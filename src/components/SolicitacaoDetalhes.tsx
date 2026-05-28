@@ -1,0 +1,5480 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao, Aditivo, AjustePlanilha } from '../types';
+import { CHECKLIST_PADRAO } from '../initialData';
+import { gerarParecerIA } from './GeradorParecerIA';
+import { 
+  ArrowLeft, Calendar, FileText, CheckCircle, XCircle, AlertCircle, AlertTriangle, TrendingUp,
+  UploadCloud, Sparkles, DollarSign, Building, Plus, Trash2, 
+  ChevronRight, RefreshCw, Layers, Shield, FileCheck, HardHat, Info, UserCheck, User, History, Paperclip, Play,
+  Download
+} from 'lucide-react';
+
+const getValorScore = (valor: number): { score: number; label: string } => {
+  if (valor > 2000000) return { score: 5, label: 'Acima de R$ 2.000.000 (Peso 5)' };
+  if (valor >= 1000000) return { score: 4, label: 'R$ 1.000.000 a R$ 2.000.000 (Peso 4)' };
+  if (valor >= 500000) return { score: 3, label: 'R$ 500.000 a R$ 1.000.000 (Peso 3)' };
+  if (valor >= 100000) return { score: 2, label: 'R$ 100.000 a R$ 500.000 (Peso 2)' };
+  return { score: 1, label: 'Até R$ 100.000 (Peso 1)' };
+};
+
+const getTipoObraScore = (tipo: string): { score: number; label: string } => {
+  const normalized = tipo.toLowerCase();
+  if (normalized.includes('constru_') || normalized.includes('construc') || normalized.includes('construç')) {
+    return { score: 5, label: 'Construção (Peso 5)' };
+  }
+  if (normalized.includes('amplia') || normalized.includes('quadra')) {
+    return { score: 4, label: 'Ampliação / Quadra (Peso 4)' };
+  }
+  if (normalized.includes('reform')) {
+    return { score: 3, label: 'Reforma (Peso 3)' };
+  }
+  if (normalized.includes('acessi') || normalized.includes('pne')) {
+    return { score: 2, label: 'Acessibilidade (Peso 2)' };
+  }
+  if (normalized.includes('projet') || normalized.includes('estud')) {
+    return { score: 1, label: 'Projeto (Peso 1)' };
+  }
+  return { score: 3, label: 'Reforma/Outros (Peso 3)' };
+};
+
+const getDuracaoScore = (meses: number): { score: number; label: string } => {
+  if (meses > 12) return { score: 5, label: 'Acima de 12 meses (Peso 5)' };
+  if (meses >= 9) return { score: 4, label: '9 a 12 meses (Peso 4)' };
+  if (meses >= 6) return { score: 3, label: '6 a 9 meses (Peso 3)' };
+  if (meses >= 3) return { score: 2, label: '3 a 6 meses (Peso 2)' };
+  return { score: 1, label: 'Até 3 meses (Peso 1)' };
+};
+
+const calcularDuracaoMeses = (inicioStr?: string, fimStr?: string): number => {
+  if (!inicioStr || !fimStr) return 0;
+  try {
+    const inicio = new Date(inicioStr + 'T00:00:00');
+    const fim = new Date(fimStr + 'T00:00:00');
+    if (isNaN(inicio.getTime()) || isNaN(fim.getTime())) return 0;
+    
+    const diffYears = fim.getFullYear() - inicio.getFullYear();
+    const diffMonths = fim.getMonth() - inicio.getMonth();
+    const diffDays = fim.getDate() - inicio.getDate();
+    
+    let totalMonths = diffYears * 12 + diffMonths;
+    if (diffDays > 15) {
+      totalMonths += 1;
+    } else if (diffDays < -15) {
+      totalMonths -= 1;
+    }
+    return Math.max(1, totalMonths);
+  } catch (e) {
+    return 0;
+  }
+};
+
+const calcularComplexidade = (valor: number, tipo: string, meses: number) => {
+  const vInfo = getValorScore(valor);
+  const tInfo = getTipoObraScore(tipo);
+  const dInfo = getDuracaoScore(meses);
+
+  const pontuacao = (vInfo.score * 0.75) + (tInfo.score * 0.15) + (dInfo.score * 0.10);
+
+  let classe: 'I' | 'II' | 'III' | 'IV' = 'I';
+  let classificacao = 'Baixa Complexidade';
+  let colorClass = 'text-green-600 bg-green-50 border-green-250';
+
+  if (pontuacao >= 4.2) {
+    classe = 'IV';
+    classificacao = 'Muito Alta Complexidade';
+    colorClass = 'text-rose-600 bg-rose-50 border-rose-250';
+  } else if (pontuacao >= 3.2) {
+    classe = 'III';
+    classificacao = 'Alta Complexidade';
+    colorClass = 'text-orange-600 bg-orange-50 border-orange-250';
+  } else if (pontuacao >= 2.0) {
+    classe = 'II';
+    classificacao = 'Média Complexidade';
+    colorClass = 'text-amber-600 bg-amber-50 border-amber-250';
+  }
+
+  return {
+    pontuacao: Number(pontuacao.toFixed(2)),
+    classe,
+    classificacao,
+    colorClass,
+    vInfo,
+    tInfo,
+    dInfo
+  };
+};
+
+interface SolicitacaoDetalhesProps {
+  solicitacao: Solicitacao;
+  perfilUsuario: PerfilUsuario;
+  onVoltar: () => void;
+  onUpdate: (updated: Solicitacao) => void;
+  forcedTab?: string;
+  hideVoltar?: boolean;
+  hideStepper?: boolean;
+  hideTransitionButtons?: boolean;
+  hideTabs?: boolean;
+}
+
+export default function SolicitacaoDetalhes({ 
+  solicitacao, 
+  perfilUsuario, 
+  onVoltar, 
+  onUpdate,
+  forcedTab,
+  hideVoltar = false,
+  hideStepper = false,
+  hideTransitionButtons = false,
+  hideTabs = false
+}: SolicitacaoDetalhesProps) {
+  // Navigation internal view
+  const [activeTab, setActiveTab ] = useState<'checklist' | 'paf' | 'ordem_inicio' | 'execucao' | 'ajustes' | 'aditivos' | 'conclusao'>('checklist');
+
+  React.useEffect(() => {
+    if (forcedTab) {
+      setActiveTab(forcedTab as any);
+    }
+  }, [forcedTab, solicitacao.id]);
+  const isMyAssignment = perfilUsuario === 'analista_dore' && solicitacao.analistaAtribuido === 'Eng. André Silva';
+
+  const handleDownloadDocument = (fileName: string, label: string) => {
+    const textContent = `--- Governo do Estado de Minas Gerais ---
+Secretaria de Estado de Educação (SEE-MG)
+
+DOCUMENTO: ${label}
+ARQUIVO ORIGEM: ${fileName}
+DATA DE CONSULTA: ${new Date().toLocaleDateString('pt-BR')}
+
+Este é um arquivo auxiliar gerado dinamicamente para simulação do processo físico-financeiro de obras e faturamento de dotação do PAF e SGO. Todas as validações foram formalizadas eletronicamente via fluxo de trabalho.
+
+----------------------------------------
+Plataforma e-SGO - SEE-MG`;
+    
+    const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+  
+  // States for file uploads simulation
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  
+  // State for rejecting document (modal / input trigger)
+  const [justificativaFields, setJustificativaFields] = useState<{ [key: string]: string }>({});
+
+  // States for new measurement
+  const [novaMedicaoData, setNovaMedicaoData] = useState(new Date().toISOString().split('T')[0]);
+  const [novaMedicaoDesc, setNovaMedicaoDesc] = useState('');
+  const [novaMedicaoValor, setNovaMedicaoValor] = useState('');
+  const [novaMedicaoPorc, setNovaMedicaoPorc] = useState('');
+  const [mostrandoNovaMedicao, setMostrandoNovaMedicao] = useState(false);
+
+  // States for new aditivo
+  const [novoAditivoTipo, setNovoAditivoTipo] = useState<'Valor' | 'Prazo' | 'Valor e Prazo'>('Valor');
+  const [novoAditivoValor, setNovoAditivoValor] = useState('');
+  const [novoAditivoPrazo, setNovoAditivoPrazo] = useState('');
+  const [novoAditivoJust, setNovoAditivoJust] = useState('');
+  const [mostrandoNovoAditivo, setMostrandoNovoAditivo] = useState(false);
+
+  // General execution state
+  const [empresaInput, setEmpresaInput] = useState(solicitacao.empresaContratada || '');
+  const [cnpjInput, setCnpjInput] = useState(solicitacao.cnpjEmpresa || '');
+  const [statusContratoInput, setStatusContratoInput] = useState(solicitacao.statusContratoEmpresa || 'Ativa');
+  const [statusObraInput, setStatusObraInput] = useState(solicitacao.statusObra || 'Não Iniciada');
+
+  // Replacement company state (Distrato)
+  const [novoEmpresaNome, setNovoEmpresaNome] = useState('');
+  const [novoEmpresaCnpj, setNovoEmpresaCnpj] = useState('');
+  const [mostrandoNovaEmpresa, setMostrandoNovaEmpresa] = useState(false);
+
+  // States for Distrato and Paralysation details
+  const [justificativaDistratoInput, setJustificativaDistratoInput] = useState(solicitacao.justificativaDistrato || 'Planilha de orçamento defasada');
+  const [dataDistratoInput, setDataDistratoInput] = useState(solicitacao.dataDistrato || '');
+  const [documentoDistratoFileName, setDocumentoDistratoFileName] = useState(solicitacao.documentoDistratoFileName || '');
+  const [documentoDistratoFileSize, setDocumentoDistratoFileSize] = useState(solicitacao.documentoDistratoFileSize || '');
+  const [documentoDistratoUploadedAt, setDocumentoDistratoUploadedAt] = useState(solicitacao.documentoDistratoUploadedAt || '');
+
+  const [dataParalizacaoInput, setDataParalizacaoInput] = useState(solicitacao.dataParalizacao || '');
+  const [justificativaParalizacaoInput, setJustificativaParalizacaoInput] = useState(solicitacao.justificativaParalizacao || 'Aguardando diretor da cx escolar realizar notificação empresa');
+
+  // State for Fiscal assigned in Ordem de Início
+  const [fiscalObraAtribuidoInput, setFiscalObraAtribuidoInput] = useState(solicitacao.fiscalObraAtribuido || '');
+
+  // File Input Ref for Distrato document
+  const distratoInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Measurement file / photo uploads states
+  const [medicaoDocName, setMedicaoDocName] = useState('');
+  const [medicaoFotos, setMedicaoFotos] = useState<string[]>([]);
+  const [fotoInputSimulada, setFotoInputSimulada] = useState('');
+
+  // Aditivos Process states
+  const [selectedAditivoId, setSelectedAditivoId] = useState<string | null>(null);
+  const [novoAditivoNumero, setNovoAditivoNumero] = useState('');
+  const [aditivoDocName, setAditivoDocName] = useState('');
+  const [aditivoAnalista, setAditivoAnalista] = useState('');
+
+  // Ajustes de Planilha states
+  const [ajusteTipo, setAjusteTipo] = useState<'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto'>('sem_alteracao_meta');
+  const [ajusteValor, setAjusteValor] = useState('12422.94');
+  const [ajusteResponsavel, setAjusteResponsavel] = useState('Guilherme Pereira e Silva');
+  const [ajusteRegistro, setAjusteRegistro] = useState('242488/D');
+  const [ajusteReferenteOpt, setAjusteReferenteOpt] = useState<'atendimento_inicial' | 'saldo_nova_cotacao'>('atendimento_inicial');
+  const [ajusteValorContrato, setAjusteValorContrato] = useState(solicitacao.valorHomologadoContratacao?.toString() || '400498.42');
+  const [ajusteDiferenca, setAjusteDiferenca] = useState('153284.34');
+  const [ajusteDesconto, setAjusteDesconto] = useState('28');
+  const [ajusteAvanco, setAjusteAvanco] = useState('50');
+  const [ajusteObservacoes, setAjusteObservacoes] = useState('');
+  const [ajustePlanilhaFileName, setAjustePlanilhaFileName] = useState('');
+  const [ajustePlanilhaFileSize, setAjustePlanilhaFileSize] = useState('');
+  const [ajustePlanilhaUploadedAt, setAjustePlanilhaUploadedAt] = useState('');
+  const [selectedAjusteId, setSelectedAjusteId] = useState<string | null>(null);
+  const [ajusteParecerDoreInput, setAjusteParecerDoreInput] = useState('');
+  const [ajusteAnalistaAtribuidoInput, setAjusteAnalistaAtribuidoInput] = useState('Eng. André Silva');
+
+  const planilhaAjusteFormInputRef = useRef<HTMLInputElement>(null);
+
+  // Simulated doc upload
+  const handleSimulatedUpload = (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const targetDoc = solicitacao.documentos.find(d => d.id === docId);
+    if (targetDoc?.status === 'aprovado') {
+      alert('Este documento já foi validado e aprovado anteriormente pela DORE. Não é permitido substituir um arquivo aprovado.');
+      return;
+    }
+
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    const updatedDocs = solicitacao.documentos.map(doc => {
+      if (doc.id === docId) {
+        return {
+          ...doc,
+          fileName: file.name,
+          fileSize: sizeFormatted,
+          uploadedAt: new Date().toISOString().split('T')[0],
+          status: 'pendente' as const, // resets to pending check
+          justificativa: undefined
+        };
+      }
+      return doc;
+    });
+
+    onUpdate({
+      ...solicitacao,
+      documentos: updatedDocs
+    });
+  };
+
+  const handleTriggerUpload = (docId: string) => {
+    const targetDoc = solicitacao.documentos.find(d => d.id === docId);
+    if (targetDoc?.status === 'aprovado') {
+      alert('Este documento já foi validado e aprovado anteriormente pela DORE. Ele não pode ser substituído.');
+      return;
+    }
+    fileInputRefs.current[docId]?.click();
+  };
+
+  const removerDocumento = (docId: string) => {
+    const targetDoc = solicitacao.documentos.find(d => d.id === docId);
+    if (targetDoc?.status === 'aprovado') {
+      alert('Este documento já foi validado e aprovado anteriormente pela DORE. Ele não pode ser removido.');
+      return;
+    }
+
+    const updatedDocs = solicitacao.documentos.map(doc => {
+      if (doc.id === docId) {
+        return {
+          ...doc,
+          fileName: undefined,
+          fileSize: undefined,
+          uploadedAt: undefined,
+          status: 'pendente' as const,
+          justificativa: undefined
+        };
+      }
+      return doc;
+    });
+
+    onUpdate({
+      ...solicitacao,
+      documentos: updatedDocs
+    });
+  };
+
+  // Helper to bundle all document reviews together into a single cohesive technical statement
+  const gerarParecerConsolidadoTudo = (updatedDocs: DocumentoChecklist[], count: number) => {
+    const analisesValidas = updatedDocs
+      .map((d, index) => {
+        let estStatus = 'PENDENTE DE AVALIAÇÃO';
+        if (d.status === 'aprovado') estStatus = '✓ APROVADO / VALIDADO';
+        if (d.status === 'recusado') estStatus = '❌ REJEITADO / PENDENTE';
+        if (d.status === 'nao_se_aplica') estStatus = 'ℹ️ NÃO SE APLICA';
+        
+        const textoAnalise = d.justificativa ? d.justificativa.trim() : 'Nenhuma observação técnica cadastrada.';
+        return `• [Documento ${index + 1}] ${d.nome}\n  Status técnico: ${estStatus}\n  Parecer individual: "${textoAnalise}"`;
+      })
+      .join('\n\n');
+
+    const totalPendencias = updatedDocs.filter(d => d.status === 'recusado').length;
+    const dataHoraAnalise = new Date().toLocaleString('pt-BR');
+
+    return `PARECER TÉCNICO CONSOLIDADO DE ENGENHARIA (DORE)
+--------------------------------------------------
+ID Solicitação: ${solicitacao.id}
+Escola: ${solicitacao.nomeEscola} (CODESC: ${solicitacao.codesc})
+Analista Responsável: Eng. André Silva (Analista de Engenharia DORE)
+Data/Hora de Emissão: ${dataHoraAnalise}
+Entradas/Rodadas de Análise acumuladas: ${count} ciclos
+Total de Itens com Pendência Técnica: ${totalPendencias} item(ns)
+
+DETALHAMENTO DA AVALIAÇÃO DO CHECKLIST DOCUMENTAL:
+${analisesValidas}
+
+--------------------------------------------------
+CONCLUSÃO TÉCNICA CONSOLIDADA:
+${totalPendencias > 0 
+  ? `REPROVADO / COM REQUISITOS DE AJUSTE. O dossier possui ${totalPendencias} item(ns) inadequado(s). O técnico da SRE deve providenciar as correções e submeter novamente.`
+  : `APROVADO TOTALMENTE. Toda a documentação técnica foi verificada e validada em conformidade técnica de engenharia da DORE. Liberado para a etapa de Geração e Homologação de PAF.`
+}`;
+  };
+
+  // Engineer document decision
+  const setDocumentStatus = (docId: string, status: 'aprovado' | 'recusado' | 'nao_se_aplica', justificativa?: string) => {
+    const updatedDocs = solicitacao.documentos.map(doc => {
+      if (doc.id === docId) {
+        return {
+          ...doc,
+          status,
+          justificativa: justificativa !== undefined ? justificativa : (doc.justificativa || (status === 'aprovado' ? 'Documento verificado e validado em conformidade.' : status === 'recusado' ? 'Ajuste ou complementação de documento técnica pendente.' : 'Dispensado.'))
+        };
+      }
+      return doc;
+    });
+
+    onUpdate({
+      ...solicitacao,
+      documentos: updatedDocs
+    });
+  };
+
+  // AI analysis click
+  const handleAISmartAnalysis = (docId: string) => {
+    const doc = solicitacao.documentos.find(d => d.id === docId);
+    if (!doc || !doc.fileName) return;
+
+    const { statusRecomendado, justificativa } = gerarParecerIA(doc, solicitacao.nomeEscola);
+    setJustificativaFields(prev => ({ ...prev, [docId]: justificativa }));
+    setDocumentStatus(docId, statusRecomendado, justificativa);
+  };
+
+  // Bulk simulated DORE review - helps demonstrate app quickly!
+  const reviewAllWithIA = () => {
+    const updatedDocs = solicitacao.documentos.map(doc => {
+      if (!doc.fileName) {
+        // can't review an empty doc
+        return doc;
+      }
+      const { statusRecomendado, justificativa } = gerarParecerIA(doc, solicitacao.nomeEscola);
+      return {
+        ...doc,
+        status: statusRecomendado,
+        justificativa: justificativa || (statusRecomendado === 'aprovado' ? 'Documento em conformidade e validado.' : 'Necessita detalhar ou complementar pendência.')
+      };
+    });
+
+    onUpdate({
+      ...solicitacao,
+      documentos: updatedDocs
+    });
+  };
+
+  // TECHNICAL TRANSITIONS
+  const canSendToDore = () => {
+    // Check if all mandatory documents have been uploaded
+    const mandatory = solicitacao.documentos.filter(d => d.obrigatorio);
+    return mandatory.every(d => d.fileName !== undefined);
+  };
+
+  const enviarParaDore = () => {
+    if (!canSendToDore()) return;
+
+    // Considera a primeira que receber (starts at 1) e incrementa a cada encaminhamento de reanálise
+    const currentCount = solicitacao.contadorAnalises || 0;
+    const nextCount = currentCount === 0 ? 1 : currentCount + 1;
+
+    onUpdate({
+      ...solicitacao,
+      etapaAtual: 'analise',
+      contadorAnalises: nextCount,
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { etapa: 'analise', data: new Date().toISOString().split('T')[0], responsavel: 'Téc. Infraestrutura (Envio)' }
+      ]
+    });
+    setActiveTab('checklist');
+  };
+
+  const solicitarDevolucaoProcesso = () => {
+    if (solicitacao.etapaAtual !== 'analise') {
+      alert('Apenas solicitações em etapa de análise podem ser devolvidas.');
+      return;
+    }
+    if (solicitacao.analistaAtribuido) {
+      alert('Não é possível solicitar a devolução pois um analista de engenharia já foi atribuído ao projeto.');
+      return;
+    }
+
+    onUpdate({
+      ...solicitacao,
+      etapaAtual: 'cadastro',
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { 
+          etapa: 'cadastro', 
+          data: new Date().toISOString().split('T')[0], 
+          responsavel: 'Téc. Infraestrutura (Devolução Solicitada)' 
+        }
+      ]
+    });
+    alert('Processo devolvido com sucesso à etapa de atendimento inicial para correções de envio!');
+  };
+
+  const finalizarAnaliseDore = () => {
+    // Determine if there are absolute rejections on uploaded/mandatory files
+    const hasRejections = solicitacao.documentos.some(d => d.status === 'recusado');
+    const currentCount = solicitacao.contadorAnalises || 1;
+    
+    // Contando quando o engenheiro não validar e voltar para o técnico
+    const nextCount = hasRejections ? currentCount + 1 : currentCount;
+    const parecerTudo = gerarParecerConsolidadoTudo(solicitacao.documentos, currentCount);
+
+    if (hasRejections) {
+      // Goes back to correction (cadastro)
+      onUpdate({
+        ...solicitacao,
+        etapaAtual: 'cadastro',
+        contadorAnalises: nextCount,
+        parecerConsolidado: parecerTudo,
+        historicoEtapas: [
+          ...solicitacao.historicoEtapas,
+          { etapa: 'cadastro', data: new Date().toISOString().split('T')[0], responsavel: 'Eng. DORE (Retorno por Pendências)' }
+        ]
+      });
+      alert('Processo retornado para o Técnico de Infraestrutura com o parecer consolidado anexado.');
+    } else {
+      // All approved! Move to PAF Autorização
+      onUpdate({
+        ...solicitacao,
+        etapaAtual: 'paf_autorizacao',
+        parecerConsolidado: parecerTudo,
+        historicoEtapas: [
+          ...solicitacao.historicoEtapas,
+          { etapa: 'paf_autorizacao', data: new Date().toISOString().split('T')[0], responsavel: 'Eng. DORE (Aprovação Técnica)' }
+        ]
+      });
+      setActiveTab('paf');
+    }
+  };
+
+  // PAF PROCESSORS
+  const [numPAFInput, setNumPAFInput] = useState(solicitacao.numeroPAF || '');
+
+  const getCalculatedVigencia = (creationDate: string) => {
+    if (!creationDate) return '';
+    const parts = creationDate.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      return `${year + 5}-${parts[1]}-${parts[2]}`;
+    }
+    return '';
+  };
+
+  const initialDataCreation = solicitacao.dataHomologacao || new Date().toISOString().split('T')[0];
+  const [dataPAFInput, setDataPAFInput] = useState(initialDataCreation);
+  const [dataVigenciaPAFInput, setDataVigenciaPAFInput] = useState(solicitacao.dataVigenciaPAF || getCalculatedVigencia(initialDataCreation));
+
+  // Novo Bloco: Financeiro
+  const [dataFinHomologacaoInput, setDataFinHomologacaoInput] = useState(solicitacao.dataFinHomologacao || solicitacao.dataHomologacao || new Date().toISOString().split('T')[0]);
+  const [pagoPAFInput, setPagoPAFInput] = useState<boolean>(solicitacao.pago || solicitacao.statusPAF === 'Pago e Liberado');
+
+  const salvarPAF = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!numPAFInput) {
+      alert('Por favor insira o número do PAF.');
+      return;
+    }
+
+    onUpdate({
+      ...solicitacao,
+      valorHomologado: solicitacao.valorHomologado || solicitacao.valorPlanilha || 0,
+      numeroPAF: numPAFInput,
+      dataHomologacao: dataPAFInput,
+      dataVigenciaPAF: dataVigenciaPAFInput,
+      dataFinHomologacao: dataFinHomologacaoInput,
+      pago: pagoPAFInput,
+      statusPAF: pagoPAFInput ? 'Pago e Liberado' : 'Aguardando Pagamento',
+      statusObra: solicitacao.statusObra || 'Não Iniciada'
+    });
+  };
+
+  const homologarEAvancarOrdemInicio = () => {
+    if (perfilUsuario !== 'administrativo_dore') {
+      alert('Apenas o perfil Administrativo DORE (Rui Lages) pode homologar e liberar para Ordem de Início.');
+      return;
+    }
+    const finalNumeroPAF = numPAFInput || solicitacao.numeroPAF;
+    if (!finalNumeroPAF) {
+      alert('Por favor preencha o número do PAF antes de homologar.');
+      return;
+    }
+
+    onUpdate({
+      ...solicitacao,
+      valorHomologado: solicitacao.valorHomologado || solicitacao.valorPlanilha || 0,
+      numeroPAF: finalNumeroPAF,
+      dataHomologacao: dataPAFInput,
+      dataVigenciaPAF: dataVigenciaPAFInput,
+      dataFinHomologacao: dataFinHomologacaoInput,
+      pago: pagoPAFInput,
+      statusPAF: pagoPAFInput ? 'Pago e Liberado' : 'Aguardando Pagamento',
+      etapaAtual: 'ordem_inicio',
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { etapa: 'ordem_inicio', data: new Date().toISOString().split('T')[0], responsavel: 'Administrativo DORE (Rui Lages - Homologado e Avançado)' }
+      ]
+    });
+    setActiveTab('execucao');
+    alert('Informações salvas, PAF homologado e liberado para emissão de Ordem de Início com sucesso!');
+  };
+
+  const avancarDiretoParaExecucao = () => {
+    if (perfilUsuario !== 'administrativo_dore') {
+      alert('Apenas o perfil Administrativo DORE (Rui Lages) pode homologar e liberar para Execução.');
+      return;
+    }
+    const finalNumeroPAF = numPAFInput || solicitacao.numeroPAF;
+    if (!finalNumeroPAF) {
+      alert('Por favor preencha o número do PAF antes de homologar.');
+      return;
+    }
+
+    onUpdate({
+      ...solicitacao,
+      valorHomologado: solicitacao.valorHomologado || solicitacao.valorPlanilha || 0,
+      numeroPAF: finalNumeroPAF,
+      dataHomologacao: dataPAFInput,
+      dataVigenciaPAF: dataVigenciaPAFInput,
+      dataFinHomologacao: dataFinHomologacaoInput,
+      pago: pagoPAFInput,
+      statusPAF: pagoPAFInput ? 'Pago e Liberado' : 'Aguardando Pagamento',
+      etapaAtual: 'execucao',
+      statusObra: 'Em Andamento',
+      dataOrdemInicio: solicitacao.dataOrdemInicio || new Date().toISOString().split('T')[0],
+      previsaoTerminoObra: solicitacao.previsaoTerminoObra || new Date(Date.now() + 180 * 24 * 3600 * 1000).toISOString().split('T')[0], // 6 meses
+      valorHomologadoContratacao: solicitacao.valorHomologadoContratacao || solicitacao.valorPlanilha || solicitacao.valorHomologado || 0,
+      cronogramaFisicoFinanceiroFileName: solicitacao.cronogramaFisicoFinanceiroFileName || 'cronograma_final_paf.pdf',
+      cronogramaFisicoFinanceiroFileSize: solicitacao.cronogramaFisicoFinanceiroFileSize || '1.2 MB',
+      cronogramaFisicoFinanceiroUploadedAt: solicitacao.cronogramaFisicoFinanceiroUploadedAt || new Date().toLocaleString('pt-BR'),
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { 
+          etapa: 'execucao', 
+          data: new Date().toISOString().split('T')[0], 
+          responsavel: 'Administrativo DORE (Rui Lages - Homologado e Avançado Direto)' 
+        }
+      ]
+    });
+    setActiveTab('execucao');
+    alert('Processo homologado, salvo e enviado diretamente para Execução de Obra com sucesso!');
+  };
+
+  // ORDEM DE INÍCIO PROCESSORS
+  const cronogramaInputRef = useRef<HTMLInputElement | null>(null);
+  const [dataOrdemInicioInput, setDataOrdemInicioInput] = useState(solicitacao.dataOrdemInicio || '');
+  const [previsaoTerminoInput, setPrevisaoTerminoInput] = useState(solicitacao.previsaoTerminoObra || '');
+  const [valorHomologadoContratacaoInput, setValorHomologadoContratacaoInput] = useState(solicitacao.valorHomologadoContratacao?.toString() || '');
+  const [tipoObraInput, setTipoObraInput] = useState(solicitacao.tipoObra || solicitacao.tipo || 'Reforma');
+
+  // CONCLUSÃO DE OBRA STATES & REFS
+  const laudoConclusivoInputRef = useRef<HTMLInputElement | null>(null);
+  const relatorioFotograficoInputRef = useRef<HTMLInputElement | null>(null);
+  const planilhaMedicaoFinalInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [dataConclusaoInput, setDataConclusaoInput] = useState(solicitacao.dataConclusao || '');
+  const [laudoConclusivoFileName, setLaudoConclusivoFileName] = useState(solicitacao.laudoConclusivoFileName || '');
+  const [laudoConclusivoFileSize, setLaudoConclusivoFileSize] = useState(solicitacao.laudoConclusivoFileSize || '');
+  const [laudoConclusivoUploadedAt, setLaudoConclusivoUploadedAt] = useState(solicitacao.laudoConclusivoUploadedAt || '');
+
+  const [relatorioFotograficoFileName, setRelatorioFotograficoFileName] = useState(solicitacao.relatorioFotograficoFileName || '');
+  const [relatorioFotograficoFileSize, setRelatorioFotograficoFileSize] = useState(solicitacao.relatorioFotograficoFileSize || '');
+  const [relatorioFotograficoUploadedAt, setRelatorioFotograficoUploadedAt] = useState(solicitacao.relatorioFotograficoUploadedAt || '');
+
+  const [planilhaMedicaoFinalFileName, setPlanilhaMedicaoFinalFileName] = useState(solicitacao.planilhaMedicaoFinalFileName || '');
+  const [planilhaMedicaoFinalFileSize, setPlanilhaMedicaoFinalFileSize] = useState(solicitacao.planilhaMedicaoFinalFileSize || '');
+  const [planilhaMedicaoFinalUploadedAt, setPlanilhaMedicaoFinalUploadedAt] = useState(solicitacao.planilhaMedicaoFinalUploadedAt || '');
+
+  const parsedValor = valorHomologadoContratacaoInput ? parseFloat(valorHomologadoContratacaoInput) : 0;
+  const parsedMeses = calcularDuracaoMeses(dataOrdemInicioInput, previsaoTerminoInput);
+  const complexidadeCalculada = calcularComplexidade(parsedValor, tipoObraInput, parsedMeses);
+
+  // Keep state in sync with parent updates
+  useEffect(() => {
+    setDataOrdemInicioInput(solicitacao.dataOrdemInicio || '');
+    setPrevisaoTerminoInput(solicitacao.previsaoTerminoObra || '');
+    setValorHomologadoContratacaoInput(solicitacao.valorHomologadoContratacao?.toString() || '');
+    setTipoObraInput(solicitacao.tipoObra || solicitacao.tipo || 'Reforma');
+    setFiscalObraAtribuidoInput(solicitacao.fiscalObraAtribuido || '');
+
+    setEmpresaInput(solicitacao.empresaContratada || '');
+    setCnpjInput(solicitacao.cnpjEmpresa || '');
+    setStatusContratoInput(solicitacao.statusContratoEmpresa || 'Ativa');
+    setStatusObraInput(solicitacao.statusObra || 'Não Iniciada');
+
+    setJustificativaDistratoInput(solicitacao.justificativaDistrato || 'Planilha de orçamento defasada');
+    setDataDistratoInput(solicitacao.dataDistrato || '');
+    setDocumentoDistratoFileName(solicitacao.documentoDistratoFileName || '');
+    setDocumentoDistratoFileSize(solicitacao.documentoDistratoFileSize || '');
+    setDocumentoDistratoUploadedAt(solicitacao.documentoDistratoUploadedAt || '');
+
+    setDataParalizacaoInput(solicitacao.dataParalizacao || '');
+    setJustificativaParalizacaoInput(solicitacao.justificativaParalizacao || 'Aguardando diretor da cx escolar realizar notificação empresa');
+
+    // Conclusão de obra states syncing
+    setDataConclusaoInput(solicitacao.dataConclusao || '');
+    setLaudoConclusivoFileName(solicitacao.laudoConclusivoFileName || '');
+    setLaudoConclusivoFileSize(solicitacao.laudoConclusivoFileSize || '');
+    setLaudoConclusivoUploadedAt(solicitacao.laudoConclusivoUploadedAt || '');
+
+    setRelatorioFotograficoFileName(solicitacao.relatorioFotograficoFileName || '');
+    setRelatorioFotograficoFileSize(solicitacao.relatorioFotograficoFileSize || '');
+    setRelatorioFotograficoUploadedAt(solicitacao.relatorioFotograficoUploadedAt || '');
+
+    setPlanilhaMedicaoFinalFileName(solicitacao.planilhaMedicaoFinalFileName || '');
+    setPlanilhaMedicaoFinalFileSize(solicitacao.planilhaMedicaoFinalFileSize || '');
+    setPlanilhaMedicaoFinalUploadedAt(solicitacao.planilhaMedicaoFinalUploadedAt || '');
+
+    if (solicitacao.valorHomologadoContratacao) {
+      setAjusteValorContrato(solicitacao.valorHomologadoContratacao.toString());
+    }
+
+    // Sync PAF related fields
+    setNumPAFInput(solicitacao.numeroPAF || '');
+    const initialDataCreation = solicitacao.dataHomologacao || new Date().toISOString().split('T')[0];
+    setDataPAFInput(solicitacao.dataHomologacao || initialDataCreation);
+    setDataVigenciaPAFInput(solicitacao.dataVigenciaPAF || getCalculatedVigencia(solicitacao.dataHomologacao || initialDataCreation));
+    setDataFinHomologacaoInput(solicitacao.dataFinHomologacao || solicitacao.dataHomologacao || new Date().toISOString().split('T')[0]);
+    setPagoPAFInput(solicitacao.pago || solicitacao.statusPAF === 'Pago e Liberado');
+  }, [
+    solicitacao.id, 
+    solicitacao.numeroPAF,
+    solicitacao.dataHomologacao,
+    solicitacao.dataVigenciaPAF,
+    solicitacao.dataFinHomologacao,
+    solicitacao.pago,
+    solicitacao.statusPAF,
+    solicitacao.dataOrdemInicio, 
+    solicitacao.previsaoTerminoObra, 
+    solicitacao.valorHomologadoContratacao, 
+    solicitacao.tipoObra, 
+    solicitacao.tipo,
+    solicitacao.fiscalObraAtribuido,
+    solicitacao.empresaContratada,
+    solicitacao.cnpjEmpresa,
+    solicitacao.statusContratoEmpresa,
+    solicitacao.statusObra,
+    solicitacao.justificativaDistrato,
+    solicitacao.dataDistrato,
+    solicitacao.documentoDistratoFileName,
+    solicitacao.dataParalizacao,
+    solicitacao.justificativaParalizacao,
+    solicitacao.dataConclusao,
+    solicitacao.laudoConclusivoFileName,
+    solicitacao.relatorioFotograficoFileName,
+    solicitacao.planilhaMedicaoFinalFileName
+  ]);
+
+  const handleCronogramaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    onUpdate({
+      ...solicitacao,
+      cronogramaFisicoFinanceiroFileName: file.name,
+      cronogramaFisicoFinanceiroFileSize: sizeFormatted,
+      cronogramaFisicoFinanceiroUploadedAt: new Date().toISOString().split('T')[0]
+    });
+    alert('Cronograma Físico-Financeiro anexado com sucesso!');
+  };
+
+  const removerCronograma = () => {
+    onUpdate({
+      ...solicitacao,
+      cronogramaFisicoFinanceiroFileName: undefined,
+      cronogramaFisicoFinanceiroFileSize: undefined,
+      cronogramaFisicoFinanceiroUploadedAt: undefined
+    });
+  };
+
+  const salvarOrdemInicio = (e: React.FormEvent) => {
+    e.preventDefault();
+    const valor = valorHomologadoContratacaoInput ? parseFloat(valorHomologadoContratacaoInput) : 0;
+    const meses = calcularDuracaoMeses(dataOrdemInicioInput, previsaoTerminoInput);
+    const comp = calcularComplexidade(valor, tipoObraInput, meses);
+
+    onUpdate({
+      ...solicitacao,
+      dataOrdemInicio: dataOrdemInicioInput,
+      previsaoTerminoObra: previsaoTerminoInput,
+      valorHomologadoContratacao: valor ? valor : undefined,
+      tipoObra: tipoObraInput,
+      duracaoObraMeses: meses,
+      classeObra: comp.classe,
+      pontuacaoComplexidade: comp.pontuacao,
+      fiscalObraAtribuido: fiscalObraAtribuidoInput
+    });
+    alert('Dados da Ordem de Início salvos com sucesso!');
+  };
+
+  const emitirOrdemEIniciarObra = () => {
+    if (!solicitacao.dataOrdemInicio || !solicitacao.previsaoTerminoObra || !solicitacao.valorHomologadoContratacao || !solicitacao.cronogramaFisicoFinanceiroFileName) {
+      alert('Por favor registre a Data de Início, Previsão de Término, Valor Homologado de Contratação e anexe o Cronograma Físico-Financeiro antes de iniciar a obra.');
+      return;
+    }
+
+    onUpdate({
+      ...solicitacao,
+      etapaAtual: 'execucao',
+      statusObra: 'Em Andamento',
+      fiscalObraAtribuido: fiscalObraAtribuidoInput,
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { 
+          etapa: 'execucao', 
+          data: new Date().toISOString().split('T')[0], 
+          responsavel: `Fiscal de Obra (Emissão Ordem de Início e Liberação)` 
+        }
+      ]
+    });
+    setActiveTab('execucao');
+    alert('Ordem de Início emitida com sucesso! O processo avançou para a etapa de Execução Física de Obra.');
+  };
+
+  const handlePlanilhaAjusteUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    setAjustePlanilhaFileName(file.name);
+    setAjustePlanilhaFileSize(sizeFormatted);
+    setAjustePlanilhaUploadedAt(new Date().toLocaleDateString('pt-BR'));
+  };
+
+  const salvarAjustePlanilha = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ajustePlanilhaFileName) {
+      alert('Atenção: É obrigatório anexar a planilha de ajuste para prosseguir!');
+      return;
+    }
+
+    const numeroNovo = (solicitacao.ajustes?.length || 0) + 1;
+    const novoAjuste: AjustePlanilha = {
+      id: `AJU-${new Date().getTime().toString().slice(-4)}`,
+      numero: numeroNovo,
+      tipoAjuste: ajusteTipo,
+      valorAjuste: parseFloat(ajusteValor) || 0,
+      responsavelPlanilha: ajusteResponsavel,
+      registroProfissional: ajusteRegistro,
+      ajusteReferente: ajusteReferenteOpt,
+      valorContrato: parseFloat(ajusteValorContrato) || 0,
+      diferencaPlanilhas: parseFloat(ajusteDiferenca) || 0,
+      desconto: parseFloat(ajusteDesconto) || 0,
+      avancoFisico: parseFloat(ajusteAvanco) || 0,
+      observacoes: ajusteObservacoes,
+      dataCriacao: new Date().toLocaleDateString('pt-BR'),
+      status: 'analise_dore',
+      analistaAtribuido: 'Eng. André Silva',
+      planilhaAjusteFileName: ajustePlanilhaFileName,
+      planilhaAjusteFileSize: ajustePlanilhaFileSize,
+      planilhaAjusteUploadedAt: ajustePlanilhaUploadedAt,
+      parecerDore: ''
+    };
+
+    onUpdate({
+      ...solicitacao,
+      ajustes: [...(solicitacao.ajustes || []), novoAjuste]
+    });
+
+    alert(`Solicitação de Ajuste de Planilha nº ${numeroNovo} cadastrada e enviada para Análise DORE!`);
+    
+    // reset spreadsheet form values
+    setAjustePlanilhaFileName('');
+    setAjustePlanilhaFileSize('');
+    setAjustePlanilhaUploadedAt('');
+    setAjusteObservacoes('');
+    setActiveTab('execucao');
+  };
+
+  const atualizarStatusAjuste = (ajusteId: string, novoStatus: 'em_elaboracao' | 'analise_dore' | 'validado') => {
+    const ajustesAtuais = solicitacao.ajustes || [];
+    const novosAjustes = idAdjustmentStatusHelper(ajustesAtuais, ajusteId, novoStatus);
+
+    onUpdate({
+      ...solicitacao,
+      ajustes: novosAjustes
+    });
+    alert('Status da solicitação de ajuste atualizado!');
+  };
+
+  const idAdjustmentStatusHelper = (ajustes: AjustePlanilha[], id: string, status: 'em_elaboracao' | 'analise_dore' | 'validado'): AjustePlanilha[] => {
+    return ajustes.map(a => a.id === id ? { ...a, status } : a);
+  };
+
+  const atribuirAnalistaAjuste = (ajusteId: string, analista: string) => {
+    const ajustesAtuais = solicitacao.ajustes || [];
+    const novosAjustes = dependencyAdjustmentAnalystHelper(ajustesAtuais, ajusteId, analista);
+
+    onUpdate({
+      ...solicitacao,
+      ajustes: novosAjustes
+    });
+    alert(`Análise do ajuste de planilha atribuída com sucesso ao técnico/analista: ${analista}`);
+  };
+
+  const dependencyAdjustmentAnalystHelper = (ajustes: AjustePlanilha[], id: string, analyst: string): AjustePlanilha[] => {
+    return ajustes.map(a => a.id === id ? { ...a, analistaAtribuido: analyst } : a);
+  };
+
+  const validarAjusteDore = (ajusteId: string, parecer: string) => {
+    const ajustesAtuais = solicitacao.ajustes || [];
+    const novosAjustes = dependencyAdjustmentValidationHelper(ajustesAtuais, ajusteId, parecer);
+
+    onUpdate({
+      ...solicitacao,
+      ajustes: novosAjustes
+    });
+
+    alert('Parecer registrado e ajuste homologado/validado com sucesso!');
+    setSelectedAjusteId(null);
+    setAjusteParecerDoreInput('');
+  };
+
+  const dependencyAdjustmentValidationHelper = (ajustes: AjustePlanilha[], id: string, opinion: string): AjustePlanilha[] => {
+    return ajustes.map(a => a.id === id ? { ...a, status: 'validado' as const, parecerDore: opinion } : a);
+  };
+
+  // EXECUTION PROCESSORS
+  const assumirNovaEmpresa = (nome: string, cnpj: string) => {
+    if (!nome || !cnpj) {
+      alert('Por favor, informe o nome e o CNPJ da nova empresa.');
+      return;
+    }
+
+    // Calcular avanço físico anterior da empresa que acabou de ser distratada
+    const currentCnpj = solicitacao.cnpjEmpresa || '';
+    const medicoesDaEmpresaAntiga = solicitacao.medicoes.filter(
+      m => m.empresaCnpj === currentCnpj
+    );
+    const avancoOld = medicoesDaEmpresaAntiga.reduce((acc, m) => acc + m.porcentagem, 0);
+
+    const antigaEmpresa = {
+      id: `emp-${Math.floor(1000 + Math.random() * 9000)}`,
+      nome: solicitacao.empresaContratada || 'Empresa Anterior',
+      cnpj: currentCnpj || '00.000.000/0001-00',
+      avancoFisicoOriginal: avancoOld,
+      
+      // Save old Ordem de Início info of this empresa!
+      dataOrdemInicio: solicitacao.dataOrdemInicio,
+      previsaoTerminoObra: solicitacao.previsaoTerminoObra,
+      valorHomologadoContratacao: solicitacao.valorHomologadoContratacao,
+      cronogramaFisicoFinanceiroFileName: solicitacao.cronogramaFisicoFinanceiroFileName,
+      cronogramaFisicoFinanceiroFileSize: solicitacao.cronogramaFisicoFinanceiroFileSize,
+      cronogramaFisicoFinanceiroUploadedAt: solicitacao.cronogramaFisicoFinanceiroUploadedAt,
+      fiscalObraAtribuido: solicitacao.fiscalObraAtribuido,
+      duracaoObraMeses: solicitacao.duracaoObraMeses,
+      classeObra: solicitacao.classeObra,
+      pontuacaoComplexidade: solicitacao.pontuacaoComplexidade,
+
+      // Save Distrato details of this old empresa!
+      justificativaDistrato: justificativaDistratoInput,
+      dataDistrato: dataDistratoInput,
+      documentoDistratoFileName: documentoDistratoFileName,
+      documentoDistratoFileSize: documentoDistratoFileSize,
+      documentoDistratoUploadedAt: documentoDistratoUploadedAt,
+    };
+
+    const updatedEmpresasAnteriores = solicitacao.empresasAnteriores || [];
+
+    onUpdate({
+      ...solicitacao,
+      empresaContratada: nome,
+      cnpjEmpresa: cnpj,
+      statusContratoEmpresa: 'Ativa',
+      empresasAnteriores: [...updatedEmpresasAnteriores, antigaEmpresa],
+      
+      // Clears/opens space for new Ordem de Início for the new company
+      dataOrdemInicio: undefined,
+      previsaoTerminoObra: undefined,
+      valorHomologadoContratacao: undefined,
+      cronogramaFisicoFinanceiroFileName: undefined,
+      cronogramaFisicoFinanceiroFileSize: undefined,
+      cronogramaFisicoFinanceiroUploadedAt: undefined,
+      fiscalObraAtribuido: undefined,
+      duracaoObraMeses: undefined,
+      classeObra: undefined,
+      pontuacaoComplexidade: undefined,
+
+      // Clear distrato fields from active record too
+      justificativaDistrato: undefined,
+      dataDistrato: undefined,
+      documentoDistratoFileName: undefined,
+      documentoDistratoFileSize: undefined,
+      documentoDistratoUploadedAt: undefined,
+
+      etapaAtual: 'ordem_inicio'
+    });
+
+    setEmpresaInput(nome);
+    setCnpjInput(cnpj);
+    setStatusContratoInput('Ativa');
+    
+    // Clear Ordem de Início input states too so they are empty for the succession!
+    setDataOrdemInicioInput('');
+    setPrevisaoTerminoInput('');
+    setValorHomologadoContratacaoInput('');
+    setFiscalObraAtribuidoInput('');
+
+    // Clear Distrato inputs
+    setJustificativaDistratoInput('Planilha de orçamento defasada');
+    setDataDistratoInput('');
+    setDocumentoDistratoFileName('');
+    setDocumentoDistratoFileSize('');
+    setDocumentoDistratoUploadedAt('');
+
+    setNovoEmpresaNome('');
+    setNovoEmpresaCnpj('');
+    setMostrandoNovaEmpresa(false);
+    alert('Empresa substituída com sucesso! Histórico preservado e espaço liberado para uma nova Ordem de Início.');
+  };
+
+  const salvarDadosGeraisObra = () => {
+    if (statusContratoInput === 'Distratada') {
+      if (!justificativaDistratoInput) {
+        alert('Por favor, informe a justificativa do distrato.');
+        return;
+      }
+      if (!dataDistratoInput) {
+        alert('Por favor, informe a data do distrato.');
+        return;
+      }
+      if (!documentoDistratoFileName) {
+        alert('Por favor, anexe o documento do distrato.');
+        return;
+      }
+    }
+
+    if (statusObraInput === 'Paralisada') {
+      if (!dataParalizacaoInput) {
+        alert('Por favor, informe a data de paralisação.');
+        return;
+      }
+      if (!justificativaParalizacaoInput) {
+        alert('Por favor, selecione a justificativa da paralisação.');
+        return;
+      }
+    }
+
+    onUpdate({
+      ...solicitacao,
+      empresaContratada: empresaInput,
+      cnpjEmpresa: cnpjInput,
+      statusContratoEmpresa: statusContratoInput as any,
+      statusObra: statusObraInput as any,
+
+      // Save distrato fields
+      justificativaDistrato: statusContratoInput === 'Distratada' ? justificativaDistratoInput : undefined,
+      dataDistrato: statusContratoInput === 'Distratada' ? dataDistratoInput : undefined,
+      documentoDistratoFileName: statusContratoInput === 'Distratada' ? documentoDistratoFileName : undefined,
+      documentoDistratoFileSize: statusContratoInput === 'Distratada' ? documentoDistratoFileSize : undefined,
+      documentoDistratoUploadedAt: statusContratoInput === 'Distratada' ? documentoDistratoUploadedAt : undefined,
+
+      // Save paralisada fields
+      dataParalizacao: statusObraInput === 'Paralisada' ? dataParalizacaoInput : undefined,
+      justificativaParalizacao: statusObraInput === 'Paralisada' ? justificativaParalizacaoInput : undefined
+    });
+    alert('Dados gerais salvos com sucesso!');
+  };
+
+  const adicionarMedicao = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseFloat(novaMedicaoValor);
+    const porc = parseFloat(novaMedicaoPorc);
+
+    if (isNaN(val) || val <= 0 || isNaN(porc) || porc <= 0 || !novaMedicaoDesc) {
+      alert('Campos de medição inválidos.');
+      return;
+    }
+
+    const novaMed: Medicao = {
+      id: `med-${Math.floor(1000 + Math.random() * 9000)}`,
+      data: novaMedicaoData,
+      valor: val,
+      porcentagem: porc,
+      descricao: novaMedicaoDesc,
+      empresaNome: solicitacao.empresaContratada || 'Empresa Geral',
+      empresaCnpj: solicitacao.cnpjEmpresa || '',
+      fileName: medicaoDocName || undefined,
+      fotos: medicaoFotos.length > 0 ? medicaoFotos : undefined
+    };
+
+    onUpdate({
+      ...solicitacao,
+      medicoes: [...solicitacao.medicoes, novaMed]
+    });
+
+    // Reset form
+    setNovaMedicaoValor('');
+    setNovaMedicaoPorc('');
+    setNovaMedicaoDesc('');
+    setMedicaoDocName('');
+    setMedicaoFotos([]);
+    setMostrandoNovaMedicao(false);
+  };
+
+  const excluirMedicao = (medId: string) => {
+    onUpdate({
+      ...solicitacao,
+      medicoes: solicitacao.medicoes.filter(m => m.id !== medId)
+    });
+  };
+
+  // Aditivos
+  const adicionarAditivo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!novoAditivoJust) {
+      alert('Insira uma justificativa.');
+      return;
+    }
+
+    const novoAdt: Aditivo = {
+      id: `adt-${Math.floor(1000 + Math.random() * 9000)}`,
+      data: new Date().toISOString().split('T')[0],
+      tipo: novoAditivoTipo,
+      valorExtra: novoAditivoTipo !== 'Prazo' ? parseFloat(novoAditivoValor) || 0 : undefined,
+      prazoExtraDias: novoAditivoTipo !== 'Valor' ? parseInt(novoAditivoPrazo) || 0 : undefined,
+      justificativa: novoAditivoJust,
+      status: 'Pendente',
+      analistaAtribuido: undefined,
+      documentos: [
+        { id: 'relatorio_tecnico', nome: 'Parecer Circunstanciado de Engenharia / Memorial Descritivo', desc: 'Justificativa técnica circunstanciada assinada por engenheiro.', status: 'pendente', obrigatorio: true },
+        { id: 'planilha_orcamentaria_ref', nome: 'Planilha de Custos Unitários Aditiva Refatorada e Cronograma', desc: 'Apresentação de custos aditivos detalhados com indicação do reajuste.', status: 'pendente', obrigatorio: true },
+        { id: 'anotacao_responsabilidade_tecnica', nome: 'ART do Responsável Técnico do Projeto Alterado', desc: 'Anotação de responsabilidade registrada no CREA.', status: 'pendente', obrigatorio: false }
+      ]
+    };
+
+    onUpdate({
+      ...solicitacao,
+      aditivos: [...solicitacao.aditivos, novoAdt]
+    });
+
+    // Reset
+    setNovoAditivoValor('');
+    setNovoAditivoPrazo('');
+    setNovoAditivoJust('');
+    setMostrandoNovoAditivo(false);
+    alert('Nova solicitação de termo aditivo enviada para análise!');
+  };
+
+  const alterarStatusAditivo = (aditivoId: string, status: 'Aprovado' | 'Recusado') => {
+    const updatedAditivos = solicitacao.aditivos.map(a => {
+      if (a.id === aditivoId) {
+        return { ...a, status };
+      }
+      return a;
+    });
+
+    onUpdate({
+      ...solicitacao,
+      aditivos: updatedAditivos
+    });
+  };
+
+  // ADITIVO ADVANCED WORKFLOW HANDLERS
+  const anexarDocumentoAditivo = (aditivoId: string, docId: string, fileName: string) => {
+    const updatedAditivos = solicitacao.aditivos.map(adt => {
+      if (adt.id === aditivoId) {
+        const docs = adt.documentos || [];
+        const updatedDocs = docs.map(doc => {
+          if (doc.id === docId) {
+            return {
+              ...doc,
+              fileName,
+              uploadedAt: new Date().toISOString().split('T')[0],
+              fileSize: '2.4 MB',
+              status: 'pendente' as const
+            };
+          }
+          return doc;
+        });
+        return { ...adt, documentos: updatedDocs };
+      }
+      return adt;
+    });
+
+    onUpdate({
+      ...solicitacao,
+      aditivos: updatedAditivos
+    });
+  };
+
+  const atualizarStatusDocAditivo = (aditivoId: string, docId: string, status: 'aprovado' | 'recusado' | 'nao_se_aplica', justificativa?: string) => {
+    const updatedAditivos = solicitacao.aditivos.map(adt => {
+      if (adt.id === aditivoId) {
+        const docs = adt.documentos || [];
+        const updatedDocs = docs.map(doc => {
+          if (doc.id === docId) {
+            return {
+              ...doc,
+              status,
+              justificativa
+            };
+          }
+          return doc;
+        });
+        return { ...adt, documentos: updatedDocs };
+      }
+      return adt;
+    });
+
+    onUpdate({
+      ...solicitacao,
+      aditivos: updatedAditivos
+    });
+  };
+
+  const atribuirAnalistaAditivo = (aditivoId: string, nomeAnalista: string) => {
+    const updatedAditivos = solicitacao.aditivos.map(adt => {
+      if (adt.id === aditivoId) {
+        return { ...adt, analistaAtribuido: nomeAnalista };
+      }
+      return adt;
+    });
+
+    onUpdate({
+      ...solicitacao,
+      aditivos: updatedAditivos
+    });
+  };
+
+  const alterarStatusAditivoCompleto = (aditivoId: string, status: 'Aprovado' | 'Recusado', parecer?: string) => {
+    const updatedAditivos = solicitacao.aditivos.map(adt => {
+      if (adt.id === aditivoId) {
+        return { 
+          ...adt, 
+          status,
+          parecerConsolidado: parecer
+        };
+      }
+      return adt;
+    });
+
+    onUpdate({
+      ...solicitacao,
+      aditivos: updatedAditivos
+    });
+  };
+
+  const salvarConclusaoObra = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dataConclusaoInput) {
+      alert("Por favor, preencha a data de conclusão.");
+      return;
+    }
+    if (!laudoConclusivoFileName) {
+      alert("Por favor, anexe o Laudo Conclusivo.");
+      return;
+    }
+    if (!relatorioFotograficoFileName) {
+      alert("Por favor, anexe o Relatório Fotográfico.");
+      return;
+    }
+    if (!planilhaMedicaoFinalFileName) {
+      alert("Por favor, anexe a Planilha de Medição Acumulada Final.");
+      return;
+    }
+
+    onUpdate({
+      ...solicitacao,
+      statusObra: 'Concluída',
+      dataConclusao: dataConclusaoInput,
+      laudoConclusivoFileName,
+      laudoConclusivoFileSize,
+      laudoConclusivoUploadedAt,
+      relatorioFotograficoFileName,
+      relatorioFotograficoFileSize,
+      relatorioFotograficoUploadedAt,
+      planilhaMedicaoFinalFileName,
+      planilhaMedicaoFinalFileSize,
+      planilhaMedicaoFinalUploadedAt
+    });
+
+    alert("Conclusão de Obra salva e protocolada com sucesso! O status da obra foi atualizado para 'Concluída'.");
+  };
+
+  // Calculations for dashboard inside Details
+  const totalMedido = solicitacao.medicoes.reduce((acc, m) => acc + m.valor, 0);
+  const totalAditivosAprovados = solicitacao.aditivos
+    .filter(a => a.status === 'Aprovado' && a.valorExtra)
+    .reduce((acc, a) => acc + (a.valorExtra || 0), 0);
+
+  const valorContratoAtual = (solicitacao.valorHomologado || 0) + totalAditivosAprovados;
+  const porcentagemMedidaFinanceira = valorContratoAtual > 0 
+    ? Math.min(100, Math.round((totalMedido / valorContratoAtual) * 100)) 
+    : 0;
+
+  const progressoEmpresaAtual = solicitacao.medicoes
+    .filter(m => m.empresaCnpj === (solicitacao.cnpjEmpresa || ''))
+    .reduce((acc, m) => acc + m.porcentagem, 0);
+
+  const progressoTotalObra = (solicitacao.empresasAnteriores || []).reduce((acc, emp) => acc + emp.avancoFisicoOriginal, 0) + progressoEmpresaAtual;
+
+  // Render variables corresponding to step indicators
+  const stepConfig: { label: string; key: EtapaProcesso; desc: string }[] = [
+    { label: 'Atendimento Inicial', key: 'cadastro', desc: 'Anexos obrigatórios pelo técnico' },
+    { label: 'Análise DORE', key: 'analise', desc: 'Análise técnica e aprovação ministerial' },
+    { label: 'Geração PAF', key: 'paf', desc: 'Atribuição de verba e número de PAF' },
+    { label: 'Ordem de Início', key: 'ordem_inicio', desc: 'Preenchimento de datas e cronograma' },
+    { label: 'Execução & Medições', key: 'execucao', desc: 'Contratação, medições e aditivos' }
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Botão de Retorno e Resumo da Escola - PROFESSIONAL POLISH */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-start gap-4">
+          {!hideVoltar && (
+            <button 
+              onClick={onVoltar}
+              className="mt-1 p-2 rounded-lg border border-slate-200 text-slate-650 hover:text-slate-850 hover:bg-slate-100 transition-colors bg-white shadow-xs cursor-pointer"
+              title="Voltar ao Painel"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-xs font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded border border-slate-200/50">
+                Ref: {solicitacao.id}
+              </span>
+              <span className="text-xs text-slate-400">•</span>
+              <span className="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded">
+                {solicitacao.tipo}
+              </span>
+              {solicitacao.contadorAnalises && solicitacao.contadorAnalises > 0 && (
+                <>
+                  <span className="text-xs text-slate-400">•</span>
+                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md font-bold text-[10px] flex items-center gap-1 font-sans shadow-xs">
+                    <RefreshCw className="w-3 h-3 text-indigo-500 animate-spin" />
+                    {solicitacao.contadorAnalises}ª Entrada/Ciclo de Análise
+                  </span>
+                </>
+              )}
+            </div>
+            <h1 className="text-xl sm:text-2xl font-display font-bold text-slate-800 mt-1">
+              {solicitacao.nomeEscola}
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5 font-sans">
+              CODESC: <span className="font-mono font-medium text-slate-700">{solicitacao.codesc}</span> | {solicitacao.municipio} — {solicitacao.sre}
+            </p>
+          </div>
+        </div>
+
+        {/* Status Atual do Processo Base */}
+        <div className="flex flex-col items-start sm:items-end justify-center shrink-0">
+          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Etapa do Processo:</span>
+          <div className="flex items-center gap-2 mt-1">
+            {solicitacao.etapaAtual === 'cadastro' && (
+              <span className="px-3 py-1 bg-amber-50 text-amber-800 border border-amber-250 rounded-full font-semibold text-xs flex items-center gap-1.5 animate-pulse animate-duration-1000">
+                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                Atendimento Inicial
+              </span>
+            )}
+            {solicitacao.etapaAtual === 'analise' && (
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-850 border border-indigo-250 rounded-full font-semibold text-xs flex items-center gap-1.5 animate-pulse animate-duration-1000">
+                <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                Em Análise (DORE)
+              </span>
+            )}
+            {solicitacao.etapaAtual === 'paf_autorizacao' && (
+              <span className="px-3 py-1 bg-amber-50 text-amber-850 border border-amber-250 rounded-full font-semibold text-xs flex items-center gap-1.5 animate-pulse animate-duration-1000">
+                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                Autorização do PAF
+              </span>
+            )}
+            {solicitacao.etapaAtual === 'paf' && (
+              <span className="px-3 py-1 bg-cyan-50 text-cyan-800 border border-cyan-200 rounded-full font-semibold text-xs flex items-center gap-1.5 animate-pulse animate-duration-1000">
+                <span className="w-2 h-2 rounded-full bg-cyan-500"></span>
+                Geração de PAF
+              </span>
+            )}
+            {solicitacao.etapaAtual === 'execucao' && (
+              <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full font-semibold text-xs flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                Obra em Execução
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* STEPPER SUPERIOR - INDICANDO ETAPA DO PROCESSO (PROFESSIONAL POLISH) */}
+      {!hideStepper && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex flex-col md:flex-row items-center justify-between w-full max-w-5xl mx-auto gap-4 md:gap-0">
+            {stepConfig.map((step, idx) => {
+              const stepOrder: EtapaProcesso[] = ['cadastro', 'analise', 'paf', 'ordem_inicio', 'execucao'];
+              const curIdx = stepOrder.indexOf(solicitacao.etapaAtual);
+              const stepIdx = stepOrder.indexOf(step.key);
+              
+              const isCompleted = stepIdx < curIdx;
+              const isActive = stepIdx === curIdx;
+              const isFuture = stepIdx > curIdx;
+
+              return (
+                <React.Fragment key={step.key}>
+                  <div className="flex items-center text-left">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 border-2 transition-all duration-300 ${
+                      isCompleted 
+                        ? 'bg-blue-100 border-blue-600 text-blue-600' 
+                        : isActive 
+                          ? 'bg-blue-600 border-blue-600 text-white shadow-sm ring-4 ring-blue-500/10' 
+                          : 'bg-white border-slate-200 text-slate-400'
+                    }`}>
+                      {isCompleted ? '✓' : idx + 1}
+                    </div>
+                    <div className="ml-3">
+                      <span className={`block text-xs font-bold uppercase tracking-wider ${
+                        isActive || isCompleted ? 'text-blue-600' : 'text-slate-450'
+                      }`}>
+                        {step.label.split(' & ')[0].split(' ')[0]} {/* simplified like Solicitor list */}
+                      </span>
+                      <span className="text-[10px] text-slate-400 block font-medium leading-none mt-1">{step.desc.split(' ')[0]} {step.desc.split(' ')[1] || ''}</span>
+                    </div>
+                  </div>
+                  {idx < stepConfig.length - 1 && (
+                    <div className={`hidden md:block flex-1 h-[2px] mx-4 transition-all duration-300 ${
+                      stepIdx < curIdx ? 'bg-blue-600' : 'bg-slate-200'
+                    }`} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ATRIBUIÇÃO DE ANALISTA DA DORE (Apenas para Gestor Atendimento DORE) */}
+      {perfilUsuario === 'gestor_dore' && solicitacao.etapaAtual === 'analise' && (
+        <div className="bg-indigo-50/70 border border-indigo-200/85 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 shrink-0">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Encaminhar para Analista DORE</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Como Gestor Geral de Atendimento, você recebe os checklists encaminhados pelas SREs. Valide o cadastro e decida qual analista da DORE será responsável por validar esta demanda.
+              </p>
+              {solicitacao.analistaAtribuido ? (
+                <p className="text-xs text-indigo-800 font-semibold mt-1">
+                  Atribuído atualmente para: <span className="underline">{solicitacao.analistaAtribuido}</span>
+                </p>
+              ) : (
+                <p className="text-xs text-amber-700 font-semibold mt-1">
+                  ⚠️ Nenhuma atribuição definida. Selecione um responsável de engenharia abaixo para iniciar a validação.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 select-none">
+            <select
+              value={solicitacao.analistaAtribuido || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                const updated = { ...solicitacao, analistaAtribuido: val || undefined };
+                onUpdate(updated);
+              }}
+              className="px-3 py-2 text-xs border border-indigo-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white text-slate-750 font-sans min-w-[200px] cursor-pointer"
+            >
+              <option value="">-- Selecione o Analista --</option>
+              <option value="Eng. André Silva">Eng. André Silva</option>
+              <option value="Engª. Paula Rezende">Engª. Paula Rezende</option>
+              <option value="Eng. Marcus Vinícius">Eng. Marcus Vinícius</option>
+            </select>
+            {solicitacao.analistaAtribuido && (
+              <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg font-bold">
+                Definido!
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* FICHA TÉCNICA DA DEMANDA (CODESC E EXTENSÕES) */}
+      <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs space-y-5">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-wrap gap-2">
+          <h2 className="text-xs font-semibold text-slate-450 uppercase tracking-wider flex items-center gap-2">
+            <Info className="w-4 h-4 text-slate-450" />
+            Ficha de Informações da Solicitação
+          </h2>
+          <span className="text-[10px] font-mono font-semibold text-neutral-400">
+            Enviada pelo Técnico da SRE
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 text-xs font-sans">
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Prédio</span>
+            <span className="text-slate-800 text-sm font-medium">{solicitacao.predio || 'Principal'}</span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Tipo de Obra</span>
+            <span className="text-slate-800 text-sm font-semibold text-indigo-700 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100 inline-block">
+              {solicitacao.tipoObra || solicitacao.tipo || 'Não informado'}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Forma de Ocupação</span>
+            <span className="text-slate-800 text-sm font-medium">{solicitacao.formaOcupacao || 'PRÓPRIO'}</span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Forma Atendimento</span>
+            <span className="text-slate-800 text-sm font-medium">{solicitacao.formaAtendimento || 'VIA CAIXA ESCOLAR'}</span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Tipo de Atendimento</span>
+            <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${
+              solicitacao.tipoAtendimento === 'EMERGENCIAL' 
+                ? 'bg-amber-50 text-amber-900 border border-amber-200/50' 
+                : solicitacao.tipoAtendimento === 'EMENDA'
+                ? 'bg-indigo-100/70 text-indigo-900 border border-indigo-200'
+                : solicitacao.tipoAtendimento === 'SOE'
+                ? 'bg-teal-50 text-teal-900 border border-teal-200/50'
+                : solicitacao.tipoAtendimento === 'PDDE'
+                ? 'bg-pink-50 text-pink-900 border border-pink-200/50'
+                : 'text-slate-700 bg-slate-100'
+            }`}>
+              {solicitacao.tipoAtendimento || 'NORMAL'}
+            </span>
+          </div>
+
+          {solicitacao.tipoAtendimento === 'EMENDA' && (
+            <div className="sm:col-span-2 bg-indigo-50/50 border border-indigo-100/80 p-3 rounded-lg">
+              <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-widest block mb-2">Dados da Emenda Parlamentar</span>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="text-slate-500 block uppercase font-medium text-[9px] tracking-wide mb-0.5">Número do PAF</span>
+                  <strong className="text-slate-800 font-mono text-sm">{solicitacao.numPaf || 'NÃO CONFIGURADO'}</strong>
+                </div>
+                <div>
+                  <span className="text-slate-500 block uppercase font-medium text-[9px] tracking-wide mb-0.5">Ano da Emenda</span>
+                  <strong className="text-slate-800 font-mono text-sm">{solicitacao.anoEmenda || 'NÃO CONFIGURADO'}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Valor Estimado Planilha</span>
+            <span className="text-slate-950 font-mono text-sm font-semibold">
+              {solicitacao.valorPlanilha ? `R$ ${solicitacao.valorPlanilha.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">ISS Retido</span>
+            <span className="text-slate-800 text-sm font-medium">{solicitacao.iss || 'Não informado'}</span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Imóvel Tombado</span>
+            <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-xs font-medium ${
+              solicitacao.tombado && solicitacao.tombado !== 'NÃO É TOMBADO'
+                ? 'bg-purple-100/70 text-purple-900 border border-purple-200' 
+                : 'text-slate-700 bg-slate-100'
+            }`}>
+              <span>{solicitacao.tombado || 'NÃO INFORMADO'}</span>
+              {solicitacao.orgaoTombador && (
+                <span className="text-[10px] opacity-75 font-bold uppercase bg-purple-200/50 px-1 rounded">
+                  {solicitacao.orgaoTombador}
+                </span>
+              )}
+            </span>
+          </div>
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Imóvel Coabitado</span>
+            <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded text-xs font-medium ${
+              solicitacao.coabitado === 'SIM'
+                ? 'bg-blue-100/70 text-blue-900 border border-blue-200' 
+                : 'text-slate-700 bg-slate-100'
+            }`}>
+              <span>{solicitacao.coabitado || 'NÃO'}</span>
+              {solicitacao.coabitado === 'SIM' && solicitacao.tipoCoabitado && (
+                <span className="text-[10px] opacity-75 font-bold uppercase bg-blue-200/50 px-1 rounded">
+                  {solicitacao.tipoCoabitado}
+                </span>
+              )}
+            </span>
+          </div>
+
+          {solicitacao.notificacao && (
+            <div className="col-span-2">
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Notificação / Órgão Regulador</span>
+              <span className="text-amber-800 font-semibold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs leading-normal block">
+                🚨 {solicitacao.notificacao}
+              </span>
+            </div>
+          )}
+
+          <div>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Responsável Técnico</span>
+            <span className="text-slate-850 text-sm font-semibold block">{solicitacao.responsavel || 'Não cadastrado'}</span>
+          </div>
+        </div>
+
+        {/* Descrição Folha de Rosto */}
+        {solicitacao.descricaoFolhaRosto && (
+          <div className="pt-4 border-t border-slate-100">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1.5">Descrição Técnica do Escopo</span>
+            <p className="text-slate-650 text-xs leading-relaxed font-sans max-w-5xl bg-slate-50 p-3 rounded-lg border border-slate-100">{solicitacao.descricaoFolhaRosto}</p>
+          </div>
+        )}
+
+        {/* PAINEL INTERATIVO DE VERIFICAÇÃO DE ENGENHARIA DA FICHA */}
+        <div className="pt-4 border-t border-slate-200 text-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              Verificação de Conformidade Cadastral (DORE)
+            </h3>
+          </div>
+
+          {solicitacao.fichaVerificada === true ? (
+            <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-3xs">
+              <div className="flex items-start gap-2.5">
+                <span className="text-emerald-600 text-[18px] select-none">✅</span>
+                <div className="space-y-1">
+                  <p className="font-extrabold text-emerald-950 text-xs text-left">
+                    Ficha Cadastral Verificada e Aprovada por Engenharia DORE
+                  </p>
+                  <p className="text-[11px] text-emerald-700 text-left">
+                    Atestada por: <strong className="font-bold">{solicitacao.fichaVerificadaPor}</strong> em {solicitacao.fichaVerificadaData}
+                  </p>
+                  {solicitacao.observacoesFicha && (
+                    <p className="text-[11px] text-emerald-900 bg-emerald-100/50 p-2 rounded border border-emerald-200 italic mt-1 font-sans text-left">
+                      <strong>Parecer de conformidade:</strong> "{solicitacao.observacoesFicha}"
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdate({
+                      ...solicitacao,
+                      fichaVerificada: undefined,
+                      fichaVerificadaPor: undefined,
+                      fichaVerificadaData: undefined,
+                      observacoesFicha: undefined
+                    });
+                  }}
+                  className="px-2.5 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100/35 text-emerald-800 rounded-lg text-[10.5px] font-bold cursor-pointer transition shrink-0"
+                >
+                  Refazer Análise
+                </button>
+              )}
+            </div>
+          ) : solicitacao.fichaVerificada === false ? (
+            <div className="bg-red-50 border border-red-250 text-red-800 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-3xs">
+              <div className="flex items-start gap-2.5">
+                <span className="text-red-650 text-[18px] select-none">❌</span>
+                <div className="space-y-1">
+                  <p className="font-extrabold text-red-950 text-xs text-left">
+                    Inconsistências Identificadas na Ficha da Solicitação!
+                  </p>
+                  <p className="text-[11px] text-red-700 text-left">
+                    Sinalizado por: <strong className="font-bold">{solicitacao.fichaVerificadaPor}</strong> em {solicitacao.fichaVerificadaData}
+                  </p>
+                  <p className="text-xs text-red-950 bg-red-100/50 p-2.5 rounded-lg border border-red-200 mt-2 font-medium leading-relaxed text-left">
+                    <strong>Motivo da Inadequação:</strong> "{solicitacao.observacoesFicha || 'Inconsistência genérica nos dados cadastrais cadastrados pela infraestrutura SRE.'}"
+                  </p>
+                  <p className="text-[10px] text-red-400 italic block mt-1 text-left">
+                    🚨 O técnico de infraestrutura da SRE precisará retificar as informações antes de prosseguir com aprovação.
+                  </p>
+                </div>
+              </div>
+
+              {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUpdate({
+                      ...solicitacao,
+                      fichaVerificada: undefined,
+                      fichaVerificadaPor: undefined,
+                      fichaVerificadaData: undefined,
+                      observacoesFicha: undefined
+                    });
+                  }}
+                  className="px-2.5 py-1.5 bg-white border border-red-300 hover:bg-red-105 text-red-800 rounded-lg text-[10.5px] font-bold cursor-pointer transition shrink-0"
+                >
+                  Refazer Análise
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-4">
+              <div className="flex items-start gap-2 text-slate-600">
+                <span className="text-[16px]">⏳</span>
+                <div>
+                  <p className="font-semibold text-slate-800">Conformidade Cadastral Pendente de Confirmação</p>
+                  <p className="text-[11px] text-slate-450 mt-0.5">Nenhum engenheiro avaliou a integridade destas informações cadastrais da escola cooperadora ainda.</p>
+                </div>
+              </div>
+
+              {/* Controles ativos de edição para o engenheiro logado */}
+              {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
+                <div className="bg-white border border-indigo-150 p-4 rounded-xl space-y-3/2 text-left">
+                  <div className="flex items-center gap-1.5 text-indigo-900 font-bold">
+                    <UserCheck className="w-4 h-4 text-indigo-650" />
+                    <span>Painel de Avaliação Cadastral (Engenheiro DORE)</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-500">
+                    Como engenheiro responsável, verifique se todos os parâmetros digitados pelo técnico (Ex: Tipo de obra: {solicitacao.tipoObra || solicitacao.tipo}, Valor Estimado: {solicitacao.valorPlanilha ? `R$ ${solicitacao.valorPlanilha.toLocaleString('pt-BR')}` : 'Não informado'}) estão consistentes com as peças técnicas enviadas.
+                  </p>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] uppercase font-bold text-slate-450">Parecer Técnico da Ficha (Exigido em caso de inconsistência)</label>
+                    <textarea
+                      id="obs-ficha-input"
+                      placeholder="Ex: Dados checados. Valor estimado está condizente com as medições iniciais."
+                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-indigo-100"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 text-xs pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById('obs-ficha-input') as HTMLTextAreaElement | null;
+                        const msg = input?.value || '';
+                        if (!msg.trim()) {
+                          alert('Justificativa técnica detalhada sobre a inconsistência é obrigatória para recusar a ficha.');
+                          return;
+                        }
+                        const name = perfilUsuario === 'analista_dore' ? 'Eng. André Silva' : 'Dra. Helena Rocha';
+                        onUpdate({
+                          ...solicitacao,
+                          fichaVerificada: false,
+                          fichaVerificadaPor: `${name} (Analista DORE)`,
+                          fichaVerificadaData: new Date().toISOString().split('T')[0],
+                          observacoesFicha: msg
+                        });
+                        alert('Inconsistência registrada na ficha!');
+                      }}
+                      className="px-3.5 py-1.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded-lg cursor-pointer"
+                    >
+                      Apontar Inconsistência
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById('obs-ficha-input') as HTMLTextAreaElement | null;
+                        const msg = input?.value || '';
+                        const name = perfilUsuario === 'analista_dore' ? 'Eng. André Silva' : 'Dra. Helena Rocha';
+                        onUpdate({
+                          ...solicitacao,
+                          fichaVerificada: true,
+                          fichaVerificadaPor: `${name} (Analista DORE)`,
+                          fichaVerificadaData: new Date().toISOString().split('T')[0],
+                          observacoesFicha: msg || 'Dados avaliados e condizentes com as peças técnicas regimentais.'
+                        });
+                        alert('Conformidade cadastral da ficha validada e atestada com sucesso!');
+                      }}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer"
+                    >
+                      Atestar Conformidade Cadastral
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ABAS DO WORKSPACE INTERNO - PROFESSIONAL POLISH */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        {!hideTabs && (
+          <div className="flex border-b border-slate-200 bg-slate-50/75 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('checklist')}
+              className={`px-5 py-3.5 border-b-2 text-xs font-bold tracking-wider uppercase shrink-0 transition-all cursor-pointer ${
+                activeTab === 'checklist' 
+                  ? 'border-blue-600 text-blue-650 bg-white' 
+                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+              }`}
+            >
+              Check list documental
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('paf')}
+              disabled={solicitacao.etapaAtual === 'cadastro' || solicitacao.etapaAtual === 'analise'}
+              className={`px-5 py-3.5 border-b-2 text-xs font-bold tracking-wider uppercase shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${
+                solicitacao.etapaAtual === 'cadastro' || solicitacao.etapaAtual === 'analise'
+                  ? 'opacity-40 cursor-not-allowed text-slate-400'
+                  : activeTab === 'paf'
+                    ? 'border-blue-600 text-blue-650 bg-white'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+              }`}
+            >
+              {solicitacao.etapaAtual === 'cadastro' || solicitacao.etapaAtual === 'analise' ? '🔒' : ''} Ficha PAF (Homologação)
+            </button>
+
+            <button
+              onClick={() => setActiveTab('execucao')}
+              disabled={solicitacao.etapaAtual === 'cadastro' || solicitacao.etapaAtual === 'analise' || solicitacao.etapaAtual === 'paf_autorizacao' || solicitacao.etapaAtual === 'paf'}
+              className={`px-5 py-3.5 border-b-2 text-xs font-bold tracking-wider uppercase shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${
+                solicitacao.etapaAtual === 'cadastro' || solicitacao.etapaAtual === 'analise' || solicitacao.etapaAtual === 'paf_autorizacao' || solicitacao.etapaAtual === 'paf'
+                  ? 'opacity-40 cursor-not-allowed text-slate-400'
+                  : activeTab === 'execucao'
+                    ? 'border-blue-600 text-blue-650 bg-white'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+              }`}
+            >
+              {solicitacao.etapaAtual === 'cadastro' || solicitacao.etapaAtual === 'analise' || solicitacao.etapaAtual === 'paf_autorizacao' || solicitacao.etapaAtual === 'paf' ? '🔒' : ''} Execução & Medições da Obra
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ajustes')}
+              disabled={solicitacao.etapaAtual !== 'execucao'}
+              className={`px-5 py-3.5 border-b-2 text-xs font-bold tracking-wider uppercase shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${
+                solicitacao.etapaAtual !== 'execucao'
+                  ? 'opacity-40 cursor-not-allowed text-slate-400'
+                  : activeTab === 'ajustes'
+                    ? 'border-blue-600 text-blue-650 bg-white'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+              }`}
+            >
+              {solicitacao.etapaAtual !== 'execucao' ? '🔒' : ''} Ajustes de Planilha
+            </button>
+
+            <button
+              onClick={() => setActiveTab('aditivos')}
+              disabled={solicitacao.etapaAtual !== 'execucao'}
+              className={`px-5 py-3.5 border-b-2 text-xs font-bold tracking-wider uppercase shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${
+                solicitacao.etapaAtual !== 'execucao'
+                  ? 'opacity-40 cursor-not-allowed text-slate-400'
+                  : activeTab === 'aditivos'
+                    ? 'border-blue-600 text-blue-650 bg-white'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+              }`}
+            >
+              {solicitacao.etapaAtual !== 'execucao' ? '🔒' : ''} Aditivos do Contrato
+            </button>
+
+            <button
+              onClick={() => setActiveTab('conclusao')}
+              disabled={solicitacao.etapaAtual !== 'execucao'}
+              className={`px-5 py-3.5 border-b-2 text-xs font-bold tracking-wider uppercase shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${
+                solicitacao.etapaAtual !== 'execucao'
+                  ? 'opacity-40 cursor-not-allowed text-slate-400'
+                  : activeTab === 'conclusao'
+                    ? 'border-blue-600 text-blue-650 bg-white'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+              }`}
+            >
+              {solicitacao.etapaAtual !== 'execucao' ? '🔒' : ''} Conclusão de Obra
+            </button>
+          </div>
+        )}
+
+        {/* CONTEÚDO DA ABA 1: CHECKLIST DE DOCUMENTOS */}
+        {activeTab === 'checklist' && (
+          <div className="p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-100 mb-6">
+              <div>
+                <h2 className="font-display text-lg font-bold text-neutral-800">
+                  Check list documental
+                </h2>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  Análise, validação e retornos para correção imediata dos relatórios de engenharia.
+                </p>
+              </div>
+
+              {/* Action buttons corresponding to Role Permissions */}
+              <div className="flex items-center gap-2">
+                {/* Simulated Quick Action block for Engineer to approve/evaluate quickly */}
+                {perfilUsuario === 'analista_dore' && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
+                  <>
+                    <button
+                      onClick={reviewAllWithIA}
+                      className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-medium hover:bg-indigo-100 transition-all flex items-center gap-1.5 cursor-pointer"
+                      title="Avalia automaticamente documentos anexados simulando critérios de engenharia."
+                    >
+                      <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                      Parecer Rápido com IA
+                    </button>
+
+                    <button
+                      onClick={finalizarAnaliseDore}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer border ${
+                        solicitacao.documentos.some(d => d.status === 'recusado')
+                          ? 'bg-red-600 border-red-600 hover:bg-red-700 text-white'
+                          : 'bg-emerald-600 border-emerald-600 hover:bg-emerald-700 text-white'
+                      }`}
+                    >
+                      {solicitacao.documentos.some(d => d.status === 'recusado') ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 text-white" />
+                          Retornar com Pendências
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-3.5 h-3.5 text-white" />
+                          Aprovar Processo (Avançar para PAF)
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* BANNER DE ATRIBUIÇÃO PARA O ANALISTA DORE */}
+            {perfilUsuario === 'analista_dore' && (
+              <div className="mb-6 p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-3 font-sans bg-white shadow-xs border-slate-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 shrink-0 border border-slate-200/50">
+                    <User className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-800">Atribuição da Demanda (DORE)</p>
+                    <p className="text-slate-500 text-[10.5px]">
+                      {solicitacao.analistaAtribuido 
+                        ? `Responsável técnico: ${solicitacao.analistaAtribuido}`
+                        : '⚠️ Ninguém atribuído. Esta demanda precisa ser encaminhada por um Gestor DORE.'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  {isMyAssignment ? (
+                    <div className="flex items-center gap-2">
+                      <span className="bg-emerald-150 text-emerald-805 border border-emerald-250 font-bold px-2.5 py-1 rounded-full text-[10.5px]">
+                        ✓ Atribuído a você
+                      </span>
+                      {solicitacao.etapaAtual === 'analise' && (
+                        <button
+                          onClick={finalizarAnaliseDore}
+                          className={`px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1 border border-emerald-500`}
+                          title="Aprovar e Avançar para Autorização do PAF"
+                        >
+                          <CheckCircle className="w-3 h-3 text-white" />
+                          Aprovar Análise DORE
+                        </button>
+                      )}
+                    </div>
+                  ) : solicitacao.analistaAtribuido ? (
+                    <span className="bg-amber-50 text-amber-800 border border-amber-200 font-medium px-2.5 py-1 rounded-full text-[10.5px]">
+                      🔒 Somente Leitura (Responsabilidade de {solicitacao.analistaAtribuido})
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        onUpdate({
+                          ...solicitacao,
+                          analistaAtribuido: 'Eng. André Silva'
+                        });
+                      }}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
+                      title="Atribuir demanda a mim mesmo para iniciar análise técnica"
+                    >
+                      Atribuir a mim e Analisar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Beautiful display of the custom-aggregated consolidated technical opinion */}
+            {solicitacao.parecerConsolidado && (
+              <div id="card-parecer-consolidado" className="mb-6 bg-slate-50 border border-slate-300 rounded-xl overflow-hidden shadow-xs font-sans">
+                <div className="bg-slate-800 text-slate-100 px-4 py-3 flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-blue-400" />
+                    Parecer Técnico Consolidado (DORE)
+                  </span>
+                  {solicitacao.contadorAnalises && solicitacao.contadorAnalises > 0 && (
+                    <span className="text-[10.5px] bg-blue-600/50 border border-blue-500 text-blue-200 px-2.5 py-0.5 rounded-full font-bold">
+                      {solicitacao.contadorAnalises}º Ciclo de Avaliação
+                    </span>
+                  )}
+                </div>
+                <div className="p-4 bg-white border-b border-slate-200">
+                  <pre className="text-xs font-mono text-slate-700 whitespace-pre-wrap leading-relaxed max-h-72 overflow-y-auto bg-slate-50/50 border border-slate-200/80 p-4 rounded-xl select-text">
+                    {solicitacao.parecerConsolidado}
+                  </pre>
+                  <p className="text-[10.5px] text-slate-500 mt-3 font-medium flex items-center gap-1">
+                    <span>💡 Este parecer técnico é automaticamente compilado com base nas avaliações e observações individuais cadastradas pelo Analista de Engenharia da DORE para cada documento.</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Warning if there are Rejected Docs */}
+            {solicitacao.documentos.some(d => d.status === 'recusado') && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="font-bold block text-sm">Pendências de Engenharia Identificadas</span>
+                    <span>O dossier atual possui pendências apontadas pelo engenheiro da DORE. O técnico de infraestrutura deve providenciar a substituição dos arquivos recusados e re-enviar para reanálise assim que as correções forem anexadas.</span>
+                    <div className="bg-white/80 p-2.5 rounded-lg border border-red-100 mt-2 font-mono text-neutral-700 scale-[0.98] origin-left">
+                      <span className="font-bold text-red-700 text-[10px] uppercase block mb-1">Itens a Corrigir:</span>
+                      {solicitacao.documentos.filter(d => d.status === 'recusado').map(d => (
+                        <div key={d.id} className="mb-1 last:mb-0">
+                          • <strong className="text-neutral-800 font-sans">{d.nome}</strong>: {d.justificativa}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Checklist Items Table/Flex */}
+            <div className="space-y-4">
+              {solicitacao.documentos.map((doc, idx) => {
+                const isUploaded = doc.fileName !== undefined;
+                const uploadRefId = `${doc.id}-input`;
+
+                return (
+                  <div 
+                    key={doc.id} 
+                    className={`p-4 rounded-xl border transition-all ${
+                      doc.status === 'recusado' 
+                        ? 'border-red-200 bg-red-50/15'
+                        : doc.status === 'aprovado'
+                          ? 'border-emerald-100 bg-emerald-50/5'
+                          : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      {/* Left: Info & Description */}
+                      <div className="max-w-xl">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
+                            doc.status === 'aprovado' 
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                              : doc.status === 'recusado'
+                                ? 'bg-red-50 text-red-700 border border-red-200'
+                                : doc.status === 'nao_se_aplica'
+                                  ? 'bg-neutral-100 text-neutral-600 border border-neutral-200'
+                                  : 'bg-neutral-50 text-neutral-600 border border-neutral-100'
+                          }`}>
+                            Item {idx + 1}
+                          </span>
+                          <h4 className="font-display font-bold text-neutral-800 text-sm">
+                            {doc.nome}
+                          </h4>
+                          {doc.obrigatorio ? (
+                            <span className="text-[10px] font-bold text-red-500 uppercase">Obrigatório</span>
+                          ) : (
+                            <span className="text-[10px] font-medium text-neutral-400 capitalize">Opcional</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-neutral-500 mt-1">
+                          {doc.desc}
+                        </p>
+
+                        {/* File details if uploaded */}
+                        {isUploaded ? (
+                          <div className="mt-3 flex items-center gap-3 bg-neutral-50 border border-neutral-200/60 p-2.5 rounded-lg text-xs">
+                            <FileText className="w-4 h-4 text-blue-500 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <span className="font-mono font-medium text-neutral-800 block truncate">{doc.fileName}</span>
+                              <span className="text-[10px] text-neutral-400 font-mono">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
+                            </div>
+                            
+                            {/* Download Action */}
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDocument(doc.fileName!, doc.nome)}
+                              className="text-blue-600 hover:text-blue-850 p-1.5 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer inline-flex items-center gap-1 font-extrabold text-[10.5px] uppercase tracking-wider border border-blue-200"
+                              title="Baixar Documento"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Baixar</span>
+                            </button>
+
+                            {/* Delete Uploaded Doc - Available only for technical profiles during edit states */}
+                            {(perfilUsuario === 'tecnico_infra') && (solicitacao.etapaAtual === 'cadastro') && doc.status !== 'aprovado' && (
+                              <button 
+                                onClick={() => removerDocumento(doc.id)}
+                                className="text-red-500 hover:text-red-705 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                title="Remover Arquivo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-neutral-400 italic block mt-2 font-mono">
+                            ⚠️ Nenhum documento anexado ainda.
+                          </span>
+                        )}
+
+                        {/* Justification / Notes details shown if NOT currently in active review mode by this engineer */}
+                        {doc.justificativa && (solicitacao.etapaAtual !== 'analise' || perfilUsuario !== 'analista_dore' || !isMyAssignment) && (
+                          <div className={`mt-3 p-3 rounded-xl border text-xs font-sans ${
+                            doc.status === 'recusado' 
+                              ? 'bg-red-50/50 border-red-200 text-red-850'
+                              : doc.status === 'aprovado'
+                                ? 'bg-emerald-50/50 border-emerald-100 text-emerald-850'
+                                : 'bg-slate-50 border-slate-200 text-slate-750'
+                          }`}>
+                            <span className="font-bold flex items-center gap-1 text-[9.5px] uppercase tracking-wider">
+                              {doc.status === 'recusado' ? '❌ Pendência Técnica Identificada' : doc.status === 'aprovado' ? '✅ Nota de Validação do Analista' : 'ℹ️ Observação de Análise'}:
+                            </span>
+                            <p className="mt-1 font-sans leading-relaxed">{doc.justificativa}</p>
+                          </div>
+                        )}
+
+                        {/* 2. OPEN TEXT AREA FOR ACTIVE ANALYST REVIEW - CAMPO DE TEXTO ABERTO DE ANÁLISE EM TEMPO REAL */}
+                        {perfilUsuario === 'analista_dore' && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
+                          <div className="mt-4 space-y-2 p-3.5 border border-slate-200 rounded-xl bg-slate-50 shadow-inner">
+                            <div className="flex items-center justify-between">
+                              <label htmlFor={`analise-doc-${doc.id}`} className="text-[11px] font-bold text-slate-755 flex items-center gap-1.5 font-sans">
+                                <FileCheck className="w-3.5 h-3.5 text-blue-600" />
+                                Parecer de Análise Física / Documental do Analista:
+                              </label>
+                              <span className="text-[9.5px] text-slate-400 font-mono">Salva no modelo automaticamente</span>
+                            </div>
+                            <textarea
+                              id={`analise-doc-${doc.id}`}
+                              value={doc.justificativa || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const updatedDocs = solicitacao.documentos.map(d => {
+                                  if (d.id === doc.id) {
+                                    return { ...d, justificativa: val };
+                                  }
+                                  return d;
+                                });
+                                onUpdate({ ...solicitacao, documentos: updatedDocs });
+                              }}
+                              placeholder="Digite aqui as considerações, conformidades encontradas ou as justificativas detalhadas para correções..."
+                              className="w-full text-xs p-2.5 border border-slate-250 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 font-sans text-slate-800 focus:outline-hidden leading-relaxed"
+                              rows={2.5}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right: Actions depending on Profile Role */}
+                      <div className="shrink-0 flex items-center gap-3">
+                        
+                        {/* 1. TECNICO DE INFRAESTRUTURA ACTIONS */}
+                        {perfilUsuario === 'tecnico_infra' && (
+                          <div className="flex items-center gap-2">
+                            {solicitacao.etapaAtual === 'cadastro' ? (
+                              doc.status === 'aprovado' ? (
+                                <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 font-sans shadow-xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  🔒 Validado (Imutável)
+                                </span>
+                              ) : (
+                                <div>
+                                  <input
+                                    type="file"
+                                    id={uploadRefId}
+                                    ref={el => { fileInputRefs.current[doc.id] = el }}
+                                    onChange={(e) => handleSimulatedUpload(doc.id, e)}
+                                    className="hidden"
+                                  />
+                                  <button
+                                    onClick={() => handleTriggerUpload(doc.id)}
+                                    className={`px-3 py-1.5 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer ${
+                                      isUploaded 
+                                        ? 'bg-neutral-50 text-neutral-700 border-neutral-300 hover:bg-neutral-100'
+                                        : 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700'
+                                    }`}
+                                  >
+                                    <UploadCloud className="w-3.5 h-3.5" />
+                                    {isUploaded ? 'Substituir Código' : 'Anexar Documento'}
+                                  </button>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-xs text-neutral-400 border border-neutral-100 px-2 py-1 rounded bg-neutral-50/50 font-mono">
+                                Apenas Leitura (Enviado)
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* 2. ENGENHEIRO DORE ACTIONS */}
+                        {perfilUsuario === 'analista_dore' && isMyAssignment && (
+                          <div className="flex flex-col items-end gap-2">
+                            {solicitacao.etapaAtual === 'analise' ? (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-1 bg-neutral-100 p-1.5 rounded-xl border border-neutral-200">
+                                  <button
+                                    onClick={() => setDocumentStatus(doc.id, 'aprovado')}
+                                    disabled={!isUploaded}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                      doc.status === 'aprovado'
+                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                        : 'text-neutral-600 hover:bg-neutral-200'
+                                    } ${!isUploaded ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                    title="Aprovar Documento"
+                                  >
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Aprovar
+                                  </button>
+
+                                  <button
+                                    onClick={() => setDocumentStatus(doc.id, 'recusado')}
+                                    disabled={!isUploaded}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                                      doc.status === 'recusado'
+                                        ? 'bg-red-600 text-white shadow-xs'
+                                        : 'text-neutral-600 hover:bg-neutral-200'
+                                    } ${!isUploaded ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                    title="Recusar Documento"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5" />
+                                    Recusar
+                                  </button>
+
+                                  <button
+                                    onClick={() => setDocumentStatus(doc.id, 'nao_se_aplica')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                      doc.status === 'nao_se_aplica'
+                                        ? 'bg-neutral-600 text-white shadow-xs'
+                                        : 'text-neutral-600 hover:bg-neutral-200'
+                                    }`}
+                                    title="Não Se Aplica"
+                                  >
+                                    Não se Aplica
+                                  </button>
+                                </div>
+
+                                {isUploaded && (
+                                  <button 
+                                    onClick={() => handleAISmartAnalysis(doc.id)}
+                                    className="w-full text-center text-[10px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center justify-center gap-1 bg-indigo-50 border border-indigo-100 rounded-lg py-1.5 transition-colors cursor-pointer"
+                                  >
+                                    <Sparkles className="w-3 h-3 animate-bounce" />
+                                    Gerar Análise IA
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-xs">
+                                {doc.status === 'aprovado' && <span className="text-emerald-700 font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Validado</span>}
+                                {doc.status === 'recusado' && <span className="text-red-700 font-bold flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> Recusado</span>}
+                                {doc.status === 'nao_se_aplica' && <span className="text-neutral-500 font-bold">N/A</span>}
+                                {doc.status === 'pendente' && <span className="text-neutral-400 font-mono italic">Pendente de Ação</span>}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* OTHER USER ROLES PREVIEWS */}
+                        {((perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore') || (perfilUsuario === 'analista_dore' && !isMyAssignment)) && (
+                          <div className="flex items-center gap-1.5 text-xs font-mono font-medium text-neutral-500">
+                            Status: <span className={`uppercase font-bold ${
+                              doc.status === 'aprovado' ? 'text-emerald-600' : doc.status === 'recusado' ? 'text-red-500' : 'text-neutral-400'
+                            }`}>{doc.status}</span>
+                          </div>
+                        )}
+
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* BARRA DE BOTÕES DE TRANSIÇÃO DO CHECKLIST */}
+            <div className="border-t border-neutral-100 pt-6 mt-6 flex justify-between items-center bg-neutral-50/50 p-4 rounded-xl border">
+              <div className="text-xs text-neutral-500 max-w-md">
+                <span className="font-bold text-neutral-600 block">Etapas consecutivas:</span>
+                Técnico anexa documentos obrigatórios → Engenheiro valida ou aponta erros → Aprovados completam e abrem o envio do PAF.
+              </div>
+
+              <div>
+                {/* 1. Técnico enviando para Engenharia */}
+                {perfilUsuario === 'tecnico_infra' && solicitacao.etapaAtual === 'cadastro' && !hideTransitionButtons && (
+                  <div className="text-right">
+                    {!canSendToDore() && (
+                      <span className="text-xs text-red-600 font-semibold block mb-2">
+                        ⚠️ Aguardando anexo dos {solicitacao.documentos.filter(d => d.obrigatorio && !d.fileName).length} docs obrigatórios restantes.
+                      </span>
+                    )}
+                    <button
+                      onClick={enviarParaDore}
+                      disabled={!canSendToDore()}
+                      className={`px-5 py-2.5 rounded-lg text-sm font-semibold shadow-xs transition-all flex items-center gap-2 ${
+                        canSendToDore()
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
+                          : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                      }`}
+                    >
+                      Enviar documentação para atendimento DORE
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* 1b. Técnico solicitando devolução se já enviado e antes de atribuição */}
+                {perfilUsuario === 'tecnico_infra' && solicitacao.etapaAtual === 'analise' && !solicitacao.analistaAtribuido && !hideTransitionButtons && (
+                  <div className="text-right space-y-1.5">
+                    <span className="text-xs text-amber-600 block font-medium">
+                      ⚠️ O processo está na DORE aguardando atribuição de analista.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={solicitarDevolucaoProcesso}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer ml-auto"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-white" />
+                      Solicitar Devolução do Processo (Resgatar)
+                    </button>
+                    <p className="text-[10px] text-neutral-400 max-w-sm ml-auto">
+                      Caso tenha esquecido algum documento ou enviado errado, você pode resgatar a ficha cadastral para correção enquanto nenhum analista iniciou os trabalhos.
+                    </p>
+                  </div>
+                )}
+
+                {/* 2. Engenheiro DORE finalizando análise */}
+                {perfilUsuario === 'analista_dore' && isMyAssignment && solicitacao.etapaAtual === 'analise' && !hideTransitionButtons && (
+                  <div className="text-right">
+                    {solicitacao.documentos.some(d => d.status === 'pendente' && d.fileName) && (
+                      <span className="text-xs text-amber-600 font-semibold block mb-2">
+                        💡 Recomenda-se definir parecer em todos os documentos anexados.
+                      </span>
+                    )}
+                    
+                    <button
+                      onClick={finalizarAnaliseDore}
+                      className={`px-5 py-2.5 rounded-lg text-sm font-semibold shadow-xs transition-all flex items-center gap-2 ml-auto ${
+                        solicitacao.documentos.some(d => d.status === 'recusado')
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      }`}
+                    >
+                      {solicitacao.documentos.some(d => d.status === 'recusado') ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 text-white animate-spin-reverse" />
+                          Retornar com Pendências para Técnico
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4 text-white" />
+                          Aprovar Processo (Avançar para Autorização do PAF)
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Ajuda visual caso não seja analista_dore ou não esteja atribuído */}
+                {solicitacao.etapaAtual === 'analise' && (!isMyAssignment || perfilUsuario !== 'analista_dore') && (
+                  <div className="p-4 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs">
+                    <p className="font-bold flex items-center gap-1.5 font-sans">
+                      <Info className="w-4.5 h-4.5 text-amber-600 shrink-0" />
+                      Como aprovar e avançar este processo para a etapa de Autorização do PAF?
+                    </p>
+                    <p className="mt-1 leading-relaxed">
+                      Para visualizar os botões de aprovação de análise do processo, altere o seu perfil para <strong className="underline">Analista de Engenharia (DORE)</strong> no painel de perfis da barra lateral esquerda e certifique-se de que a demanda está atribuída para <strong className="underline">Eng. André Silva</strong> (ou clique no botão "Atribuir a mim e Analisar" no topo do checklist).
+                    </p>
+                  </div>
+                )}
+
+                {/* Info block for others */}
+                {solicitacao.etapaAtual !== 'cadastro' && solicitacao.etapaAtual !== 'analise' && (
+                  <span className="text-xs text-emerald-600 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 font-sans">
+                    <CheckCircle className="w-4 h-4" /> Checklist Técnico Validado e Aprovado pelo Analista DORE!
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CONTEÚDO DA ABA 2: PAF FICHA DE HOMOLOGAÇÃO */}
+        {activeTab === 'paf' && (
+          <div className="p-6">
+            <div className="pb-4 border-b border-neutral-100 mb-6 font-sans">
+              <h2 className="font-display text-lg font-bold text-neutral-800">
+                Plano de Atendimento Financeiro (PAF)
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                Instrua o número oficial do PAF e acompanhe o fluxo de geração e pagamento do recurso para início imediato da execução financeira.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Form Info */}
+              <div className="lg:col-span-2 space-y-6">
+                {perfilUsuario !== 'administrativo_dore' && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs space-y-1.5 text-left font-sans flex items-start gap-2.5">
+                    <span className="text-base select-none leading-none mt-0.5">⚠️</span>
+                    <div className="space-y-0.5">
+                      <strong className="font-extrabold block text-amber-955">Ação Restrita: Controle Exclusivo da Área Administrativa DORE</strong>
+                      <span>O seu perfil de simulação atual é <strong>{perfilUsuario.toUpperCase()}</strong>. Para preencher, alterar ou oficializar as informações de Geração do PAF nesta Etapa 4, por favor altere seu perfil para <strong>Rui Lages (Administrativo DORE)</strong> no seletor de usuários no cabeçalho.</span>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={salvarPAF} className="space-y-6">
+                  {/* Bloco 1: Acompanhamento do PAF */}
+                  <div className="bg-neutral-50 p-6 rounded-xl border border-neutral-200 space-y-4 text-left font-sans">
+                    <h3 className="font-display font-bold text-sm text-neutral-700 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-neutral-200/60">
+                      <FileCheck className="w-4 h-4 text-neutral-500" />
+                      Editar Ficha de Acompanhamento do PAF
+                    </h3>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Número Oficial do PAF *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Ex: PAF-3320-2026"
+                          value={numPAFInput}
+                          onChange={(e) => setNumPAFInput(e.target.value)}
+                          disabled={perfilUsuario !== 'administrativo_dore'}
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono"
+                          required
+                        />
+                        <p className="text-[10px] text-neutral-400 mt-1">Código único de registro do plano financeiro.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Data de Criação do PAF
+                        </label>
+                        <input
+                          type="date"
+                          value={dataPAFInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setDataPAFInput(val);
+                            setDataVigenciaPAFInput(getCalculatedVigencia(val));
+                          }}
+                          disabled={perfilUsuario !== 'administrativo_dore'}
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-800"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider flex items-center gap-1">
+                          Data de Vigência <span className="text-[10px] text-blue-600 font-extrabold lowercase font-sans">(automático)</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={dataVigenciaPAFInput}
+                          disabled={true}
+                          title="Vigência automática calculada em 5 anos com base na criação do PAF"
+                          className="w-full px-3 py-2 text-sm border border-neutral-200 bg-neutral-100 rounded-lg font-mono text-neutral-500 cursor-not-allowed select-none"
+                        />
+                        <p className="text-[10px] text-blue-600 font-bold mt-1">🔒 Calculado automaticamente (Ano da Criação + 5).</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bloco 2: Financeiro */}
+                  <div className="bg-neutral-50 p-6 rounded-xl border border-neutral-200 space-y-4 text-left font-sans">
+                    <h3 className="font-display font-bold text-sm text-neutral-700 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-neutral-200/60">
+                      <DollarSign className="w-4 h-4 text-emerald-600" />
+                      Financeiro
+                    </h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Data da Homologação
+                        </label>
+                        <input
+                          type="date"
+                          value={dataFinHomologacaoInput}
+                          onChange={(e) => setDataFinHomologacaoInput(e.target.value)}
+                          disabled={perfilUsuario !== 'administrativo_dore'}
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-800"
+                        />
+                        <p className="text-[10px] text-neutral-400 mt-1">A data em que o recurso financeiro foi homologado.</p>
+                      </div>
+
+                      <div className="flex flex-col justify-center">
+                        <label className="block text-xs font-semibold text-neutral-600 mb-2 uppercase tracking-wider">
+                          Situação do Pagamento
+                        </label>
+                        <div className="flex items-center">
+                          <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={pagoPAFInput}
+                              onChange={(e) => setPagoPAFInput(e.target.checked)}
+                              disabled={perfilUsuario !== 'administrativo_dore'}
+                              className="w-5 h-5 text-blue-600 bg-white border-neutral-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:cursor-not-allowed"
+                            />
+                            <span className="text-sm font-semibold text-neutral-700">
+                              O valor do PAF já foi pago
+                            </span>
+                          </label>
+                        </div>
+                        <p className="text-[10px] text-neutral-400 mt-1">Marque este campo para indicar que a dotação financeira já foi repassada/paga.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {perfilUsuario === 'administrativo_dore' && (
+                    <div className="pt-4 flex flex-col sm:flex-row justify-end items-center gap-3 border-t border-slate-150">
+                      <button
+                        type="submit"
+                        className="w-full sm:w-auto px-4 py-2 bg-slate-50 border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                      >
+                        Salvar Provisório (Manter na Etapa 4)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={homologarEAvancarOrdemInicio}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-black transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider font-sans"
+                      >
+                        ⚡ Oficializar, Gerar PAF e Enviar para Execução (Liberar Obra)
+                      </button>
+                    </div>
+                  )}
+                </form>
+
+                {/* Workflow Status Info */}
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 space-y-2">
+                  <span className="font-bold block text-sm flex items-center gap-1">
+                    <Info className="w-4 h-4 shrink-0" />
+                    Validação do Processo e Liberação Orçamentária
+                  </span>
+                  <span>Quando todos os documentos técnicos são validados e o orçamento é homologado pela DORE, o processo ganha uma dotação orçamentária oficial (Número PAF) e segue em definitivo para a contratação da Construtora e Fiscalização regular das Medições de Obra.</span>
+                </div>
+              </div>
+
+              {/* Right Column: Information Sidebar */}
+              <div className="space-y-4">
+                <div className="p-5 bg-white border border-neutral-200 rounded-xl space-y-4">
+                  <h4 className="font-display font-medium text-xs text-neutral-400 uppercase tracking-widest">Acompanhamento do PAF</h4>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <span className="block text-xs text-neutral-500">Status do PAF</span>
+                      <span className={`inline-block mt-1 px-2.5 py-1 rounded-full text-xs font-bold font-sans border ${
+                        solicitacao.statusPAF === 'Pago e Liberado'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : solicitacao.statusPAF === 'Aguardando Pagamento'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {solicitacao.statusPAF || 'Aguardando Geração'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-xs text-neutral-500">Número de PAF Registrado</span>
+                      <span className="text-sm font-semibold font-mono text-neutral-700">
+                        {solicitacao.numeroPAF || 'Não registrado'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-xs text-neutral-500">Data de Criação do PAF</span>
+                      <span className="text-xs text-neutral-600 font-mono">
+                        {solicitacao.dataHomologacao || 'Não cadastrada'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-xs text-neutral-500">Data de Vigência</span>
+                      <span className="text-xs text-neutral-600 font-mono">
+                        {solicitacao.dataVigenciaPAF || 'Não cadastrada'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl text-[11px] text-orange-800">
+                  <span className="font-bold block text-xs mb-1">Acesso do Perfil:</span>
+                  Para editar essa aba, simule o perfil de <strong>Administrativo DORE</strong> (usuário Rui Lages) na barra superior.
+                </div>
+              </div>
+            </div>
+
+            {/* BOTÕES DE TRANSIÇÃO DO PAF */}
+            {!hideTransitionButtons && (
+              <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-slate-200 p-4 -mx-6 -mb-6 mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg rounded-b-xl z-20">
+                <div className="text-[11px] text-slate-500 font-sans max-w-sm">
+                  {solicitacao.etapaAtual === 'paf' ? (
+                    <span className="font-semibold text-blue-600 flex items-center gap-1.5">
+                      <Info className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      Instrua as informações do PAF para liberar as ações de engenharia de obra.
+                    </span>
+                  ) : (
+                    <span className="font-semibold text-emerald-650 flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      Status do PAF processado e homologado pelo Administrativo DORE!
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {solicitacao.etapaAtual === 'paf' ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={perfilUsuario === 'administrativo_dore' ? homologarEAvancarOrdemInicio : undefined}
+                        disabled={perfilUsuario !== 'administrativo_dore' || !numPAFInput}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 ${
+                          perfilUsuario === 'administrativo_dore' && numPAFInput
+                            ? 'bg-blue-650 hover:bg-blue-700 text-white cursor-pointer hover:shadow-md'
+                            : 'bg-slate-100 text-slate-450 cursor-not-allowed border border-slate-200'
+                        }`}
+                        title="Envia para a etapa de Ordem de Início convencional da fiscalização"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-slate-450 group-hover:text-white" />
+                        Homologar e Liberar Ordem de Início
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={perfilUsuario === 'administrativo_dore' ? avancarDiretoParaExecucao : undefined}
+                        disabled={perfilUsuario !== 'administrativo_dore' || !numPAFInput}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 ${
+                          perfilUsuario === 'administrativo_dore' && numPAFInput
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer hover:shadow-md'
+                            : 'bg-slate-100 text-slate-450 cursor-not-allowed border border-slate-200'
+                        }`}
+                        title="Atalho: Avança diretamente para a Execução Física de Obra (Em Andamento)"
+                      >
+                        <Play className="w-3.5 h-3.5 text-slate-450 group-hover:text-white" />
+                        Homologar e Iniciar Execução (Direto)
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-blue-650 border border-blue-200 bg-blue-50/75 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 font-sans shadow-xs">
+                      <CheckCircle className="w-4 h-4 animate-pulse text-blue-600" /> Recurso PAF homologado e liberado para execução física da obra!
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CONTEÚDO DA ABA: ORDEM DE INÍCIO */}
+        {activeTab === 'ordem_inicio_obsoleto_integrado_na_execucao_da_obra' && (
+          <div className="p-6">
+            <div className="pb-4 border-b border-neutral-100 mb-6 font-sans">
+              <h2 className="font-display text-lg font-bold text-neutral-800 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-neutral-600" />
+                Ordem de Início
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                Preencha os dados cadastrais da vigência contratual do início das obras e anexe o cronograma físico-financeiro oficial.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans items-start">
+              <div className="lg:col-span-2 space-y-6">
+                <form onSubmit={salvarOrdemInicio} className="space-y-4">
+                  <div className="bg-slate-50/50 p-5 rounded-xl border border-slate-100 space-y-4">
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Dados Contratuais de Iniciação</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          INÍCIO OBRA (DATA DA ORDEM DE INÍCIO) *
+                        </label>
+                        <input
+                          type="date"
+                          value={dataOrdemInicioInput}
+                          onChange={(e) => setDataOrdemInicioInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          required
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          PREVISÃO DE TÉRMINO DA OBRA *
+                          <span className="block text-[10px] text-neutral-400 normal-case font-normal mt-0.5 leading-tight">
+                            (VIGÊNCIA DOS MESES CONTRATUAIS)
+                          </span>
+                        </label>
+                        <input
+                          type="date"
+                          value={previsaoTerminoInput}
+                          onChange={(e) => setPrevisaoTerminoInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          required
+                          className="w-full px-3 py-1.5 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          VALOR HOMOLOGADO NA CONTRATAÇÃO *
+                        </label>
+                        <div className="relative rounded-lg shadow-sm">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <span className="text-neutral-500 text-sm">R$</span>
+                          </div>
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="0,00"
+                            value={valorHomologadoContratacaoInput}
+                            onChange={(e) => setValorHomologadoContratacaoInput(e.target.value)}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            required
+                            className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          TIPO DE OBRA PONDERADO *
+                        </label>
+                        <select
+                          value={tipoObraInput}
+                          onChange={(e) => setTipoObraInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          required
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700 font-sans"
+                        >
+                          <option value="Construção">Construção (Classe IV - Peso 5)</option>
+                          <option value="Ampliação / Quadra">Ampliação / Quadra (Classe III - Peso 4)</option>
+                          <option value="Reforma">Reforma (Classe II/III - Peso 3)</option>
+                          <option value="Acessibilidade">Acessibilidade (Classe I/II - Peso 2)</option>
+                          <option value="Projeto">Projeto (Classe I - Peso 1)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Fiscal de Obra Atribuído *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Digite o nome do engenheiro fiscal responsável pela obra"
+                          value={fiscalObraAtribuidoInput}
+                          onChange={(e) => setFiscalObraAtribuidoInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          required
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700"
+                        />
+                        <p className="text-[10px] text-neutral-400 mt-1">Este profissional acompanhará a execução em campo e assinará as medições.</p>
+                      </div>
+                    </div>
+
+                    {/* PAINEL DO CÁLCULO DA COMPLEXIDADE EM TEMPO REAL */}
+                    <div className="mt-4 p-5 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-xl space-y-4 font-sans">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 gap-2">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <Layers className="w-4 h-4 text-blue-600" />
+                            Calculador do Enquadramento da Complexidade
+                          </h4>
+                          <p className="text-[10px] text-slate-500 mt-0.5">Definida pelo Valor Contratual, Tipo de Obra e Duração</p>
+                        </div>
+                        <div className={`px-3 py-1.5 rounded-lg border text-xs font-black flex items-center gap-2 self-start sm:self-auto ${complexidadeCalculada.colorClass}`}>
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
+                          </span>
+                          <span>CLASSE {complexidadeCalculada.classe}</span>
+                          <span className="text-[10px] font-normal opacity-60">•</span>
+                          <span className="text-[10px] tracking-wider uppercase font-extrabold">{complexidadeCalculada.classificacao}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="bg-white p-3.5 rounded-lg border border-slate-200 relative overflow-hidden shadow-xs hover:border-blue-200 transition-colors">
+                          <div className="absolute top-0 right-0 py-0.5 px-1.5 bg-slate-100 text-[8px] text-slate-500 font-bold rounded-bl uppercase">Peso: 75%</div>
+                          <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Valor Contrato</span>
+                          <span className="text-xs font-bold text-slate-705 block mt-0.5 truncate" title={complexidadeCalculada.vInfo.label}>
+                            {complexidadeCalculada.vInfo.label}
+                          </span>
+                          <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100">
+                            <span className="text-[10px] text-slate-400 font-semibold text-neutral-500">Ponto ponderado:</span>
+                            <span className="text-xs font-extrabold font-mono text-slate-700">{(complexidadeCalculada.vInfo.score * 0.75).toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-3.5 rounded-lg border border-slate-200 relative overflow-hidden shadow-xs hover:border-blue-200 transition-colors">
+                          <div className="absolute top-0 right-0 py-0.5 px-1.5 bg-slate-100 text-[8px] text-slate-500 font-bold rounded-bl uppercase">Peso: 15%</div>
+                          <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Tipo da Obra</span>
+                          <span className="text-xs font-bold text-slate-705 block mt-0.5 truncate" title={complexidadeCalculada.tInfo.label}>
+                            {complexidadeCalculada.tInfo.label}
+                          </span>
+                          <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100">
+                            <span className="text-[10px] text-slate-400 font-semibold text-neutral-500">Ponto ponderado:</span>
+                            <span className="text-xs font-extrabold font-mono text-slate-700">{(complexidadeCalculada.tInfo.score * 0.15).toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-3.5 rounded-lg border border-slate-200 relative overflow-hidden shadow-xs hover:border-blue-200 transition-colors">
+                          <div className="absolute top-0 right-0 py-0.5 px-1.5 bg-slate-100 text-[8px] text-slate-500 font-bold rounded-bl uppercase">Peso: 10%</div>
+                          <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Duração (Meses)</span>
+                          <span className="text-xs font-bold text-slate-705 block mt-0.5 truncate">
+                            {parsedMeses} meses
+                          </span>
+                          <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100">
+                            <span className="text-[10px] text-slate-400 font-semibold text-neutral-500">Ponto ponderado:</span>
+                            <span className="text-xs font-extrabold font-mono text-slate-700">{(complexidadeCalculada.dInfo.score * 0.10).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-200/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between text-[11px] font-semibold text-slate-700 gap-2">
+                        <span className="font-mono text-[10px] text-slate-500">Fórmula: (Valor * 0.75) + (Tipo * 0.15) + (Duração * 0.10)</span>
+                        <div className="flex items-center gap-1.5 self-end md:self-auto">
+                          <span className="text-slate-500 font-normal">Soma Ponderada:</span>
+                          <span className="text-xs font-bold font-mono text-blue-700 bg-blue-50 px-2 py-0.5 border border-blue-100 rounded">{complexidadeCalculada.pontuacao} / 5.00</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CRONOGRAMA FÍSICO-FINANCEIRO UPLOADER */}
+                  <div className="bg-slate-50/50 p-5 rounded-xl border border-slate-100 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Cronograma Físico-Financeiro *</h3>
+                      <span className="text-[10px] font-semibold text-rose-500 bg-rose-50 px-2 py-0.5 border border-rose-100 rounded">Obrigatório</span>
+                    </div>
+
+                    {solicitacao.cronogramaFisicoFinanceiroFileName ? (
+                      <div className="p-4 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 bg-green-50 rounded-lg text-green-600 border border-green-200">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="block text-xs font-bold text-neutral-800 break-all">{solicitacao.cronogramaFisicoFinanceiroFileName}</span>
+                            <span className="text-[10px] text-neutral-400 font-mono italic block mt-0.5">
+                              Tamanho: {solicitacao.cronogramaFisicoFinanceiroFileSize} • Enviado em: {solicitacao.cronogramaFisicoFinanceiroUploadedAt}
+                            </span>
+                          </div>
+                        </div>
+
+                        {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                          <button
+                            type="button"
+                            onClick={removerCronograma}
+                            className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Remover arquivo"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div 
+                        onClick={() => {
+                          if (perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') {
+                            cronogramaInputRef.current?.click();
+                          }
+                        }}
+                        className={`border-2 border-dashed rounded-xl p-6 text-center transition-all ${
+                          perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf'
+                            ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/55 cursor-pointer'
+                            : 'border-neutral-200 bg-neutral-50/20 cursor-not-allowed'
+                        }`}
+                      >
+                        <UploadCloud className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
+                        <span className="block text-xs font-bold text-neutral-700">Anexar cronograma físico-financeiro</span>
+                        <span className="text-[10px] text-neutral-400 block mt-1">Formatos suportados: .pdf, .xls, .xlsx (Máx: 10MB)</span>
+                        <input
+                          ref={cronogramaInputRef}
+                          type="file"
+                          accept=".pdf,.xls,.xlsx"
+                          onChange={handleCronogramaUpload}
+                          className="hidden"
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SAVE ACTION */}
+                  {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all shadow-sm cursor-pointer"
+                      >
+                        Salvar Informações Cadastrais
+                      </button>
+                    </div>
+                  )}
+                </form>
+              </div>
+
+              {/* SIDEBAR DA ORDEM DE INÍCIO */}
+              <div className="space-y-4">
+                <div className="p-5 bg-white border border-neutral-200 rounded-xl space-y-4">
+                  <h4 className="font-display font-medium text-xs text-neutral-400 uppercase tracking-widest">Informações Cadastradas</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Início da Obra (O.I)</span>
+                      <span className="text-xs font-bold font-mono text-neutral-800 block mt-0.5">
+                        {solicitacao.dataOrdemInicio ? `${new Date(solicitacao.dataOrdemInicio + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Não informado'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Previsão de Término</span>
+                      <span className="text-xs font-bold font-mono text-neutral-805 block mt-0.5">
+                        {solicitacao.previsaoTerminoObra ? `${new Date(solicitacao.previsaoTerminoObra + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Não informado'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Valor de Contratação</span>
+                      <span className="text-xs font-bold font-mono text-emerald-600 block mt-0.5">
+                        {solicitacao.valorHomologadoContratacao ? `R$ ${solicitacao.valorHomologadoContratacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Tipo da Obra</span>
+                      <span className="text-xs font-bold text-neutral-800 block mt-0.5">
+                        {solicitacao.tipoObra || 'Não informado'}
+                      </span>
+                    </div>
+
+                    {solicitacao.classeObra && (
+                      <div className="pt-2 border-t border-slate-100">
+                        <span className="block text-[10px] text-neutral-500 font-semibold uppercase mb-1">Classe de Complexidade</span>
+                        <div className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col gap-1 ${
+                          solicitacao.classeObra === 'IV' 
+                            ? 'bg-rose-50 text-rose-800 border-rose-200' 
+                            : solicitacao.classeObra === 'III'
+                              ? 'bg-orange-50 text-orange-800 border-orange-200'
+                              : solicitacao.classeObra === 'II'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-green-50 text-green-800 border-green-200'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold">CLASSE {solicitacao.classeObra}</span>
+                            <span className="font-mono text-[10px] opacity-80">Score: {solicitacao.pontuacaoComplexidade?.toFixed(2)}</span>
+                          </div>
+                          <span className="text-[9px] font-normal uppercase opacity-95 block pt-0.5">
+                            {solicitacao.duracaoObraMeses ? `${solicitacao.duracaoObraMeses} meses • ` : ''} 
+                            {solicitacao.classeObra === 'IV' ? 'Muito Alta Complexidade' : solicitacao.classeObra === 'III' ? 'Alta Complexidade' : solicitacao.classeObra === 'II' ? 'Média Complexidade' : 'Baixa Complexidade'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Cronograma Físico-Financeiro</span>
+                      <span className="text-xs font-bold text-neutral-600 truncate block mt-0.5 max-w-full">
+                        {solicitacao.cronogramaFisicoFinanceiroFileName || 'Falta anexar'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {solicitacao.empresasAnteriores && solicitacao.empresasAnteriores.length > 0 && (
+                  <div className="p-5 bg-neutral-50 border border-neutral-200 rounded-xl space-y-4 font-sans">
+                    <h4 className="font-display font-bold text-xs text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <History className="w-4 h-4 text-neutral-400" />
+                      O.I. das Construtoras Anteriores
+                    </h4>
+                    <div className="space-y-4 divide-y divide-neutral-200 max-h-96 overflow-y-auto pr-1">
+                      {solicitacao.empresasAnteriores.map((emp, idx) => (
+                        <div key={emp.id || idx} className="pt-4 first:pt-0 space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-xs font-bold text-neutral-800 block leading-tight">{emp.nome}</span>
+                              <span className="text-[10px] text-neutral-400 block font-mono mt-0.5">CNPJ: {emp.cnpj}</span>
+                            </div>
+                            <span className="px-2 py-0.5 text-[9px] font-bold rounded-md bg-red-50 text-red-800 border border-red-200">
+                              Distratada
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] font-sans">
+                            <div>
+                              <span className="text-neutral-400 block uppercase text-[8px] font-bold">Início Obra</span>
+                              <span className="font-semibold text-neutral-700 font-mono">
+                                {emp.dataOrdemInicio ? `${new Date(emp.dataOrdemInicio + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Não informado'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-400 block uppercase text-[8px] font-bold">Previsão Término</span>
+                              <span className="font-semibold text-neutral-700 font-mono">
+                                {emp.previsaoTerminoObra ? `${new Date(emp.previsaoTerminoObra + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Não informado'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-400 block uppercase text-[8px] font-bold">Valor Contratual</span>
+                              <span className="font-bold text-emerald-600 font-mono">
+                                {emp.valorHomologadoContratacao ? `R$ ${emp.valorHomologadoContratacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-neutral-400 block uppercase text-[8px] font-bold">Fiscal Obra</span>
+                              <span className="font-semibold text-neutral-700 truncate block" title={emp.fiscalObraAtribuido}>
+                                {emp.fiscalObraAtribuido || 'Não informado'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="pt-1.5">
+                            <span className="text-[9px] text-neutral-400 font-semibold uppercase block">Doc. Cronograma Antigo</span>
+                            <span className="text-[10px] text-neutral-600 font-mono flex items-center gap-1 bg-white p-1 rounded border border-neutral-200 mt-0.5 truncate" title={emp.cronogramaFisicoFinanceiroFileName}>
+                              <FileText className="w-3 h-3 text-blue-500 shrink-0" />
+                              {emp.cronogramaFisicoFinanceiroFileName || 'Não anexado'}
+                            </span>
+                          </div>
+
+                          {(emp.justificativaDistrato || emp.dataDistrato) && (
+                            <div className="p-2.5 bg-red-50/50 border border-red-100 rounded-lg text-[10px] space-y-1">
+                              <span className="font-bold text-red-800 block text-[9px] uppercase tracking-wider">Histórico do Distrato:</span>
+                              {emp.dataDistrato && (
+                                <div className="flex justify-between">
+                                  <span className="text-neutral-500">Data do distrato:</span>
+                                  <span className="font-semibold text-neutral-700 font-mono">{new Date(emp.dataDistrato + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                                </div>
+                              )}
+                              {emp.justificativaDistrato && (
+                                <div>
+                                  <span className="text-neutral-500 block mb-0.5">Motivo / Justificativa:</span>
+                                  <p className="font-medium text-neutral-700 italic border-l-2 border-red-200 pl-1.5 leading-snug">{emp.justificativaDistrato}</p>
+                                </div>
+                              )}
+                              {emp.documentoDistratoFileName && (
+                                <div className="flex items-center gap-1 mt-1 text-[9px] text-neutral-650 font-bold bg-white p-1 rounded border border-neutral-150 truncate">
+                                  <FileText className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                                  <span className="truncate">{emp.documentoDistratoFileName}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {perfilUsuario !== 'fiscal_obra' && (
+                  <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl text-[11px] text-orange-800 leading-relaxed">
+                    <span className="font-bold block text-xs mb-1 text-orange-900">Acesso Restrito:</span>
+                    Essas informações são protegidas e devem ser inseridas pelo perfil de <strong>Fiscal de Obra</strong>. Atualmente, os formulários estão abertos apenas para leitura.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* BOTÕES DE TRANSIÇÃO DA ORDEM DE INÍCIO */}
+            {!hideTransitionButtons && (
+              <div className="border-t border-neutral-100 pt-6 mt-6 flex justify-end font-sans">
+                {solicitacao.etapaAtual === 'ordem_inicio' ? (
+                  <button
+                    type="button"
+                    onClick={emitirOrdemEIniciarObra}
+                    className={`px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all flex items-center gap-2 ${
+                      solicitacao.dataOrdemInicio && solicitacao.previsaoTerminoObra && solicitacao.valorHomologadoContratacao && solicitacao.cronogramaFisicoFinanceiroFileName
+                        ? 'bg-emerald-605 hover:bg-emerald-700 text-white cursor-pointer'
+                        : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                    }`}
+                    disabled={!solicitacao.dataOrdemInicio || !solicitacao.previsaoTerminoObra || !solicitacao.valorHomologadoContratacao || !solicitacao.cronogramaFisicoFinanceiroFileName}
+                  >
+                    <Building className="w-4 h-4 text-white" />
+                    Emitir Ordem de Início e Liberar Obra
+                  </button>
+                ) : (
+                  <span className="text-xs text-emerald-600 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4" /> Ordem de Início emitida! Processo em fase de Execução e Medições regulares.
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CONTEÚDO DA ABA 3: EXECUÇÃO DA OBRA */}
+        {activeTab === 'execucao' && (
+          <div className="p-6">
+            <div className="pb-4 border-b border-neutral-100 mb-6 font-sans">
+              <h2 className="font-display text-lg font-bold text-neutral-800 flex items-center gap-2">
+                <HardHat className="w-5 h-5 text-neutral-600" />
+                Andamento da Execução e Medições Periódicas
+              </h2>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                Acompanhe as medições físicas validadas em campo pela fiscalização oficial e solicitações de aditivos de recursos de engenharia.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left & Middle Column */}
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* 0. SEÇÃO DE ORDEM DE INÍCIO - PRIMEIRA COISA A SER PREENCHIDA DENTRO DA EXECUÇÃO */}
+                <div className="bg-slate-50/70 p-5 rounded-xl border border-blue-100 shadow-3xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200/80 gap-2">
+                    <div>
+                      <h3 className="font-display font-black text-sm text-neutral-800 flex items-center gap-2">
+                        <Calendar className="w-4.5 h-4.5 text-blue-600" />
+                        Abertura de Obra: Ordem de Início (OI) e Complexidade
+                      </h3>
+                      <p className="text-[11px] text-neutral-500 font-sans mt-0.5">
+                        Registre os dados de início da vigência de engenharia e anexe o Cronograma Físico-Financeiro.
+                      </p>
+                    </div>
+                    {solicitacao.etapaAtual !== 'ordem_inicio' ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-extrabold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 uppercase tracking-widest">
+                        <CheckCircle className="w-3 h-3 text-emerald-600" /> OI Emitida
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-extrabold rounded-lg bg-amber-50 border border-amber-200 text-amber-800 uppercase tracking-widest animate-pulse">
+                        Aguardando OI
+                      </span>
+                    )}
+                  </div>
+
+                  <form onSubmit={salvarOrdemInicio} className="space-y-4 font-sans">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Data da Ordem de Início *
+                        </label>
+                        <input
+                          type="date"
+                          value={dataOrdemInicioInput}
+                          onChange={(e) => setDataOrdemInicioInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          required
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Previsão de Término da Obra *
+                        </label>
+                        <input
+                          type="date"
+                          value={previsaoTerminoInput}
+                          onChange={(e) => setPrevisaoTerminoInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          required
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Valor Homologado na Contratação *
+                        </label>
+                        <div className="relative rounded-lg shadow-sm">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <span className="text-neutral-500 text-xs">R$</span>
+                          </div>
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="0,00"
+                            value={valorHomologadoContratacaoInput}
+                            onChange={(e) => setValorHomologadoContratacaoInput(e.target.value)}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            required
+                            className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Tipo de Obra Ponderado *
+                        </label>
+                        <select
+                          value={tipoObraInput}
+                          onChange={(e) => setTipoObraInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          required
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700"
+                        >
+                          <option value="Construção">Construção (Classe IV - Peso 5)</option>
+                          <option value="Ampliação / Quadra">Ampliação / Quadra (Classe III - Peso 4)</option>
+                          <option value="Reforma">Reforma (Classe II/III - Peso 3)</option>
+                          <option value="Acessibilidade">Acessibilidade (Classe I/II - Peso 2)</option>
+                          <option value="Projeto">Projeto (Classe I - Peso 1)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          Fiscal de Obra Atribuído *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Digite o nome do engenheiro fiscal responsável pela obra"
+                          value={fiscalObraAtribuidoInput}
+                          onChange={(e) => setFiscalObraAtribuidoInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          required
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700"
+                        />
+                      </div>
+                    </div>
+
+                    {/* COMPLEXIDADE REAL-TIME */}
+                    <div className="p-4 bg-white/70 border border-slate-205 rounded-xl space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2 gap-1.5">
+                        <h4 className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5 text-blue-600" /> Enquadramento de Complexidade da Obra
+                        </h4>
+                        <div className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${complexidadeCalculada.colorClass}`}>
+                          Classe {complexidadeCalculada.classe} • {complexidadeCalculada.classificacao}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-[10px] text-neutral-500 font-sans">
+                        <div>
+                          <span className="block text-neutral-400 font-bold uppercase">Soma Ponderada</span>
+                          <span className="font-extrabold text-blue-700 font-mono block mt-0.5">{complexidadeCalculada.pontuacao} / 5.00</span>
+                        </div>
+                        <div>
+                          <span className="block text-neutral-400 font-bold uppercase">Durabilidade</span>
+                          <span className="font-bold text-neutral-800 block mt-0.5">{parsedMeses} meses</span>
+                        </div>
+                        <div>
+                          <span className="block text-neutral-400 font-bold uppercase">Classe Alocada</span>
+                          <span className="font-bold text-neutral-800 block mt-0.5">Classe {complexidadeCalculada.classe}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* FILE CRONOGRAMA */}
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                        Cronograma Físico-Financeiro Executivo *
+                      </label>
+                      {solicitacao.cronogramaFisicoFinanceiroFileName ? (
+                        <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <FileText className="w-4.5 h-4.5 text-emerald-600 shrink-0" />
+                            <div className="truncate">
+                              <span className="block text-xs font-bold text-neutral-800 truncate break-all">{solicitacao.cronogramaFisicoFinanceiroFileName}</span>
+                              <span className="text-[9px] text-neutral-400 font-mono block mt-0.5">
+                                {solicitacao.cronogramaFisicoFinanceiroFileSize} • {solicitacao.cronogramaFisicoFinanceiroUploadedAt}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDocument(solicitacao.cronogramaFisicoFinanceiroFileName!, "Cronograma Físico-Financeiro Executivo")}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 hover:bg-blue-50 rounded transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Baixar
+                            </button>
+                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                              <button
+                                type="button"
+                                onClick={removerCronograma}
+                                className="px-2 py-1 text-[10px] text-rose-600 hover:bg-rose-50 rounded-md font-bold transition-colors cursor-pointer"
+                              >
+                                Remover
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div 
+                          onClick={() => {
+                            if (perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') {
+                              cronogramaInputRef.current?.click();
+                            }
+                          }}
+                          className={`border-2 border-dashed rounded-xl p-4 text-center transition-all ${
+                            perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf'
+                              ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/50 cursor-pointer'
+                              : 'border-neutral-200 bg-neutral-50/25 cursor-not-allowed'
+                          }`}
+                        >
+                          <UploadCloud className="w-6 h-6 text-neutral-400 mx-auto mb-1" />
+                          <span className="block text-xs font-bold text-neutral-700">Anexar cronograma físico-financeiro</span>
+                          <span className="text-[9px] text-neutral-400 block mt-0.5">Formatos: .pdf, .xls, .xlsx (Máx: 10MB)</span>
+                          <input
+                            ref={cronogramaInputRef}
+                            type="file"
+                            accept=".pdf,.xls,.xlsx"
+                            onChange={handleCronogramaUpload}
+                            className="hidden"
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-2 flex justify-end gap-2.5">
+                      {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                        <button
+                          type="submit"
+                          className="px-3.5 py-1.5 border border-blue-600 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-extrabold cursor-pointer transition-colors"
+                        >
+                          Salvar Dados O.I.
+                        </button>
+                      )}
+
+                      {solicitacao.etapaAtual === 'ordem_inicio' && (perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                        <button
+                          type="button"
+                          onClick={emitirOrdemEIniciarObra}
+                          disabled={!solicitacao.dataOrdemInicio || !solicitacao.previsaoTerminoObra || !solicitacao.valorHomologadoContratacao || !solicitacao.cronogramaFisicoFinanceiroFileName}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-black shadow-xs transition-all flex items-center gap-1.5 ${
+                            solicitacao.dataOrdemInicio && solicitacao.previsaoTerminoObra && solicitacao.valorHomologadoContratacao && solicitacao.cronogramaFisicoFinanceiroFileName
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs'
+                              : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                          }`}
+                        >
+                          <Play className="w-3 h-3 shrink-0" /> Emitir Ordem de Início e Liberar Obra
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+
+                {/* 1. SEÇÃO DE INFORMAÇÕES DA CONTRATADA COM CNPJ E STATUS DISTRATADA */}
+                <div className="bg-neutral-50 p-5 rounded-xl border border-neutral-200 space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b border-neutral-200">
+                    <h3 className="font-display font-bold text-sm text-neutral-800">
+                      Dados Gerais do Contrato Cooperativo
+                    </h3>
+                    <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${
+                      statusContratoInput === 'Ativa'
+                        ? 'bg-emerald-50 border-emerald-250 text-emerald-800'
+                        : 'bg-red-50 border-red-200 text-red-750'
+                    }`}>
+                      Contrato: {statusContratoInput}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                        Empresa Contratada Vencedora
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2 text-neutral-400">
+                          <Building className="w-4 h-4" />
+                        </span>
+                        <input
+                          type="text"
+                          placeholder="Ex: Construtora Triângulo Ltda"
+                          value={empresaInput}
+                          onChange={(e) => setEmpresaInput(e.target.value)}
+                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white hover:border-neutral-400 transition-colors"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                        CNPJ da Empresa
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 12.345.678/0001-90"
+                        value={cnpjInput}
+                        onChange={(e) => setCnpjInput(e.target.value)}
+                        disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white hover:border-neutral-400 transition-colors font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                        Status do Contrato Contratual
+                      </label>
+                      <select
+                        value={statusContratoInput}
+                        onChange={(e) => setStatusContratoInput(e.target.value as any)}
+                        disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white font-sans text-neutral-700"
+                      >
+                        <option value="Ativa">Ativa (Mão de obra ativa)</option>
+                        <option value="Distratada">Distratada (Contrato rescindido)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                        Status da Execução Física da Obra
+                      </label>
+                      <select
+                        value={statusObraInput}
+                        onChange={(e) => setStatusObraInput(e.target.value)}
+                        disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white font-sans text-neutral-700"
+                      >
+                        <option value="Não Iniciada">Não Iniciada</option>
+                        <option value="Em Andamento">Em Andamento</option>
+                        <option value="Paralisada">Paralisada</option>
+                        <option value="Concluída">Concluída</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* FORMULÁRIO CONDICIONAL DE DISTRATO */}
+                  {statusContratoInput === 'Distratada' && (
+                    <div className="p-4 bg-red-50/60 rounded-lg border border-red-200 space-y-4 text-xs font-sans">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-red-650" />
+                        <h4 className="font-bold text-xs uppercase tracking-wider text-red-800">
+                          Informações Mandatórias do Distrato Contratual
+                        </h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                            Justificativa do Distrato *
+                          </label>
+                          <select
+                            value={justificativaDistratoInput}
+                            onChange={(e) => setJustificativaDistratoInput(e.target.value)}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden bg-white text-neutral-700"
+                          >
+                            <option value="Planilha de orçamento defasada">Planilha de orçamento defasada</option>
+                            <option value="Pendências de projeto">Pendências de projeto</option>
+                            <option value="Necessidade de readequação técnica">Necessidade de readequação técnica</option>
+                            <option value="Falta ou contingenciamento de recursos">Falta ou contingenciamento de recursos</option>
+                            <option value="Pendências administrativas">Pendências administrativas</option>
+                            <option value="Pendências jurídicas">Pendências jurídicas</option>
+                            <option value="Licenciamento/autorizações">Licenciamento/autorizações</option>
+                            <option value="Baixo desempenho da empresa contratada">Baixo desempenho da empresa contratada</option>
+                            <option value="Abandono de obra pela empresa contratada">Abandono de obra pela empresa contratada</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                            Data do Distrato *
+                          </label>
+                          <input
+                            type="date"
+                            value={dataDistratoInput}
+                            onChange={(e) => setDataDistratoInput(e.target.value)}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            className="w-full px-3 py-1.5 text-xs border border-neutral-300 rounded-lg focus:outline-hidden bg-white text-neutral-700 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+                          Anexar Documento do Distrato (Termo de Rescisão / Diário Oficial)*
+                        </label>
+                        
+                        {documentoDistratoFileName ? (
+                          <div className="p-3 bg-white border border-neutral-300 rounded-lg flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="p-2 bg-red-100 text-red-700 rounded-md shrink-0">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div className="truncate">
+                                <span className="block text-xs font-bold text-neutral-800 break-all">{documentoDistratoFileName}</span>
+                                <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">
+                                  Tamanho: {documentoDistratoFileSize} • Enviado em: {new Date().toLocaleDateString('pt-BR')}
+                                </span>
+                              </div>
+                            </div>
+                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDocumentoDistratoFileName('');
+                                  setDocumentoDistratoFileSize('');
+                                  setDocumentoDistratoUploadedAt('');
+                                }}
+                                className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                              >
+                                Remover
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                              ref={distratoInputRef}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+                                setDocumentoDistratoFileName(file.name);
+                                setDocumentoDistratoFileSize(sizeFormatted);
+                                setDocumentoDistratoUploadedAt(new Date().toISOString().split('T')[0]);
+                              }}
+                              className="hidden"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => distratoInputRef.current?.click()}
+                              disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                              className="px-3 py-1.5 border border-dashed border-red-300 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+                            >
+                              <Paperclip className="w-3.5 h-3.5 text-neutral-500" />
+                              Selecionar Arquivo
+                            </button>
+                            <span className="text-[10px] text-neutral-400">
+                              Aceita PDF, DOCX, ou Imagens do distrato assinado.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FORMULÁRIO CONDICIONAL DE PARALISAÇÃO */}
+                  {statusObraInput === 'Paralisada' && (
+                    <div className="p-4 bg-amber-50/60 rounded-lg border border-amber-200 mt-4 space-y-4 text-xs font-sans">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600" />
+                        <h4 className="font-bold text-xs uppercase tracking-wider text-amber-800">
+                          Informações de Paralisação Temporária
+                        </h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                            Justificativa da Paralisação *
+                          </label>
+                          <select
+                            value={justificativaParalizacaoInput}
+                            onChange={(e) => setJustificativaParalizacaoInput(e.target.value)}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden bg-white text-neutral-700"
+                          >
+                            <option value="Aguardando diretor da cx escolar realizar notificação empresa">
+                              Aguardando diretor da cx escolar realizar notificação empresa
+                            </option>
+                            <option value="Condições climáticas">Condições climáticas</option>
+                            <option value="aguardando distrato">aguardando distrato</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-neutral-700 mb-1 uppercase tracking-wider">
+                            Data da Paralisação *
+                          </label>
+                          <input
+                            type="date"
+                            value={dataParalizacaoInput}
+                            onChange={(e) => setDataParalizacaoInput(e.target.value)}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            className="w-full px-3 py-1.5 text-xs border border-neutral-300 rounded-lg focus:outline-hidden bg-white text-neutral-700 font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-SECTION: PHYSICAL PROGRESS PER COMPANY AND OVERALL SUMMARY */}
+                  <div className="p-4 bg-white rounded-lg border border-neutral-200 space-y-3">
+                    <h4 className="text-xs font-bold text-neutral-700 uppercase tracking-wide flex items-center gap-1.5">
+                      <TrendingUp className="w-4 h-4 text-neutral-500" />
+                      Painel de Avanço Físico (Empresa vs. Obra)
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
+                      <div className="space-y-1">
+                        <span className="text-neutral-500 block font-medium">Evolução Física desta Contratada ({solicitacao.empresaContratada || 'Vazio'}):</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-full bg-neutral-150 rounded-full h-2 overflow-hidden">
+                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${Math.min(100, progressoEmpresaAtual)}%` }} />
+                          </div>
+                          <span className="font-bold shrink-0 text-blue-700">{progressoEmpresaAtual}%</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1 font-sans">
+                        <span className="text-neutral-500 block font-medium">Evolução Física Geral Integrada da Obra:</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-full bg-neutral-150 rounded-full h-2 overflow-hidden">
+                            <div className="bg-emerald-600 h-2 rounded-full" style={{ width: `${Math.min(100, progressoTotalObra)}%` }} />
+                          </div>
+                          <span className="font-extrabold text-emerald-700 shrink-0">{progressoTotalObra}%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {solicitacao.empresasAnteriores && solicitacao.empresasAnteriores.length > 0 && (
+                      <div className="pt-2.5 border-t border-neutral-100 space-y-1.5">
+                        <span className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider block">Histórico de Construtoras Anteriores (Medições Preservadas)</span>
+                        <div className="space-y-1 max-h-24 overflow-y-auto">
+                          {solicitacao.empresasAnteriores.map((emp) => (
+                            <div key={emp.id} className="flex justify-between text-[11px] bg-neutral-50 p-2 rounded border border-neutral-150 font-sans">
+                              <span className="text-neutral-600"><strong>{emp.nome}</strong> (CNPJ: {emp.cnpj})</span>
+                              <span className="font-mono font-bold text-neutral-700">Avanço Congelado: {emp.avancoFisicoOriginal}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* REGISTRAR NOVA EMPRESA (IF STATUS IS DISTRATADA) */}
+                  {statusContratoInput === 'Distratada' && (
+                    <div className="p-4 bg-amber-50 rounded-lg border border-amber-250 space-y-3 font-sans">
+                      <div className="flex items-start gap-2.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-bold text-amber-800">Contrato Rescindido / Distratado</p>
+                          <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                            Para dar continuidade aos serviços mantendo o histórico físico já executado, cadastre abaixo os dados da nova empresa que assumirá a obra a partir da estaca zero.
+                          </p>
+                        </div>
+                      </div>
+
+                      {!mostrandoNovaEmpresa ? (
+                        <button
+                          type="button"
+                          onClick={() => setMostrandoNovaEmpresa(true)}
+                          className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold cursor-pointer transition-all"
+                        >
+                          Atribuir Nova Construtora / Assumir Obra
+                        </button>
+                      ) : (
+                        <div className="bg-white p-4 rounded-lg border border-amber-200 space-y-3 shadow-xs">
+                          <h4 className="text-xs font-bold text-neutral-800">Nova Construtora Cooperadora</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-neutral-500 mb-1 uppercase">Nome da Empresa Sucessora</label>
+                              <input
+                                type="text"
+                                placeholder="Ex: Nova Aliança Obras S/A"
+                                value={novoEmpresaNome}
+                                onChange={(e) => setNovoEmpresaNome(e.target.value)}
+                                className="w-full text-xs p-2 border border-neutral-300 rounded focus:border-blue-500 focus:outline-hidden font-sans"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-neutral-500 mb-1 uppercase">CNPJ Comercial</label>
+                              <input
+                                type="text"
+                                placeholder="Ex: 99.888.777/0001-66"
+                                value={novoEmpresaCnpj}
+                                onChange={(e) => setNovoEmpresaCnpj(e.target.value)}
+                                className="w-full text-xs p-2 border border-neutral-300 rounded font-mono focus:border-blue-500 focus:outline-hidden"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setMostrandoNovaEmpresa(false)}
+                              className="px-2.5 py-1.5 border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50 cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => assumirNovaEmpresa(novoEmpresaNome, novoEmpresaCnpj)}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded cursor-pointer"
+                            >
+                              Confirmar Assunção da Obra
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                    <div className="flex justify-end pt-1">
+                      <button
+                        onClick={salvarDadosGeraisObra}
+                        className="px-4 py-2 border border-blue-600 text-blue-600 bg-white hover:bg-blue-50 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                      >
+                        Salvar Dados Gerais
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. SEÇÃO DE MEDIÇÕES DA OBRA */}
+                <div className="bg-white p-5 rounded-xl border border-neutral-200/90 space-y-4 relative overflow-hidden">
+                  {solicitacao.etapaAtual === 'ordem_inicio' && (
+                    <div className="absolute inset-0 bg-slate-50/85 backdrop-blur-3xs flex flex-col items-center justify-center text-center p-6 z-10 font-sans">
+                      <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 mb-2 border border-amber-150">
+                        <AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-800">Medições Bloqueadas</h4>
+                      <p className="text-xs text-neutral-500 max-w-sm mt-1 leading-relaxed">
+                        Preencha e devedoramente emita a <strong>Ordem de Início da Obra</strong> acima para liberar o registro de medições físicas.
+                      </p>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center flex-wrap gap-2 pb-2 border-b border-neutral-100">
+                    <div>
+                      <h3 className="font-display font-bold text-sm text-neutral-700">Cronograma de Medições Realizadas</h3>
+                      <p className="text-[11px] text-neutral-400">Medições mensais avaliadas pelo fiscal.</p>
+                    </div>
+
+                    {/* Button to show Measurement Form */}
+                    {(perfilUsuario === 'fiscal_obra') && !mostrandoNovaMedicao && (
+                      <button
+                        onClick={() => setMostrandoNovaMedicao(true)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-all"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Lançar Medição
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Form to insert mediação */}
+                  {mostrandoNovaMedicao && (
+                    <form onSubmit={adicionarMedicao} className="p-4 bg-neutral-50/70 border border-neutral-200/80 rounded-lg space-y-4">
+                      <h4 className="text-xs font-bold text-neutral-700 flex items-center gap-1.5 justify-between">
+                        <span>Nova Medição de Campo</span>
+                        <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-mono">
+                          Empresa Ativa: {solicitacao.empresaContratada || 'Geral'}
+                        </span>
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1">Data</label>
+                          <input
+                            type="date"
+                            value={novaMedicaoData}
+                            onChange={(e) => setNovaMedicaoData(e.target.value)}
+                            className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1">Valor Medido (R$)</label>
+                          <input
+                            type="number"
+                            placeholder="Ex: 50000"
+                            value={novaMedicaoValor}
+                            onChange={(e) => setNovaMedicaoValor(e.target.value)}
+                            className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1">Evolução Física (%)</label>
+                          <input
+                            type="number"
+                            placeholder="Ex: 15"
+                            value={novaMedicaoPorc}
+                            onChange={(e) => setNovaMedicaoPorc(e.target.value)}
+                            className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1">Descrição Detalhada do Serviço Executado</label>
+                        <textarea
+                          placeholder="Ex: Finalização da estrutura de pilares metálicos e preparação do contrapiso."
+                          value={novaMedicaoDesc}
+                          onChange={(e) => setNovaMedicaoDesc(e.target.value)}
+                          className="w-full text-xs p-2 border border-neutral-300 rounded bg-white h-16 resize-none"
+                          required
+                        />
+                      </div>
+
+                      {/* SIMULATED DOCUMENT UPLOAD FOR MEDIÇÃO */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 font-sans">
+                        <div>
+                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1 text-slate-705">Anexar Documento de Medição (PDF / XLS)</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Nenhum arquivo anexado"
+                              value={medicaoDocName}
+                              onChange={(e) => setMedicaoDocName(e.target.value)}
+                              className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
+                              readOnly
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setMedicaoDocName(`relatorio_medicao_${Math.floor(10 + Math.random() * 90)}.pdf`)}
+                              className="px-3 bg-neutral-150 border border-neutral-350 rounded hover:bg-neutral-200 text-xs font-semibold cursor-pointer shrink-0 transition-all"
+                            >
+                              Anexar Doc
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1 text-slate-705">Anexar Fotos do Avanço Físico (Múltiplas)</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Digite ou escolha aleatória"
+                              value={fotoInputSimulada}
+                              onChange={(e) => setFotoInputSimulada(e.target.value)}
+                              className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (fotoInputSimulada) {
+                                  setMedicaoFotos([...medicaoFotos, fotoInputSimulada]);
+                                  setFotoInputSimulada('');
+                                } else {
+                                  const randomNames = [
+                                    'estrutura_concreto.jpg', 'alvenaria_blocos.jpg', 'reboco_externo.jpg', 
+                                    'cobertura_telhas.jpg', 'instalacao_hidraulica.jpg', 'pintura_final.jpg'
+                                  ];
+                                  const picker = randomNames[Math.floor(Math.random() * randomNames.length)];
+                                  if (!medicaoFotos.includes(picker)) {
+                                    setMedicaoFotos([...medicaoFotos, picker]);
+                                  }
+                                }
+                              }}
+                              className="px-3 bg-neutral-150 border border-neutral-350 rounded hover:bg-neutral-200 text-xs font-semibold cursor-pointer shrink-0 transition-all font-sans"
+                            >
+                              + Adicionar Foto
+                            </button>
+                          </div>
+
+                          {/* Render photo tags preview */}
+                          {medicaoFotos.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {medicaoFotos.map((f, i) => (
+                                <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded border border-blue-100 font-mono">
+                                  <span>{f}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setMedicaoFotos(medicaoFotos.filter((_, idx) => idx !== i))}
+                                    className="text-red-500 hover:text-red-700 font-bold ml-1 text-[9px]"
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 text-xs pt-2 border-t border-neutral-150">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMostrandoNovaMedicao(false);
+                            setMedicaoDocName('');
+                            setMedicaoFotos([]);
+                          }}
+                          className="px-3 py-1.5 border border-neutral-300 rounded text-neutral-700 font-medium hover:bg-neutral-50 cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold cursor-pointer"
+                        >
+                          Salvar Medição
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* List of measurements */}
+                  {solicitacao.medicoes.length === 0 ? (
+                    <div className="text-center py-6 text-neutral-400 text-xs italic">
+                      Nenhuma medição cadastrada. Lance a primeira medição realizada.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {solicitacao.medicoes.map((med, idx) => (
+                        <div key={med.id} className="p-4 bg-white rounded-xl border border-neutral-200 shadow-sm flex flex-col space-y-3 text-xs">
+                          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap font-sans">
+                                <span className="font-bold text-neutral-800 text-sm">Medição #{idx + 1}</span>
+                                <span className="text-neutral-300">•</span>
+                                <span className="font-mono text-neutral-500 font-medium">{med.data}</span>
+                                <span className="text-neutral-300">•</span>
+                                <span className="bg-emerald-50 text-emerald-800 border border-emerald-150 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                  {med.porcentagem}% nesta medição
+                                </span>
+
+                                {/* Displaying per-company attribution */}
+                                <span className="bg-blue-50 text-blue-800 border border-blue-150 px-2 py-0.5 rounded-full text-[10px] font-mono">
+                                  Empresa: {med.empresaNome || 'Geral'}
+                                </span>
+                              </div>
+                              <p className="text-neutral-600 font-sans leading-relaxed mt-1">{med.descricao}</p>
+                            </div>
+
+                            <div className="flex items-center gap-4 shrink-0 justify-between md:justify-end">
+                              <span className="font-mono font-extrabold text-neutral-900 text-base">
+                                R$ {med.valor.toLocaleString('pt-BR')}
+                              </span>
+
+                              {perfilUsuario === 'fiscal_obra' && (
+                                <button
+                                  onClick={() => excluirMedicao(med.id)}
+                                  className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg hover:text-red-700 transition cursor-pointer"
+                                  title="Excluir Medição"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* ATTACHMENT AND PHOTO GALLERIES COMPONENT */}
+                          {(med.fileName || (med.fotos && med.fotos.length > 0)) && (
+                            <div className="pt-3 border-t border-neutral-100 flex flex-col md:flex-row gap-4">
+                              {med.fileName && (
+                                <div className="space-y-1 max-w-xs">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">Documento de Engenharia</span>
+                                  <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 p-2 rounded-lg text-xs leading-none font-sans">
+                                    <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <div className="truncate">
+                                      <span className="font-medium text-neutral-700 block truncate" title={med.fileName}>{med.fileName}</span>
+                                      <span className="text-[9px] text-neutral-400 font-mono mt-0.5 block">Revisado pelo fiscal</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {med.fotos && med.fotos.length > 0 && (
+                                <div className="space-y-1 flex-1">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">Galeria Fotográfica de Campo</span>
+                                  <div className="flex gap-2 overflow-x-auto pb-1">
+                                    {med.fotos.map((f, fIdx) => (
+                                      <div key={fIdx} className="relative group shrink-0 w-24 h-16 bg-neutral-900 rounded-lg overflow-hidden border border-neutral-200 flex flex-col justify-end p-1.5 shadow-xs">
+                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent z-10" />
+                                        <span className="font-mono text-[8px] text-white truncate z-20 font-bold block bg-neutral-950/40 px-1 rounded">{f}</span>
+                                        <div className="absolute inset-0 flex items-center justify-center text-slate-400 font-semibold text-lg bg-neutral-100/10 hover:bg-neutral-100/20 transition-all cursor-pointer">
+                                          📸
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. SEÇÃO DE HISTÓRICO DE AJUSTES DA PLANILHA */}
+                <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                    <div>
+                      <h3 className="font-display font-bold text-sm text-neutral-800">Histórico de Ajustes de Planilha</h3>
+                      <p className="text-[11px] text-neutral-400">Solicitações de adequação de meta, quantitativos e tabela de serviços.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('ajustes')}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Módulo de Ajustes (Ações)
+                    </button>
+                  </div>
+
+                  {!solicitacao.ajustes || solicitacao.ajustes.length === 0 ? (
+                    <div className="text-center py-6 text-neutral-400 text-xs italic bg-neutral-50 rounded-lg border border-neutral-150">
+                      Nenhum ajuste de planilha orçamentária ou adequação de meta registrado para esta obra.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {solicitacao.ajustes.map((aju) => (
+                        <div key={aju.id} className="p-4 bg-slate-50 rounded-lg border border-slate-250 space-y-3 text-xs font-sans">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-200 gap-1 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-[10px] bg-slate-200 text-slate-705 px-1.5 py-0.5 rounded font-bold">Ajuste #{aju.numero}</span>
+                              <span className="font-bold text-slate-800 mr-1">
+                                {aju.tipoAjuste === 'sem_alteracao_meta' && 'Ajuste sem alteração de meta'}
+                                {aju.tipoAjuste === 'com_alteracao_meta' && 'Ajuste com alteração/acréscimo de meta'}
+                                {aju.tipoAjuste === 'com_alteracao_meta_projeto' && 'Ajuste com alteração/acréscimo de meta e com alteração de projeto'}
+                                {aju.tipoAjuste === 'sem_alteracao_meta_com_projeto' && 'Ajuste sem alteração/acréscimo de meta e com alteração de projeto'}
+                              </span>
+
+                              {/* Status Badges */}
+                              {aju.status === 'validado' ? (
+                                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                  ✓ VALIDADO DORE
+                                </span>
+                              ) : aju.status === 'analise_dore' ? (
+                                <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse">
+                                  ⏳ EM ANÁLISE DORE
+                                </span>
+                              ) : (
+                                <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                  ✎ EM ELABORAÇÃO
+                                </span>
+                              )}
+
+                              {aju.analistaAtribuido && (
+                                <span className="bg-neutral-100 text-neutral-600 border border-neutral-200 px-1.5 py-0.5 rounded text-[9px] font-mono leading-none">
+                                  Resp: {aju.analistaAtribuido}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-mono font-medium">{aju.dataCriacao}</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="bg-white p-2 rounded border border-slate-200">
+                              <span className="text-[9px] font-bold text-neutral-400 uppercase block">Valor do Ajuste</span>
+                              <span className="font-mono font-extrabold text-neutral-800 mt-0.5 block">R$ {aju.valorAjuste.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="bg-white p-2 rounded border border-slate-200">
+                              <span className="text-[9px] font-bold text-neutral-400 uppercase block">Diferença Contrato</span>
+                              <span className="font-mono font-bold text-neutral-855 mt-0.5 block">R$ {aju.diferencaPlanilhas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="bg-white p-2 rounded border border-slate-200">
+                              <span className="text-[9px] font-bold text-neutral-400 uppercase block">Desconto / Avanço</span>
+                              <span className="font-bold text-neutral-80s mt-0.5 block">{aju.desconto}% desc. | {aju.avancoFisico}% avanço</span>
+                            </div>
+                            <div className="bg-white p-2 rounded border border-slate-200">
+                              <span className="text-[9px] font-bold text-neutral-400 uppercase block">Referência</span>
+                              <span className="font-semibold text-blue-700 mt-0.5 block uppercase text-[10px] truncate">
+                                {aju.ajusteReferente === 'atendimento_inicial' ? 'Atendimento Inicial' : 'Saldo Nova Cotação'}
+                              </span>
+                            </div>
+
+                            {/* Spreadsheet attachment file info */}
+                            {aju.planilhaAjusteFileName && (
+                              <div className="col-span-2 md:col-span-4 bg-emerald-50/40 border border-emerald-150 p-2 rounded-lg flex items-center justify-between gap-2 mt-1">
+                                <div className="flex items-center gap-2 truncate">
+                                  <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <div className="truncate text-left">
+                                    <span className="font-bold text-slate-800 text-[11px] block truncate">{aju.planilhaAjusteFileName}</span>
+                                    <span className="text-[9px] text-slate-400 font-mono block">Tamanho: {aju.planilhaAjusteFileSize} • Enviado em {aju.planilhaAjusteUploadedAt}</span>
+                                  </div>
+                                </div>
+                                <span className="bg-emerald-105 text-emerald-800 font-extrabold text-[9px] px-2 py-0.5 rounded border border-emerald-200 shrink-0 select-none">
+                                  OBRIGATÓRIO
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] bg-slate-100/75 p-2.5 rounded border border-slate-200/60 text-slate-705">
+                            <div>
+                              <span className="font-semibold text-slate-500">Responsável pela Elaboração: </span>
+                              <strong>{aju.responsavelPlanilha}</strong> <span className="text-slate-450 text-[10px]">({aju.registroProfissional})</span>
+                            </div>
+                            <div>
+                              <span className="font-semibold text-slate-500">Valor Contrato Atualizado: </span>
+                              <strong className="font-mono text-neutral-850">R$ {aju.valorContrato.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                            </div>
+                          </div>
+
+                          {aju.observacoes && (
+                            <div className="p-2.5 bg-yellow-50 text-slate-650 rounded border border-yellow-200 text-[11px] leading-relaxed">
+                              <strong className="text-yellow-850 block mb-0.5 font-bold uppercase text-[9px]">Nova Meta Proposta:</strong>
+                              <p className="italic">"{aju.observacoes}"</p>
+                            </div>
+                          )}
+
+                          {aju.parecerDore && (
+                            <div className="p-3 bg-emerald-50 text-emerald-950 rounded-lg border border-emerald-205 text-xs mt-1 font-sans space-y-1">
+                              <strong className="text-emerald-800 text-[10px] uppercase font-bold tracking-wider block">Parecer Consolidado do Engenheiro DORE:</strong>
+                              <p className="italic">"{aju.parecerDore}"</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. SEÇÃO DE ADITIVOS INCORPORADOS AO CONTRATO */}
+                <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
+                  <div>
+                    <h3 className="font-display font-bold text-sm text-neutral-800">Histórico de Aditivos do Contrato</h3>
+                    <p className="text-[11px] text-neutral-400">Todos os acréscimos de valor ou prazo. Novos aditivos devem ser solicitados e avaliados na aba dedicada <strong className="text-blue-600">"Aditivos do Contrato"</strong>.</p>
+                  </div>
+
+                  {solicitacao.aditivos.length === 0 ? (
+                    <div className="text-center py-6 text-neutral-400 text-xs italic bg-neutral-50 rounded-lg border border-neutral-100">
+                      Nenhum aditivo orçamentário ou de prazo registrado neste contrato de obra.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {solicitacao.aditivos.map((adt) => (
+                        <div key={adt.id} className="p-3 bg-neutral-50 rounded-lg border border-neutral-200 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-sans">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-[10px] bg-neutral-200 text-neutral-600 px-1 py-0.5 rounded">ID: {adt.id}</span>
+                              <strong className="text-neutral-700">Aditivo de {adt.tipo}</strong>
+                              <span className="text-neutral-300">•</span>
+                              <span className="text-[10px] text-neutral-500">{adt.data}</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                adt.status === 'Aprovado' 
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-250' 
+                                  : adt.status === 'Recusado'
+                                    ? 'bg-red-100 text-red-800 border border-red-200'
+                                    : 'bg-amber-100 text-amber-800 border border-amber-200'
+                              }`}>{adt.status}</span>
+                            </div>
+                            <p className="text-neutral-500">{adt.justificativa}</p>
+                            
+                            <div className="text-[10px] text-neutral-400 flex gap-3 font-mono">
+                              {adt.valorExtra !== undefined && adt.valorExtra > 0 && <span className="text-emerald-700 font-bold">Acréscimo: + R$ {adt.valorExtra.toLocaleString('pt-BR')}</span>}
+                              {adt.prazoExtraDias !== undefined && adt.prazoExtraDias > 0 && <span className="text-blue-700 font-bold">Prorrogação: + {adt.prazoExtraDias} dias</span>}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Right Column Summary Sidebar */}
+              <div className="space-y-4">
+                {/* 1. PAINEL FINANCEIRO DE EXECUÇÃO */}
+                <div className="p-5 bg-white border border-neutral-200 rounded-xl space-y-4">
+                  <h4 className="font-display font-medium text-xs text-neutral-400 uppercase tracking-widest">
+                    Quadro Orçamentário da Obra
+                  </h4>
+
+                  <div className="space-y-4">
+                    <div>
+                      <span className="block text-xs text-neutral-500">Orçamento Base (Homologado)</span>
+                      <span className="text-md font-bold font-mono text-neutral-800">
+                        R$ {solicitacao.valorHomologado?.toLocaleString('pt-BR') || '0,00'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-xs text-neutral-500">Aditivos Acumulados (Aprovados)</span>
+                      <span className="text-sm font-semibold font-mono text-blue-600">
+                        + R$ {totalAditivosAprovados.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+
+                    <div className="pt-2 border-t border-neutral-100">
+                      <span className="block text-xs text-neutral-500">Valor do Contrato Atualizado</span>
+                      <span className="text-lg font-extrabold font-mono text-neutral-900">
+                        R$ {valorContratoAtual.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+
+                    <div className="pt-2 border-t border-neutral-100">
+                      <div className="flex justify-between items-center text-xs mb-1">
+                        <span className="text-neutral-500">Total Liquidado (Medições)</span>
+                        <span className="font-semibold font-mono text-neutral-800">{porcentagemMedidaFinanceira}%</span>
+                      </div>
+                      
+                      <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-emerald-500 h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${porcentagemMedidaFinanceira}%` }}
+                        />
+                      </div>
+                      
+                      <span className="text-[10px] text-neutral-400 block mt-1 text-right font-mono">
+                        R$ {totalMedido.toLocaleString('pt-BR')} medidos
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'ajustes' && (
+          <div className="p-6 space-y-6 animate-fadeIn font-sans bg-neutral-50/50 block">
+            {/* CABEÇALHO DO MÓDULO */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-blue-50/50 border border-blue-100 p-5 rounded-xl gap-4">
+              <div>
+                <h2 className="text-sm font-bold text-neutral-800 flex items-center gap-1.5 uppercase tracking-wide">
+                  <RefreshCw className="w-5 h-5 text-blue-600 animate-spin-slow" />
+                  Módulo de Solicitação de Ajustes de Planilha
+                </h2>
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  Registre alterações de planilha, meta física ou serviços extraordinários em concordância técnica com a fiscalização.
+                </p>
+              </div>
+              <div className="px-3.5 py-2 bg-white border border-blue-200 rounded-lg text-xs font-black text-neutral-850 flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                </span>
+                <span>PRÓXIMO REGISTRO ELETRÔNICO Nº {(solicitacao.ajustes?.length || 0) + 1}</span>
+              </div>
+            </div>
+
+            {/* SEÇÃO 1: ACOMPANHAMENTO E ANÁLISE DE HISTÓRICO DE AJUSTES */}
+            <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
+              <div>
+                <h3 className="font-display font-black text-xs text-neutral-800 uppercase tracking-widest">
+                  Histórico e Tramitação de Solicitações de Ajuste
+                </h3>
+                <p className="text-[11px] text-neutral-400 mt-0.5">Acompanhe a análise técnica, atribuições de técnicos e pareceres homologados pela DORE.</p>
+              </div>
+
+              {!solicitacao.ajustes || solicitacao.ajustes.length === 0 ? (
+                <div className="text-center py-8 text-neutral-400 text-xs italic bg-neutral-50 rounded-lg border border-neutral-150">
+                  Nenhum ajuste de planilha orçamentária cadastrado ainda para esta obra.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {solicitacao.ajustes.map((aju) => (
+                    <div key={aju.id} className="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-4 text-xs font-sans">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 border-b border-slate-200 gap-1 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-[10px] bg-slate-200 text-slate-705 px-2 py-0.5 rounded font-black">
+                            SOLICITAÇÃO #{aju.numero}
+                          </span>
+                          <span className="font-bold text-slate-800">
+                            {aju.tipoAjuste === 'sem_alteracao_meta' && 'Ajuste sem alteração de meta'}
+                            {aju.tipoAjuste === 'com_alteracao_meta' && 'Ajuste com alteração/acréscimo de meta'}
+                            {aju.tipoAjuste === 'com_alteracao_meta_projeto' && 'Ajuste com alteração/acréscimo de meta e com alteração de projeto'}
+                            {aju.tipoAjuste === 'sem_alteracao_meta_com_projeto' && 'Ajuste sem alteração/acréscimo de meta e com alteração de projeto'}
+                          </span>
+
+                          {/* Status workflow indicator badge */}
+                          {aju.status === 'validado' ? (
+                            <span className="bg-emerald-100 text-emerald-850 hover:bg-emerald-200 border border-emerald-300 px-2 py-0.5 rounded-full text-[10px] font-black">
+                              ✓ VALIDADO & HOMOLOGADO
+                            </span>
+                          ) : aju.status === 'analise_dore' ? (
+                            <span className="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse">
+                              ⏳ EM ANÁLISE TÉCNICA DORE
+                            </span>
+                          ) : (
+                            <span className="bg-blue-100 text-blue-900 border border-blue-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                              ✎ EM ELABORAÇÃO
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-mono font-bold">Protocolado em {aju.dataCriacao}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                        <div className="bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-2xs">
+                          <span className="text-[9px] font-black text-neutral-450 uppercase block">Valor Homologado</span>
+                          <span className="font-mono font-black text-neutral-900 mt-1 block">
+                            R$ {aju.valorAjuste.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-2xs">
+                          <span className="text-[9px] font-black text-neutral-450 uppercase block">Diferença Contrato</span>
+                          <span className="font-mono font-bold text-neutral-800 mt-1 block text-red-700">
+                            R$ {aju.diferencaPlanilhas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-2xs">
+                          <span className="text-[9px] font-black text-neutral-450 uppercase block">Critério Técnico</span>
+                          <span className="font-bold text-slate-800 mt-1 block capitalize">
+                            {aju.desconto}% Desc. | {aju.avancoFisico}% Avanço
+                          </span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-2xs">
+                          <span className="text-[9px] font-black text-neutral-450 uppercase block font-sans">Enquadramento</span>
+                          <span className="font-semibold text-blue-700 mt-1 block uppercase text-[10px] truncate">
+                            {aju.ajusteReferente === 'atendimento_inicial' ? '✓ Atendimento Inicial' : '✓ Saldo Nova Cotação'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] bg-slate-100 p-3 rounded-lg border border-slate-200 text-slate-705">
+                        <div>
+                          <span className="font-semibold text-slate-500">Laboratório Elaborador: </span>
+                          <strong className="text-neutral-800">{aju.responsavelPlanilha}</strong> <span className="text-slate-400 font-mono">({aju.registroProfissional})</span>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-slate-500">Valor do Contrato de Obra: </span>
+                          <strong className="font-mono text-neutral-900">R$ {aju.valorContrato.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                        </div>
+                      </div>
+
+                      {aju.observacoes && (
+                        <div className="p-3 bg-yellow-50/55 text-slate-700 rounded-lg border border-yellow-200 leading-relaxed text-xs">
+                          <strong className="text-yellow-850 block mb-1 font-bold uppercase text-[9px] tracking-wide">Nova Meta Proposta / Serviços Extraordinários:</strong>
+                          <p className="italic">"{aju.observacoes}"</p>
+                        </div>
+                      )}
+
+                      {/* Display spreadsheet attachment information */}
+                      {aju.planilhaAjusteFileName && (
+                        <div className="bg-emerald-50/60 border border-emerald-250 p-3 rounded-xl flex items-center justify-between gap-3 text-xs leading-none">
+                          <div className="flex items-center gap-2.5 truncate">
+                            <FileCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                            <div className="truncate text-left space-y-1">
+                              <span className="font-bold text-slate-800 block truncate">{aju.planilhaAjusteFileName}</span>
+                              <span className="text-[10px] text-slate-400 block font-mono">Tamanho: {aju.planilhaAjusteFileSize} • Carregado na plataforma em {aju.planilhaAjusteUploadedAt}</span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            id={`btn-download-simulated-${aju.id}`}
+                            onClick={() => handleDownloadDocument(aju.planilhaAjusteFileName, "Planilha de Ajuste Executivo")}
+                            className="text-emerald-800 hover:text-emerald-950 font-black text-[11px] bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-3 py-1.5 rounded-lg shrink-0 transition cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Download Planilha
+                          </button>
+                        </div>
+                      )}
+
+                      {/* WORKFLOW CONTROLS INTERACTIVE PANEL */}
+                      <div className="pt-3.5 border-t border-slate-200/80 space-y-3">
+                        
+                        {/* 1. GESTOR DORE: ATRIBUIR QUALQUER TÉCNICO DESEJADO */}
+                        {perfilUsuario === 'gestor_dore' && (
+                          <div className="bg-white border border-slate-200 p-3.5 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                            <div className="flex items-center gap-2.5">
+                              <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                              <div>
+                                <span className="block text-[11px] font-black uppercase text-slate-500 tracking-wider">Distribuição Operacional (Gestor DORE)</span>
+                                <span className="block text-[10px] text-slate-400">Atribua a análise da planilha a qualquer técnico ou perfil desejado.</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <label className="text-[11px] font-bold text-neutral-600">Responsável Tributário:</label>
+                              <select
+                                id={`select-dist-analista-${aju.id}`}
+                                value={aju.analistaAtribuido || 'Eng. André Silva'}
+                                onChange={(e) => atribuirAnalistaAjuste(aju.id, e.target.value)}
+                                className="text-xs bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-neutral-800 font-bold focus:outline-hidden focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                              >
+                                <option value="Eng. André Silva (DORE)">Eng. André Silva (DORE)</option>
+                                <option value="Téc. João Paulo (SRE)">Téc. João Paulo (SRE)</option>
+                                <option value="Eng. Daniel Costa (SRE)">Eng. Daniel Costa (SRE)</option>
+                                <option value="Engª. Sofia Viana (CONTRATADA)">Engª. Sofia Viana (CONTRATADA)</option>
+                                <option value="Engª. Helena Rocha (DORE)">Engª. Helena Rocha (DORE)</option>
+                                <option value="Prof. Guilherme Pereira (TÉCNICO)">Prof. Guilherme Pereira (TÉCNICO)</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 2. TÉCNICO ENCAMINHAR PARA ANÁLISE DORE (Workflow transitions) */}
+                        {aju.status === 'em_elaboracao' && (
+                          <div className="flex items-center gap-3 bg-blue-50/50 p-2.5 rounded-lg border border-blue-200/50">
+                            <span className="text-[11px] text-blue-700 font-bold flex-1">Ajuste salvo como rascunho de preenchimento do Técnico. Envie para dar início ao processo de análise e validação.</span>
+                            <button
+                              type="button"
+                              id={`btn-enviar-dore-analise-${aju.id}`}
+                              onClick={() => atualizarStatusAjuste(aju.id, 'analise_dore')}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs shrink-0 select-none cursor-pointer flex items-center gap-1 leading-none shadow-sm transition"
+                            >
+                              <RefreshCw className="w-3 h-3 animate-spin-slow text-white" />
+                              Encaminhar ao Engenheiro DORE
+                            </button>
+                          </div>
+                        )}
+
+                        {/* 3. ENGENHEIRO DORE: ADICIONAR PARECER TÉCNICO E VALIDAR */}
+                        {aju.status === 'analise_dore' && (
+                          <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-250 space-y-3 text-left">
+                            <div className="flex items-center gap-2">
+                              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                              <div>
+                                <span className="block text-[11px] font-black text-amber-900 uppercase">Parecer Técnico da Engenharia DORE</span>
+                                <span className="text-[10px] text-slate-500 block">Status: Sob análise técnica de <strong className="text-amber-800">{aju.analistaAtribuido || 'Eng. André Silva'}</strong></span>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="block text-[10px] font-bold text-amber-800 uppercase">Justificativa de Homologação / Parecer técnico:</label>
+                              <textarea
+                                id={`parecer-input-text-${aju.id}`}
+                                placeholder="Descreva aqui o parecer consolidado e as concordâncias físico-financeiras para validar em definitivo esta solicitação de adequação de meta de planilha técnica..."
+                                className="w-full text-xs p-3 border border-amber-300 rounded-lg bg-white text-neutral-800 focus:ring-1 focus:ring-amber-500 min-h-[70px] font-sans"
+                                defaultValue={aju.parecerDore}
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              id={`btn-validar-dore-confirm-${aju.id}`}
+                              onClick={() => {
+                                const inputEl = document.getElementById(`parecer-input-text-${aju.id}`) as HTMLTextAreaElement;
+                                const val = inputEl ? inputEl.value : 'Análise técnica finalizada. Planilha orçamentária ajustada em plena conformidade com as metas do plano de trabalho pactuado.';
+                                if (!val.trim()) {
+                                  alert('Atenção: Por favor, preencha o Parecer Técnico para fundamentar a homologação!');
+                                  return;
+                                }
+                                validarAjusteDore(aju.id, val);
+                              }}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs cursor-pointer inline-flex items-center gap-1.5 select-none transition-colors border border-emerald-500"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              Registrar Parecer & Homologar Ajuste (Concluir)
+                            </button>
+                          </div>
+                        )}
+
+                        {/* 4. PARECER FINALIZADO E VALIDADO */}
+                        {aju.status === 'validado' && (
+                          <div className="p-4 bg-emerald-50 text-emerald-950 rounded-xl border border-emerald-250 font-sans space-y-1.5 text-xs text-left shadow-2xs">
+                            <strong className="text-emerald-850 text-[10px] uppercase font-black block tracking-wider leading-none">
+                              ✓ Parecer Consolidado DORE (Homologado):
+                            </strong>
+                            <p className="italic text-slate-700">"{aju.parecerDore}"</p>
+                            <div className="flex items-center gap-2 text-[10px] text-emerald-600 font-mono mt-2 pt-2 border-t border-emerald-100">
+                              <span>Técnico Conclusivo: {aju.analistaAtribuido || 'Eng. André Silva'}</span>
+                              <span>•</span>
+                              <span>Data de Homologação: {aju.dataCriacao}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* SEÇÃO 2: FORMULÁRIO DE CADASTRO DE AJUSTE (TÉCNICO / FISCAL) */}
+            <form onSubmit={salvarAjustePlanilha} className="bg-white border border-neutral-200 rounded-xl shadow-2xs overflow-hidden">
+              <div className="bg-neutral-50 px-5 py-4 border-b border-neutral-200 flex items-center justify-between">
+                <div>
+                  <h3 className="font-display font-bold text-xs text-neutral-800 uppercase tracking-widest flex items-center gap-2">
+                    <FileCheck className="w-4 h-4 text-emerald-600" />
+                    Abertura de Nova Solicitação de Ajuste de Planilha
+                  </h3>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">Preenchimento de responsabilidade do Técnico de Infraestrutura ou Fiscal de Obra.</p>
+                </div>
+                <span className="text-[10px] text-neutral-400">Os campos com * são obrigatórios</span>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* 1. SELEÇÃO DO TIPO DE AJUSTE */}
+                <div className="space-y-3">
+                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
+                    I. Escolha o Tipo de Ajuste *
+                  </label>
+                  <p className="text-[11px] text-neutral-400">Classificação normativa do impacto físico-financeiro no contrato.</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    <label className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer transition-all ${
+                      ajusteTipo === 'sem_alteracao_meta' 
+                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500' 
+                        : 'bg-white border-neutral-200 hover:bg-neutral-50/50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="tipoAjuste"
+                        value="sem_alteracao_meta"
+                        checked={ajusteTipo === 'sem_alteracao_meta'}
+                        onChange={() => setAjusteTipo('sem_alteracao_meta')}
+                        className="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-neutral-850 block">Ajuste sem alteração de meta</span>
+                        <span className="text-[10px] text-neutral-450 block leading-tight">Adequações técnicas que não interferem no escopo físico original acordado.</span>
+                      </div>
+                    </label>
+
+                    <label className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer transition-all ${
+                      ajusteTipo === 'com_alteracao_meta' 
+                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500' 
+                        : 'bg-white border-neutral-200 hover:bg-neutral-50/50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="tipoAjuste"
+                        value="com_alteracao_meta"
+                        checked={ajusteTipo === 'com_alteracao_meta'}
+                        onChange={() => setAjusteTipo('com_alteracao_meta')}
+                        className="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-neutral-850 block">Ajuste com alteração/acréscimo de meta</span>
+                        <span className="text-[10px] text-neutral-450 block leading-tight">Modificações que acrescentam ou alteram o objeto/metas físicas do projeto.</span>
+                      </div>
+                    </label>
+
+                    <label className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer transition-all ${
+                      ajusteTipo === 'com_alteracao_meta_projeto' 
+                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500' 
+                        : 'bg-white border-neutral-200 hover:bg-neutral-50/50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="tipoAjuste"
+                        value="com_alteracao_meta_projeto"
+                        checked={ajusteTipo === 'com_alteracao_meta_projeto'}
+                        onChange={() => setAjusteTipo('com_alteracao_meta_projeto')}
+                        className="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-neutral-850 block">Ajuste com meta e alteração de projeto</span>
+                        <span className="text-[10px] text-neutral-450 block leading-tight">Complexidade máxima: altera as metas físicas e também os arquivos técnicos do projeto.</span>
+                      </div>
+                    </label>
+
+                    <label className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer transition-all ${
+                      ajusteTipo === 'sem_alteracao_meta_com_projeto' 
+                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500' 
+                        : 'bg-white border-neutral-200 hover:bg-neutral-50/50'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="tipoAjuste"
+                        value="sem_alteracao_meta_com_projeto"
+                        checked={ajusteTipo === 'sem_alteracao_meta_com_projeto'}
+                        onChange={() => setAjusteTipo('sem_alteracao_meta_com_projeto')}
+                        className="mt-1 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-neutral-850 block">Ajuste sem meta e com alteração de projeto</span>
+                        <span className="text-[10px] text-neutral-450 block leading-tight">Análise técnica referente aos quantitativos e tabela de serviços DORE/SIN.</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* 2. DADOS DA SOLICITAÇÃO E RESPONSÁVEL */}
+                <div className="space-y-4 pt-4 border-t border-neutral-150">
+                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
+                    II. Responsabilidade Técnica & Valores do Ajuste
+                  </label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
+                        Valor Proposto do Ajuste (R$) *
+                      </label>
+                      <div className="relative rounded-lg shadow-xs">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-500 text-xs font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={ajusteValor}
+                          onChange={(e) => setAjusteValor(e.target.value)}
+                          placeholder="12.422,94"
+                          className="w-full pl-8 pr-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono font-bold text-neutral-800"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
+                        Elaborador da Planilha *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={ajusteResponsavel}
+                        onChange={(e) => setAjusteResponsavel(e.target.value)}
+                        placeholder="Nome do Engenheiro / Técnico"
+                        className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-sans text-neutral-800"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
+                        Registro Profissional (CREA/CAU/CFT) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={ajusteRegistro}
+                        onChange={(e) => setAjusteRegistro(e.target.value)}
+                        placeholder="Ex: 242488/D"
+                        className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. ENQUADRAMENTO REFERENTE AO CONTRATO */}
+                <div className="space-y-4 pt-4 border-t border-neutral-150">
+                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
+                    III. Enquadramento Técnico e Referência Contratual
+                  </label>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div>
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5">
+                        Ajuste Referente a: *
+                      </label>
+                      <div className="flex gap-4 pt-1">
+                        <label className="flex items-center gap-2 text-xs text-neutral-750 font-bold cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ajusteReferente"
+                            value="atendimento_inicial"
+                            checked={ajusteReferenteOpt === 'atendimento_inicial'}
+                            onChange={() => setAjusteReferenteOpt('atendimento_inicial')}
+                            className="text-blue-600 focus:ring-blue-500"
+                          />
+                          ATENDIMENTO INICIAL
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-neutral-750 font-bold cursor-pointer">
+                          <input
+                            type="radio"
+                            name="ajusteReferente"
+                            value="saldo_nova_cotacao"
+                            checked={ajusteReferenteOpt === 'saldo_nova_cotacao'}
+                            onChange={() => setAjusteReferenteOpt('saldo_nova_cotacao')}
+                            className="text-blue-600 focus:ring-blue-500"
+                          />
+                          Saldo Nova Cotação
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5">
+                        Valor Atual do Contrato (R$)
+                      </label>
+                      <div className="relative rounded-lg shadow-xs max-w-xs">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-500 text-xs font-bold font-mono">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={ajusteValorContrato}
+                          onChange={(e) => setAjusteValorContrato(e.target.value)}
+                          placeholder="400.498,42"
+                          className="w-full pl-8 pr-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-605"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
+                        Diferença Planilhas Autorizadas e Contrato (R$) *
+                      </label>
+                      <div className="relative rounded-lg shadow-xs">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-550 text-xs font-mono font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={ajusteDiferenca}
+                          onChange={(e) => setAjusteDiferenca(e.target.value)}
+                          placeholder="153.284,34"
+                          className="w-full pl-8 pr-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-850"
+                        />
+                      </div>
+                      <span className="text-[9px] text-neutral-400 mt-0.5 block">Exclui valores vinculados especificamente ao Engenheiro Fiscal</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
+                        BDI / Desconto (%) *
+                      </label>
+                      <div className="relative rounded-lg shadow-xs">
+                        <input
+                          type="number"
+                          required
+                          value={ajusteDesconto}
+                          onChange={(e) => setAjusteDesconto(e.target.value)}
+                          placeholder="28"
+                          className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-850"
+                        />
+                        <span className="absolute inset-y-0 right-3 flex items-center text-neutral-500 text-xs font-bold">%</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
+                        Avanço Físico Obra (%) *
+                      </label>
+                      <div className="relative rounded-lg shadow-xs">
+                        <input
+                          type="number"
+                          required
+                          value={ajusteAvanco}
+                          onChange={(e) => setAjusteAvanco(e.target.value)}
+                          placeholder="50"
+                          className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-850"
+                        />
+                        <span className="absolute inset-y-0 right-3 flex items-center text-neutral-500 text-xs font-bold">%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. OBSERVAÇÕES E META PROPOSTA */}
+                <div className="space-y-3 pt-4 border-t border-neutral-150">
+                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
+                    IV. Memória de Observância / Descrição da NOVA META PROPOSTA *
+                  </label>
+                  <p className="text-[11px] text-neutral-400">Escreva detalhadamente a justificativa para este ajuste e como se caracteriza o escopo físico da nova meta.</p>
+                  
+                  <textarea
+                    required
+                    value={ajusteObservacoes}
+                    onChange={(e) => setAjusteObservacoes(e.target.value)}
+                    placeholder="Ex: Adequação das fundações do bloco B devido a interferência imprevista de rochas basálticas identificadas na escavação física. Troca de pavimentação asfáltica de acessos por bloco articulado intertravado ecológico sem alteração do valor global."
+                    className="w-full text-xs p-3 border border-neutral-300 rounded-lg bg-white h-24 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-sans text-neutral-800"
+                  />
+                </div>
+
+                {/* 5. MANDATORY SPREADSHEET PHOTO / EXCEL COMPONENT (CRITICAL REQUIREMENT) */}
+                <div className="space-y-3 pt-4 border-t border-red-100">
+                  <label className="block text-xs font-bold text-red-650 uppercase tracking-wider flex items-center gap-1.5">
+                    <UploadCloud className="w-4 h-4" />
+                    V. Anexar Planilha de Ajuste Orçamentário (Obrigatório) *
+                  </label>
+                  <p className="text-[11px] text-neutral-400">Classificação estatutária: É obrigatório e imprescindível anexar a nova planilha orçamentária para avançar o processo técnico.</p>
+
+                  <input
+                    type="file"
+                    ref={planilhaAjusteFormInputRef}
+                    id="planilha-ajuste-input-upload-form"
+                    accept=".xlsx, .xls, .csv"
+                    onChange={handlePlanilhaAjusteUpload}
+                    className="hidden"
+                  />
+
+                  {!ajustePlanilhaFileName ? (
+                    <div className="border-2 border-dashed border-red-300 bg-red-50/20 rounded-xl p-6 text-center space-y-2 cursor-pointer hover:bg-red-50/45 transition-all"
+                         onClick={() => planilhaAjusteFormInputRef.current?.click()}>
+                      <UploadCloud className="w-8 h-8 text-red-400 mx-auto animate-bounce" />
+                      <p className="text-xs text-red-800 font-extrabold uppercase">Planilha de Ajuste Não Selecionada *</p>
+                      <p className="text-[10px] text-slate-450">Clique aqui para selecionar e anexar documento Excel contendo tabelas DORE/SIN.</p>
+                    </div>
+                  ) : (
+                    <div className="border border-emerald-300 bg-emerald-50/50 rounded-xl p-4 flex items-center justify-between gap-3 shadow-3xs">
+                      <div className="flex items-center gap-2.5 truncate">
+                        <FileCheck className="w-8 h-8 text-emerald-600 shrink-0" />
+                        <div className="truncate text-left space-y-1">
+                          <span className="font-bold text-emerald-950 text-xs block truncate">{ajustePlanilhaFileName}</span>
+                          <span className="text-[10px] text-emerald-650 font-mono block">Tamanho: {ajustePlanilhaFileSize} • Carregado com Sucesso</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAjustePlanilhaFileName('');
+                          setAjustePlanilhaFileSize('');
+                          setAjustePlanilhaUploadedAt('');
+                        }}
+                        className="text-red-650 hover:text-red-800 text-[11px] font-bold bg-white border border-red-200 px-3 py-1.5 rounded-lg hover:bg-neutral-50 shrink-0 transition shadow-2xs cursor-pointer"
+                      >
+                        Substituir Planilha
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* RODAPÉ DO FORMULÁRIO COM AÇÕES */}
+              <div className="bg-neutral-50 px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Reset fields
+                    setAjustePlanilhaFileName('');
+                    setAjustePlanilhaFileSize('');
+                    setAjustePlanilhaUploadedAt('');
+                    setAjusteObservacoes('');
+                    setActiveTab('execucao');
+                  }}
+                  className="px-4 py-2 border border-neutral-300 bg-white rounded-lg text-xs font-bold text-neutral-600 hover:bg-neutral-50 transition-all cursor-pointer"
+                >
+                  Cancelar e Voltar para Medições
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-extrabold shadow-sm transition-colors cursor-pointer"
+                >
+                  Salvar e Protocolar Solicitação de Ajuste
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+                {activeTab === 'aditivos' && (
+          <div className="space-y-6 animate-fadeIn font-sans">
+            <div className="flex justify-between items-center bg-blue-50 border border-blue-100 p-4 rounded-xl">
+              <div>
+                <h2 className="text-sm font-bold text-neutral-800 flex items-center gap-1.5">
+                  <Layers className="w-5 h-5 text-blue-650 animate-pulse" />
+                  Módulo Integrado de Solicitação de Termos Aditivos
+                </h2>
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  Gerenciamento oficial de ampliação orçamentária ou dilatação de prazos do projeto cooperador de engenharia estrutural.
+                </p>
+              </div>
+              <span className="text-xs bg-white text-blue-750 font-extrabold px-3 py-1 rounded-lg border border-blue-200">
+                Total Aditados: R$ {totalAditivosAprovados.toLocaleString('pt-BR')}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Side: Creation and Audit lists */}
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* 1. REGISTER NEW ADITIVO */}
+                {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                  <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
+                    <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
+                      <h3 className="font-bold text-sm text-neutral-800">Nova Solicitação de Aditivo</h3>
+                      <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Processo de Engenharia</span>
+                    </div>
+
+                    <form onSubmit={adicionarAditivo} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-neutral-600 mb-1">Tipo de Modificação</label>
+                          <select
+                            value={novoAditivoTipo}
+                            onChange={(e) => setNovoAditivoTipo(e.target.value as any)}
+                            className="w-full text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white"
+                          >
+                            <option value="Valor">Valor (Financeiro)</option>
+                            <option value="Prazo">Prazo (Evolução Temporal)</option>
+                            <option value="Valor e Prazo">Valor & Prazo Simultâneos</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-neutral-600 mb-1">Acréscimo de Valor (R$)</label>
+                          <input
+                            type="number"
+                            placeholder="Ex: 120000"
+                            disabled={novoAditivoTipo === 'Prazo'}
+                            value={novoAditivoValor}
+                            onChange={(e) => setNovoAditivoValor(e.target.value)}
+                            className="w-full text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white disabled:opacity-50"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-neutral-600 mb-1">Prorrogação de Prazo (Dias)</label>
+                          <input
+                            type="number"
+                            placeholder="Ex: 90"
+                            disabled={novoAditivoTipo === 'Valor'}
+                            value={novoAditivoPrazo}
+                            onChange={(e) => setNovoAditivoPrazo(e.target.value)}
+                            className="w-full text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white disabled:opacity-50"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1">Justificativa Técnica Circunstanciada</label>
+                        <textarea
+                          placeholder="Digite detalhadamente os motivos que fundamentam a ampliação dos recursos financeiros ou prazo da execução física da obra."
+                          value={novoAditivoJust}
+                          onChange={(e) => setNovoAditivoJust(e.target.value)}
+                          className="w-full text-xs p-3 border border-neutral-300 rounded-lg h-24 focus:outline-hidden bg-white resize-none"
+                          required
+                        />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer transition"
+                        >
+                          Protocolar Nova Solicitação
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* 2. LIST AND INTERACTIVE WORKFLOW AUDITS */}
+                <div className="space-y-4">
+                  <h3 className="font-bold text-xs text-neutral-400 uppercase tracking-widest">
+                    Pedidos de Aditivos Sob Análise
+                  </h3>
+
+                  {solicitacao.aditivos.length === 0 ? (
+                    <div className="p-8 text-center text-neutral-400 bg-white border border-neutral-200 rounded-xl italic text-xs">
+                      Não há nenhuma solicitação de aditivo ativa ou cadastrada para esta obra.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {solicitacao.aditivos.map((adt) => (
+                        <div key={adt.id} className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4 shadow-3xs">
+                          {/* Header of Aditivo Request Card */}
+                          <div className="flex justify-between items-start border-b border-neutral-100 pb-3 flex-wrap gap-2 text-xs">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono text-[9px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded-sm">ID: {adt.id}</span>
+                                <h4 className="font-extrabold text-neutral-800 text-sm">Aditivo de {adt.tipo}</h4>
+                                <span className="text-neutral-350">•</span>
+                                <span className="text-neutral-500">{adt.data}</span>
+                              </div>
+                              <p className="text-[11px] text-neutral-400 mt-0.5 font-mono">
+                                Impactos: {adt.valorExtra ? `+ R$ ${adt.valorExtra.toLocaleString('pt-BR')}` : ''} {adt.prazoExtraDias ? ` • + ${adt.prazoExtraDias} dias` : ''}
+                              </p>
+                            </div>
+                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold border ${
+                              adt.status === 'Aprovado'
+                                ? 'bg-emerald-50 border-emerald-250 text-emerald-800'
+                                : adt.status === 'Recusado'
+                                  ? 'bg-red-50 border-red-200 text-red-700'
+                                  : 'bg-amber-50 border-amber-200 text-amber-700'
+                            }`}>
+                              Processo: {adt.status}
+                            </span>
+                          </div>
+
+                          {/* Justification details */}
+                          <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-150">
+                            <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Motivos / Justificativas do Pedido</span>
+                            <p className="text-neutral-600 text-xs leading-relaxed mt-1">{adt.justificativa}</p>
+                          </div>
+
+                          {/* 1. ATRIBUIR ANALISTA DO ADITIVO (WORKFLOW ADHERENCE) */}
+                          <div className="p-3 bg-neutral-50/60 rounded-lg border border-neutral-150 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[18px]">👷</span>
+                              <div>
+                                <span className="text-slate-500 block text-[9px] uppercase font-bold">Analista de Obras Atribuído</span>
+                                <span className="font-semibold text-neutral-700">{adt.analistaAtribuido || 'Aguardando atribuição do gestor'}</span>
+                              </div>
+                            </div>
+
+                            {perfilUsuario === 'gestor_paf' && adt.status === 'Pendente' && (
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <select
+                                  onChange={(e) => atribuirAnalistaAditivo(adt.id, e.target.value)}
+                                  value={adt.analistaAtribuido || ''}
+                                  className="text-xs p-1.5 border border-neutral-300 rounded bg-white cursor-pointer"
+                                >
+                                  <option value="">Atribuir Engenheiro...</option>
+                                  <option value="Eng. Mariana Santos (DORE)">Eng. Mariana Santos (DORE)</option>
+                                  <option value="Eng. Eduardo Ribeiro (DORE)">Eng. Eduardo Ribeiro (DORE)</option>
+                                  <option value="Eng. Bruno Albuquerque (DORE)">Eng. Bruno Albuquerque (DORE)</option>
+                                </select>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 2. SUB-CHECKLIST INDUSTRIAL DE DOCUMENTOS DO ADITIVO */}
+                          <div className="space-y-2 pt-1">
+                            <h5 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Checklist Documental Obrigatório da Solicitação de Aditivo</h5>
+                            <div className="bg-white rounded-lg border border-neutral-200/80 overflow-hidden divide-y divide-neutral-150 text-xs shadow-xs">
+                              {adt.documentos && adt.documentos.map((doc) => {
+                                return (
+                                  <div key={doc.id} className="p-3.5 space-y-3 bg-neutral-50/20">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                      <div className="flex items-start gap-2 max-w-lg font-sans">
+                                        <span className={`text-[12px] shrink-0 mt-0.5 ${doc.status === 'aprovado' ? '✅' : doc.status === 'recusado' ? '❌' : '⏳'}`}>
+                                          {doc.status === 'aprovado' ? '•' : doc.status === 'recusado' ? '•' : '•'}
+                                        </span>
+                                        <div>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="font-bold text-neutral-700">{doc.nome}</span>
+                                            {doc.obrigatorio && (
+                                              <span className="text-[9px] font-bold text-red-650 bg-red-50/85 px-1.5 py-0.2 rounded">Obrigatório</span>
+                                            )}
+                                          </div>
+                                          {doc.fileName ? (
+                                            <span className="text-[10px] text-blue-600 font-medium block font-mono mt-1">📎 {doc.fileName} (carregado em {doc.uploadedAt})</span>
+                                          ) : (
+                                            <span className="text-[10px] text-slate-400 italic block mt-1">Nenhum documento carregado para este requisito</span>
+                                          )}
+                                          {doc.justificativa && (
+                                            <p className="text-[11px] text-red-650 bg-red-50 p-1.5 rounded-md border border-red-100 mt-2 font-medium">
+                                              Motivo da Rejeição: {doc.justificativa}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Document operations */}
+                                      <div className="shrink-0 flex items-center gap-2">
+                                        {/* File Simulation Button for Contractor */}
+                                        {(perfilUsuario === 'fiscal_obra') && doc.status !== 'aprovado' && (
+                                          <button
+                                            type="button"
+                                            onClick={() => anexarDocumentoAditivo(adt.id, doc.id, `parecer_aditivo_${doc.id}_v1.pdf`)}
+                                            className="px-2.5 py-1 bg-white border border-neutral-300 rounded text-[11px] hover:bg-neutral-50 cursor-pointer font-semibold"
+                                          >
+                                            Simular Upload
+                                          </button>
+                                        )}
+
+                                        {/* Audit actions for assigned analysts */}
+                                        {doc.status === 'pendente' && doc.fileName && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf') && (
+                                          <div className="flex items-center gap-1.5">
+                                            <button
+                                              type="button"
+                                              onClick={() => atualizarStatusDocAditivo(adt.id, doc.id, 'aprovado')}
+                                              className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] hover:bg-emerald-700 font-bold cursor-pointer"
+                                            >
+                                              Deferir
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const rejJust = prompt("Por favor, digite o motivo de rejeição para este documento:") || '';
+                                                if (rejJust) {
+                                                  atualizarStatusDocAditivo(adt.id, doc.id, 'recusado', rejJust);
+                                                } else {
+                                                  alert("Justificativa de rejeição é obrigatória.");
+                                                }
+                                              }}
+                                              className="px-2 py-1 bg-red-600 text-white rounded text-[10px] hover:bg-red-700 font-bold cursor-pointer"
+                                            >
+                                              Rejeitar
+                                            </button>
+                                          </div>
+                                        )}
+
+                                        {doc.status !== 'pendente' && (
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                            doc.status === 'aprovado'
+                                              ? 'bg-emerald-50 text-emerald-800'
+                                              : 'bg-red-50 text-red-750 font-semibold'
+                                          }`}>
+                                            {doc.status.toUpperCase()}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* 3. DECISION PANEL / HOMOLOGAR ADITIVO */}
+                          {adt.status === 'Pendente' && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf') && (
+                            <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-250 space-y-3 font-sans text-xs shadow-2xs">
+                              <h5 className="font-bold text-blue-900">Análise de Homologação de Termo Aditivo</h5>
+                              <p className="text-neutral-500 leading-normal">
+                                O Termo Aditivo passará por deferimento final com base na consistência legal e técnica dos documentos atestados acima pelo analista credenciado.
+                              </p>
+                              <div className="flex flex-col sm:flex-row gap-3 py-1">
+                                <div className="flex-1">
+                                  <label className="block text-[10px] font-bold text-neutral-500 mb-1 uppercase">Parecer de Engenharia Consolidado</label>
+                                  <input
+                                    type="text"
+                                    id={`parecer-input-${adt.id}`}
+                                    placeholder="Ex: Nota Técnica Deferida. Escopo necessário devido a surpresas geotécnicas."
+                                    className="w-full text-xs p-2.5 border border-neutral-300 rounded bg-white"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex justify-end gap-2 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById(`parecer-input-${adt.id}`) as HTMLInputElement;
+                                    alterarStatusAditivoCompleto(adt.id, 'Recusado', input?.value || 'Sem parecer');
+                                    alert('Contrato Aditivo REJEITADO!');
+                                  }}
+                                  className="px-3.5 py-1.5 bg-red-650 hover:bg-red-700 text-white rounded-lg font-bold cursor-pointer"
+                                >
+                                  Recusar Aditivo
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const input = document.getElementById(`parecer-input-${adt.id}`) as HTMLInputElement;
+                                    const missingDocs = adt.documentos?.some(d => d.obrigatorio && d.status !== 'aprovado');
+                                    if (missingDocs) {
+                                      const confirmAction = confirm("⚠️ ATENÇÃO: Nem todos os documentos obrigatórios exigidos foram validados e aprovados. Deseja homologar o aditivo de qualquer forma?");
+                                      if (!confirmAction) return;
+                                    }
+                                    alterarStatusAditivoCompleto(adt.id, 'Aprovado', input?.value || 'Aprovado de acordo com requisitos regimentais.');
+                                    alert('Contrato Aditivo APROVADO! O orçamento foi recalculado com sucesso e os limites contratuais foram reajustados para a sequência da obra.');
+                                  }}
+                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer"
+                                >
+                                  Homologar & Reajustar Orçamento
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Consolidating display if decided */}
+                          {adt.status !== 'Pendente' && adt.parecerConsolidado && (
+                            <div className="p-3 bg-neutral-100/85 rounded-lg border border-neutral-150 text-xs">
+                              <span className="font-semibold text-neutral-700 block text-[9.5px] uppercase tracking-wide">Parecer de Homologação Consolidado:</span>
+                              <p className="text-neutral-600 italic mt-0.5">{adt.parecerConsolidado}</p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Right Side: Financial balance */}
+              <div className="space-y-4">
+                <div className="p-5 bg-white border border-neutral-200 rounded-xl space-y-4">
+                  <h4 className="font-display font-medium text-xs text-neutral-400 uppercase tracking-widest">
+                    Impacto Contratual Atualizado
+                  </h4>
+
+                  <div className="space-y-4 text-xs font-sans">
+                    <div>
+                      <span className="block text-neutral-500">Valor Orçado Original</span>
+                      <span className="text-sm font-semibold font-mono text-neutral-800">
+                        R$ {solicitacao.valorHomologado?.toLocaleString('pt-BR') || '0,00'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-neutral-500">Acréscimos Reajustados (Aditivos)</span>
+                      <span className="text-base font-bold font-mono text-blue-600">
+                        + R$ {totalAditivosAprovados.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+
+                    <div className="border-t border-neutral-100 pt-3">
+                      <span className="block text-neutral-500 font-bold">Valor Global do Contrato Aditado</span>
+                      <span className="text-lg font-extrabold font-mono text-neutral-900">
+                        R$ {valorContratoAtual.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl text-[11px] text-neutral-700 space-y-2 font-sans">
+                  <span className="font-bold block text-blue-900 text-xs">Regras do Processo PAF:</span>
+                  <p>1. O <strong>Fiscal da Obra</strong> propõe o termo aditivo apresentando a planilha revisada.</p>
+                  <p>2. Os analistas credenciados da DORE verificam a consistência de cada peça técnica carregada.</p>
+                  <p>3. Somente após a homologação e aprovação, o novo valor global é liberado e incorporado ao saldo físico/financeiro para novas medições da obra.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CONTEÚDO DA ABA 7: CONCLUSÃO DE OBRA */}
+        {activeTab === 'conclusao' && (
+          <form onSubmit={salvarConclusaoObra} className="space-y-6 animate-fadeIn font-sans text-left">
+            <div className="flex justify-between items-center bg-emerald-50 border border-emerald-100 p-5 rounded-xl">
+              <div>
+                <h2 className="text-sm font-bold text-neutral-800 flex items-center gap-1.5">
+                  <CheckCircle className="w-5 h-5 text-emerald-650 animate-pulse" />
+                  Módulo de Conclusão e Encerramento de Obra
+                </h2>
+                <p className="text-[11px] text-neutral-500 mt-1 font-sans">
+                  Preenchimento do termo de conclusão física integral, com anexação obrigatória das peças técnicas de encerramento da execução.
+                </p>
+              </div>
+              <span className={`text-xs font-extrabold px-3 py-1 rounded-lg border ${
+                solicitacao.statusObra === 'Concluída'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-white text-slate-750 border-slate-200'
+              }`}>
+                Dossiê Final: {solicitacao.statusObra === 'Concluída' ? 'CONCLUÍDO' : 'EM EXECUÇÃO'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Side: Form Inputs and Upload Card */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
+                  <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
+                    <h3 className="font-bold text-xs uppercase tracking-wider text-neutral-500">Dados do Termo de Conclusão</h3>
+                    <span className="text-[10px] uppercase font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Fiscalização</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-700 mb-1">
+                        Data Efetiva de Conclusão da Obra *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        value={dataConclusaoInput}
+                        onChange={(e) => setDataConclusaoInput(e.target.value)}
+                        className="w-full text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white disabled:opacity-60"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-150 w-full text-[11px] text-neutral-500 font-sans">
+                        ⚠️ <strong className="font-semibold text-neutral-700">Atenção:</strong> Ao formalizar o encerramento, o status do empreendimento será consolidado definitivamente como <strong className="text-emerald-700">Concluída</strong>.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DOCUMENT UPLOADERS CHECKLIST FOR COMPLETION */}
+                  <div className="space-y-4 pt-2">
+                    <h4 className="font-bold text-xs text-neutral-700 uppercase tracking-wide border-b border-neutral-100 pb-1.5 flex items-center gap-1.5">
+                      <Paperclip className="w-4 h-4 text-neutral-500" />
+                      Documentos de Conclusão Obrigatórios
+                    </h4>
+
+                    {/* 1. LAUDO CONCLUSIVO */}
+                    <div className="p-4 bg-slate-50/50 border border-slate-200 rounded-lg space-y-2">
+                      <div className="flex justify-between items-start flex-wrap gap-2 text-xs">
+                        <div>
+                          <span className="font-bold text-neutral-800 text-xs block">1. Laudo Conclusivo da Obra *</span>
+                          <span className="text-[10.5px] text-neutral-500 block leading-tight mt-0.5">
+                            Laudo descritivo assinado pelo engenheiro responsável certificando que todos os termos do escopo foram concluídos.
+                          </span>
+                        </div>
+                      </div>
+
+                      {laudoConclusivoFileName ? (
+                        <div className="p-3 bg-white border border-neutral-200 rounded-lg flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-md shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="truncate">
+                              <span className="block text-xs font-bold text-neutral-800 break-all">{laudoConclusivoFileName}</span>
+                              <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">
+                                Tamanho: {laudoConclusivoFileSize} • Enviado em: {laudoConclusivoUploadedAt ? new Date(laudoConclusivoUploadedAt + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDocument(laudoConclusivoFileName, "Laudo Conclusivo Final")}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 hover:bg-blue-50 rounded transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Baixar
+                            </button>
+                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLaudoConclusivoFileName('');
+                                  setLaudoConclusivoFileSize('');
+                                  setLaudoConclusivoUploadedAt('');
+                                }}
+                                className="text-red-500 hover:text-red-750 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                              >
+                                Remover
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            ref={laudoConclusivoInputRef}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+                              setLaudoConclusivoFileName(file.name);
+                              setLaudoConclusivoFileSize(sizeFormatted);
+                              setLaudoConclusivoUploadedAt(new Date().toISOString().split('T')[0]);
+                            }}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => laudoConclusivoInputRef.current?.click()}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            className="px-3.5 py-2 border border-dashed border-slate-350 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                          >
+                            <UploadCloud className="w-4 h-3.5 text-neutral-500 animate-bounce" />
+                            Selecionar Laudo Conclusivo
+                          </button>
+                          <span className="text-[10px] text-neutral-400 font-sans">
+                            Aceita PDF, DOCX ou DOC.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. RELATÓRIO FOTOGRÁFICO DE CONCLUSÃO */}
+                    <div className="p-4 bg-slate-50/50 border border-slate-200 rounded-lg space-y-2">
+                      <div className="flex justify-between items-start flex-wrap gap-2 text-xs">
+                        <div>
+                          <span className="font-bold text-neutral-800 text-xs block">2. Relatório Fotográfico Final *</span>
+                          <span className="text-[10.5px] text-neutral-500 block leading-tight mt-0.5">
+                            Relatório em PDF com fotografias legendadas demonstrando o "Antes" e o "Depois" dos espaços reformados de forma visível.
+                          </span>
+                        </div>
+                      </div>
+
+                      {relatorioFotograficoFileName ? (
+                        <div className="p-3 bg-white border border-neutral-200 rounded-lg flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-md shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="truncate">
+                              <span className="block text-xs font-bold text-neutral-800 break-all">{relatorioFotograficoFileName}</span>
+                              <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">
+                                Tamanho: {relatorioFotograficoFileSize} • Enviado em: {relatorioFotograficoUploadedAt ? new Date(relatorioFotograficoUploadedAt + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDocument(relatorioFotograficoFileName, "Relatório Fotográfico Final")}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 hover:bg-blue-50 rounded transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Baixar
+                            </button>
+                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRelatorioFotograficoFileName('');
+                                  setRelatorioFotograficoFileSize('');
+                                  setRelatorioFotograficoUploadedAt('');
+                                }}
+                                className="text-red-500 hover:text-red-750 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                              >
+                                Remover
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            ref={relatorioFotograficoInputRef}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+                              setRelatorioFotograficoFileName(file.name);
+                              setRelatorioFotograficoFileSize(sizeFormatted);
+                              setRelatorioFotograficoUploadedAt(new Date().toISOString().split('T')[0]);
+                            }}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => relatorioFotograficoInputRef.current?.click()}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            className="px-3.5 py-2 border border-dashed border-slate-350 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                          >
+                            <UploadCloud className="w-4 h-3.5 text-neutral-500 animate-bounce" />
+                            Selecionar Relatório Fotográfico
+                          </button>
+                          <span className="text-[10px] text-neutral-400 font-sans">
+                            Aceita PDF de alta resolução com imagens legendadas.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. PLANILHA DE MEDIÇÃO ACUMULADA FINAL */}
+                    <div className="p-4 bg-slate-50/50 border border-slate-200 rounded-lg space-y-2">
+                      <div className="flex justify-between items-start flex-wrap gap-2 text-xs">
+                        <div>
+                          <span className="font-bold text-neutral-800 text-xs block">3. Planilha de Medição Acumulada Final *</span>
+                          <span className="text-[10.5px] text-neutral-500 block leading-tight mt-0.5">
+                            Planilha eletrônica demonstrativa das medições periódicas consolidadas, totalizando 100% de avanço físico executado.
+                          </span>
+                        </div>
+                      </div>
+
+                      {planilhaMedicaoFinalFileName ? (
+                        <div className="p-3 bg-white border border-neutral-200 rounded-lg flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-md shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="truncate">
+                              <span className="block text-xs font-bold text-neutral-800 break-all">{planilhaMedicaoFinalFileName}</span>
+                              <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">
+                                Tamanho: {planilhaMedicaoFinalFileSize} • Enviado em: {planilhaMedicaoFinalUploadedAt ? new Date(planilhaMedicaoFinalUploadedAt + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDocument(planilhaMedicaoFinalFileName, "Planilha de Medição Final")}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 hover:bg-blue-50 rounded transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Baixar
+                            </button>
+                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPlanilhaMedicaoFinalFileName('');
+                                  setPlanilhaMedicaoFinalFileSize('');
+                                  setPlanilhaMedicaoFinalUploadedAt('');
+                                }}
+                                className="text-red-500 hover:text-red-750 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                              >
+                                Remover
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            accept=".xlsx,.xls,.pdf"
+                            ref={planilhaMedicaoFinalInputRef}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+                              setPlanilhaMedicaoFinalFileName(file.name);
+                              setPlanilhaMedicaoFinalFileSize(sizeFormatted);
+                              setPlanilhaMedicaoFinalUploadedAt(new Date().toISOString().split('T')[0]);
+                            }}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => planilhaMedicaoFinalInputRef.current?.click()}
+                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            className="px-3.5 py-2 border border-dashed border-slate-350 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                          >
+                            <UploadCloud className="w-4 h-3.5 text-neutral-500 animate-bounce" />
+                            Selecionar Planilha de Medição Final
+                          </button>
+                          <span className="text-[10px] text-neutral-400 font-sans">
+                            Aceita arquivos do Excel (.xlsx, .xls) ou PDF correspondente.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                    <div className="flex justify-end pt-3 border-t border-neutral-100">
+                      <button
+                        type="submit"
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-xs flex items-center gap-1.5"
+                      >
+                        <CheckCircle className="w-4 h-4 text-white" />
+                        Salvar e Protocolar Conclusão da Obra
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Side Info Panel */}
+              <div className="space-y-4">
+                <div className="p-5 bg-white border border-neutral-200 rounded-xl space-y-4">
+                  <h4 className="font-display font-medium text-xs text-neutral-400 uppercase tracking-widest">
+                    Informações Relevantes
+                  </h4>
+
+                  <div className="space-y-4 text-xs font-sans">
+                    <div>
+                      <span className="block text-neutral-400">Escola Afetada</span>
+                      <span className="text-sm font-semibold text-neutral-800 leading-tight block mt-0.5">
+                        {solicitacao.nomeEscola}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-neutral-400">Total Medido Acumulado</span>
+                      <span className="text-base font-bold font-mono text-emerald-600">
+                        R$ {totalMedido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-neutral-400">Valor Aditado da Obra</span>
+                      <span className="text-sm font-bold font-mono text-neutral-750">
+                        R$ {valorContratoAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="block text-neutral-400">A evolução geral da obra é de:</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex-1 bg-neutral-100 h-2.5 rounded-full overflow-hidden border border-neutral-200">
+                          <div 
+                            className="bg-emerald-650 h-full rounded-full transition-all duration-500" 
+                            style={{ width: `${Math.min(100, progressoTotalObra)}%` }}
+                          />
+                        </div>
+                        <span className="font-bold text-neutral-800 font-mono text-xs shrink-0">
+                          {progressoTotalObra}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-[11px] text-neutral-700 space-y-2 font-sans">
+                  <span className="font-bold block text-emerald-900 text-xs">Instruções de Fiscalização:</span>
+                  <p>1. Verifique rigorosamente se o total acumulado das medições financeiras corresponde ao teto reajustado do contrato.</p>
+                  <p>2. O <strong>Laudo Conclusivo</strong> deve atestar a aceitação definitiva do empreendimento sem ressalvas.</p>
+                  <p>3. Envie fotos nítidas que facilitem o processo de auditoria de obras e prestação de contas governamentais.</p>
+                </div>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
