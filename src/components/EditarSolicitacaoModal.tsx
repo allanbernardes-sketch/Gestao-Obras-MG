@@ -413,18 +413,21 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-red-650 text-red-600 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-red-500" /> Etapa Atual / Status
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <Layers className="w-3 h-3 text-slate-400" /> Etapa Atual / Status
                   </label>
                   <select
                     value={etapaAtual}
-                    onChange={(e) => setEtapaAtual(e.target.value as EtapaProcesso)}
-                    className="w-full px-3 py-2 text-xs border border-red-200 bg-red-50/20 text-slate-850 font-black rounded-lg focus:ring-2 focus:ring-blue-550/15 focus:outline-hidden"
+                    disabled={true}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 bg-slate-100 text-slate-500 font-bold rounded-lg cursor-not-allowed"
                   >
                     {Object.entries(statusLabels).map(([key, value]) => (
                       <option key={key} value={key}>{value}</option>
                     ))}
                   </select>
+                  <p className="text-[10px] text-slate-400 mt-1 italic">
+                    A Etapa Atual não pode ser alterada manualmente na edição.
+                  </p>
                 </div>
               </div>
             </div>

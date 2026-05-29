@@ -47,6 +47,7 @@ interface NovoAtendimentoPanelProps {
   onUpdateSolicitacao: (updated: Solicitacao) => void;
   usuariosSeguranca: { id: string; nome: string; perfil: string; depto?: string }[];
   onEdit?: (sol: Solicitacao) => void;
+  perfilUsuario?: string;
 }
 
 export function NovoAtendimentoPanel({ 
@@ -54,7 +55,8 @@ export function NovoAtendimentoPanel({
   onSolicitacaoCriada, 
   onUpdateSolicitacao, 
   usuariosSeguranca,
-  onEdit
+  onEdit,
+  perfilUsuario
 }: NovoAtendimentoPanelProps) {
   // Navigation: 'form' | 'checklist' | 'intermediaria'
   const [currentView, setCurrentView] = useState<'form' | 'checklist' | 'intermediaria'>('form');
@@ -80,7 +82,10 @@ export function NovoAtendimentoPanel({
   const [descricaoFolhaRosto, setDescricaoFolhaRosto] = useState('');
   const [valorPlanilha, setValorPlanilha] = useState('');
   const [iss, setIss] = useState('');
-  const [responsavel, setResponsavel] = useState('Téc. de Infraestrutura');
+  
+  const activeUser = usuariosSeguranca?.find(u => u.perfil === perfilUsuario);
+  const responsavel = activeUser ? activeUser.nome : 'João Paulo Penfield';
+  
   const [observacoesFicha, setObservacoesFicha] = useState('');
   const [erro, setErro] = useState('');
 
@@ -300,7 +305,6 @@ export function NovoAtendimentoPanel({
     setDescricaoFolhaRosto('');
     setValorPlanilha('');
     setIss('');
-    setResponsavel('Téc. de Infraestrutura');
     setObservacoesFicha('');
     setErro('');
     setSelectedAtendimentoForEdit(null);
@@ -796,15 +800,7 @@ export function NovoAtendimentoPanel({
             </div>
 
             {/* Ações */}
-            <div className="flex justify-between items-center pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setCurrentView('intermediaria')}
-                className="text-xs text-slate-500 hover:text-slate-800 underline font-semibold transition-colors"
-              >
-                Visualizar Atendimentos Criados
-              </button>
-
+            <div className="flex justify-end items-center pt-4 border-t border-slate-100">
               <button
                 type="submit"
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-1.5"
@@ -1648,8 +1644,8 @@ interface AtribuicaoPanelProps {
   usuariosSeguranca: { id: string; nome: string; perfil: string; depto?: string }[];
   atribuicoes: { [solicitacaoId: string]: string };
   onAssign: (solId: string, usrId: string) => void;
-  viewMode?: 'lista' | 'kanban_status';
-  onMudarViewMode?: (mode: 'lista' | 'kanban_status') => void;
+  viewMode?: 'lista' | 'kanban_status' | 'kanban_analista';
+  onMudarViewMode?: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
 }
 
 export function AtribuicaoPanel({ 
@@ -1663,9 +1659,74 @@ export function AtribuicaoPanel({
 }: AtribuicaoPanelProps) {
   const [feedbackMsg, setFeedbackMsg] = useState<{ [solId: string]: string }>({});
 
+  // Estados dos Filtros
+  const [filtroId, setFiltroId] = useState('');
+  const [filtroCodesc, setFiltroCodesc] = useState('');
+  const [filtroMunicipio, setFiltroMunicipio] = useState('todos');
+  const [filtroSre, setFiltroSre] = useState('todos');
+  const [filtroEscola, setFiltroEscola] = useState('');
+  const [filtroResponsavel, setFiltroResponsavel] = useState('todos');
+  const [filtroDataInicio, setFiltroDataInicio] = useState('');
+  const [filtroDataFim, setFiltroDataFim] = useState('');
+
   const analistasSgo = usuariosSeguranca.filter(
     u => u.perfil === 'analista_dore' || u.perfil === 'tecnico_infra' || u.perfil === 'fiscal_obra'
   );
+
+  // Valores Únicos para os selects
+  const idsUnicos = Array.from(new Set(solicitacoes.map(s => s.id).filter(Boolean))).sort();
+  const codescsUnicos = Array.from(new Set(solicitacoes.map(s => s.codesc).filter(Boolean))).sort();
+  const municipiosUnicos = Array.from(new Set(solicitacoes.map(s => s.municipio).filter(Boolean))).sort();
+  const sresUnicas = Array.from(new Set(solicitacoes.map(s => s.sre).filter(Boolean))).sort();
+  const escolasUnicas = Array.from(new Set(solicitacoes.map(s => s.nomeEscola).filter(Boolean))).sort();
+  const responsaveisUnicos = Array.from(new Set(solicitacoes.map(s => s.responsavel).filter(Boolean))).sort();
+
+  const filtrosAtivosCount = 
+    (filtroId ? 1 : 0) + 
+    (filtroEscola ? 1 : 0) + 
+    (filtroMunicipio !== 'todos' ? 1 : 0) + 
+    (filtroResponsavel !== 'todos' ? 1 : 0) + 
+    (filtroDataInicio ? 1 : 0) + 
+    (filtroDataFim ? 1 : 0) +
+    (filtroCodesc ? 1 : 0) +
+    (filtroSre !== 'todos' ? 1 : 0);
+
+  const limparTodosFiltros = () => {
+    setFiltroId('');
+    setFiltroEscola('');
+    setFiltroMunicipio('todos');
+    setFiltroResponsavel('todos');
+    setFiltroDataInicio('');
+    setFiltroDataFim('');
+    setFiltroCodesc('');
+    setFiltroSre('todos');
+  };
+
+  const solicitacoesFiltradas = solicitacoes.filter(sol => {
+    // 1. ID de Obra
+    if (filtroId && sol.id !== filtroId) return false;
+
+    // 2. CODESC
+    if (filtroCodesc && sol.codesc !== filtroCodesc) return false;
+
+    // 3. Municipio
+    if (filtroMunicipio !== 'todos' && sol.municipio !== filtroMunicipio) return false;
+
+    // 4. SRE
+    if (filtroSre !== 'todos' && sol.sre !== filtroSre) return false;
+
+    // 5. Escola
+    if (filtroEscola && sol.nomeEscola !== filtroEscola) return false;
+
+    // 6. Responsável
+    if (filtroResponsavel !== 'todos' && sol.responsavel !== filtroResponsavel) return false;
+
+    // 7. Data de criacao
+    if (filtroDataInicio && sol.dataCriacao && sol.dataCriacao < filtroDataInicio) return false;
+    if (filtroDataFim && sol.dataCriacao && sol.dataCriacao > filtroDataFim) return false;
+
+    return true;
+  });
 
   const handleAssignAnalyst = (sol: Solicitacao, usrId: string) => {
     // Save locally
@@ -1699,31 +1760,177 @@ export function AtribuicaoPanel({
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-3xs text-left animate-in fade-in duration-200">
-      <div className="border-b border-slate-100 pb-4 mb-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2 font-sans">
-            <Users className="w-5 h-5 text-blue-600" />
-            Atribuição Técnica de Engenharia e Pareceristas
-          </h2>
-          <p className="text-xs text-slate-500 mt-1 font-sans">
-            Distribua as demandas por analistas técnicos, fiscais de campo ou engenheiros DORE credenciados para vistorias físicas e pareceres normativos de engenharia.
-          </p>
+      <div className="border-b border-slate-100 pb-4 mb-5">
+        <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2 font-sans">
+          <Users className="w-5 h-5 text-blue-600" />
+          Atribuição Técnica de Engenharia e Pareceristas
+        </h2>
+        <p className="text-xs text-slate-500 mt-1 font-sans">
+          Distribua as demandas por analistas técnicos, fiscais de campo ou engenheiros DORE credenciados para vistorias físicas e pareceres normativos de engenharia.
+        </p>
+      </div>
+
+      {/* SEÇÃO DOS FILTROS DE PESQUISA */}
+      <div className="bg-[#f8fafc] rounded-xl border border-slate-200 overflow-hidden mb-6">
+        {/* Barra de Filtros / Título */}
+        <div className="p-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-slate-600 font-sans font-bold text-sm">Filtros de Pesquisa</span>
+            {filtrosAtivosCount > 0 && (
+              <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                {filtrosAtivosCount}
+              </span>
+            )}
+          </div>
+
+          {viewMode && onMudarViewMode && (
+            <div className="shrink-0 flex items-center gap-2.5">
+              <div className="text-right hidden sm:flex flex-col items-end">
+                <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">Tipo de Exibição</span>
+                <span className="text-[9.5px] text-slate-450 font-bold leading-none mt-0.5">Mudar o modo de visualizar os processos</span>
+              </div>
+              <select
+                value={viewMode}
+                onChange={(e) => onMudarViewMode(e.target.value as any)}
+                className="px-3.5 py-2 text-xs border border-slate-200 bg-white rounded-lg text-slate-700 font-bold focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-3xs"
+              >
+                <option value="lista">📋 Lista de Atribuição</option>
+                <option value="kanban_status">📊 Kanban por Status</option>
+                <option value="kanban_analista">👥 Kanban por Analista</option>
+              </select>
+            </div>
+          )}
         </div>
 
-        {viewMode && onMudarViewMode && (
-          <div className="shrink-0 flex items-center gap-2.5">
-            <div className="text-right hidden sm:flex flex-col items-end">
-              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">Tipo de Exibição</span>
-              <span className="text-[9.5px] text-slate-450 font-bold leading-none mt-0.5">Mudar o modo de visualizar</span>
-            </div>
+        {/* Grade de Filtros */}
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3.5 bg-slate-50/50">
+          {/* 1. ID de Obra */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">ID de Obra</label>
             <select
-              value={viewMode}
-              onChange={(e) => onMudarViewMode(e.target.value as any)}
-              className="px-3.5 py-2 text-xs border border-slate-200 bg-white rounded-lg text-slate-700 font-bold focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-3xs"
+              value={filtroId}
+              onChange={(e) => setFiltroId(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg py-2 px-2.5 bg-white text-slate-700 font-bold cursor-pointer"
             >
-              <option value="lista">📋 Lista de Atribuição</option>
-              <option value="kanban_status">📊 Kanban por Status</option>
+              <option value="">Todos os IDs</option>
+              {idsUnicos.map(id => (
+                <option key={id} value={id}>{id}</option>
+              ))}
             </select>
+          </div>
+
+          {/* 2. CODESC */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">CODESC</label>
+            <select
+              value={filtroCodesc}
+              onChange={(e) => setFiltroCodesc(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg py-2 px-2.5 bg-white text-slate-700 font-bold cursor-pointer"
+            >
+              <option value="">Todos os CODESC</option>
+              {codescsUnicos.map(cod => (
+                <option key={cod} value={cod}>{cod}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 3. Município */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Município</label>
+            <select
+              value={filtroMunicipio}
+              onChange={(e) => setFiltroMunicipio(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg py-2 px-2.5 bg-white text-slate-700 font-bold cursor-pointer"
+            >
+              <option value="todos">Todos os Municípios</option>
+              {municipiosUnicos.map(mun => (
+                <option key={mun} value={mun}>{mun}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 4. Regional (SRE) */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Regional (SRE)</label>
+            <select
+              value={filtroSre}
+              onChange={(e) => setFiltroSre(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg py-2 px-2.5 bg-white text-slate-700 font-bold cursor-pointer"
+            >
+              <option value="todos">Todas as Regionais</option>
+              {sresUnicas.map(sreOp => (
+                <option key={sreOp} value={sreOp}>{sreOp}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 5. Escola */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Escola</label>
+            <select
+              value={filtroEscola}
+              onChange={(e) => setFiltroEscola(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg py-2 px-2.5 bg-white text-slate-700 font-bold cursor-pointer"
+            >
+              <option value="">Todas as Escolas</option>
+              {escolasUnicas.map(esc => (
+                <option key={esc} value={esc}>{esc}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 6. Responsável */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Responsável</label>
+            <select
+              value={filtroResponsavel}
+              onChange={(e) => setFiltroResponsavel(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg py-2 px-2.5 bg-white text-slate-700 font-bold cursor-pointer"
+            >
+              <option value="todos">Todos os Responsáveis</option>
+              {responsaveisUnicos.map(resp => (
+                <option key={resp} value={resp}>{resp}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 7. Data de Criação */}
+          <div className="space-y-1 sm:col-span-2">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Data de Criação</label>
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={filtroDataInicio}
+                onChange={(e) => setFiltroDataInicio(e.target.value)}
+                className="w-full text-[10px] border border-slate-200 rounded-lg py-1 px-1.5 bg-white text-slate-700 font-semibold cursor-pointer text-center"
+                title="Data Inicial"
+              />
+              <span className="text-[10px] text-slate-400 font-bold px-0.5 shrink-0">à</span>
+              <input
+                type="date"
+                value={filtroDataFim}
+                onChange={(e) => setFiltroDataFim(e.target.value)}
+                className="w-full text-[10px] border border-slate-200 rounded-lg py-1 px-1.5 bg-white text-slate-700 font-semibold cursor-pointer text-center"
+                title="Data Final"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Rodapé dos Filtros se tiver algum ativo */}
+        {filtrosAtivosCount > 0 && (
+          <div className="col-span-1 flex flex-col sm:flex-row justify-between items-center gap-2 p-3 border-t border-slate-200 bg-[#f8fafc]">
+            <span className="text-[11px] text-blue-700 font-sans font-semibold bg-blue-50 px-2 py-0.5 rounded-md">
+              Mostrando {solicitacoesFiltradas.length} de {solicitacoes.length} atendimentos filtrados
+            </span>
+            <button
+              type="button"
+              onClick={limparTodosFiltros}
+              className="px-3 py-1 text-xs font-bold text-red-650 bg-red-50 border border-red-250 rounded-md hover:bg-red-100 hover:text-red-750 transition flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3 text-red-500" />
+              <span>Limpar Filtros</span>
+            </button>
           </div>
         )}
       </div>
@@ -1746,7 +1953,7 @@ export function AtribuicaoPanel({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {solicitacoes.map(sol => {
+            {solicitacoesFiltradas.map(sol => {
               const currentAssignId = Object.keys(atribuicoes).find(k => k === sol.id) 
                 ? atribuicoes[sol.id] 
                 : analistasSgo.find(u => u.nome === sol.analistaAtribuido)?.id || '';
@@ -1920,6 +2127,16 @@ export function AtribuicaoPanel({
             })}
           </tbody>
         </table>
+
+        {solicitacoesFiltradas.length === 0 && (
+          <div className="bg-slate-50 border-t border-slate-150 py-12 text-center text-slate-400">
+            <AlertCircle className="w-8 h-8 text-slate-350 mx-auto mb-2" />
+            <h5 className="font-bold text-slate-700 text-xs">Nenhum atendimento correspondente encontrado</h5>
+            <p className="text-[11px] text-slate-505 mt-1 max-w-xs mx-auto">
+              Experimente alterar os filtros (ID de Obra, CODESC, SRE, etc.) ou clique em "Limpar Filtros" acima.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

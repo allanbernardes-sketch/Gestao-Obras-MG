@@ -13,8 +13,8 @@ interface KanbanViewsProps {
   onDelete: (id: string) => void;
   onEdit?: (sol: Solicitacao) => void;
   mode: 'status' | 'usuario';
-  viewMode: 'lista' | 'kanban_status';
-  onMudarViewMode: (mode: 'lista' | 'kanban_status') => void;
+  viewMode: 'lista' | 'kanban_status' | 'kanban_analista';
+  onMudarViewMode: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
   onNovaSolicitacao: () => void;
   activeSubTask?: string;
 }
@@ -43,7 +43,6 @@ export default function KanbanViews({
   const [filtroDataFim, setFiltroDataFim] = useState('');
   const [filtroCodesc, setFiltroCodesc] = useState('');
   const [filtroSre, setFiltroSre] = useState('todos');
-  const [mostrarFiltrosAvancados, setMostrarFiltrosAvancados] = useState(true);
 
   const isReadOnly = activeSubTask === 'cadastro';
 
@@ -75,13 +74,25 @@ export default function KanbanViews({
     setFiltroSre('todos');
   };
 
-  // Analysts to categorize "Kanban by User"
-  const listaAnalistas = [
-    'Sem Atribuição',
-    'Eng. André Silva',
-    'Engª. Paula Rezende',
-    'Eng. Marcus Vinícius'
-  ];
+  // Dynamic list of analysts from existing assignments and technical profiles
+  const listaAnalistas = React.useMemo(() => {
+    const list = new Set<string>();
+    const defaults = [
+      'Eng. André Silva',
+      'Engª. Paula Rezende',
+      'Eng. Marcus Vinícius',
+      'Flavia Borges',
+      'João Paulo Penfield',
+      'Insp. Mariana Souza'
+    ];
+    defaults.forEach(d => list.add(d));
+    solicitacoes.forEach(s => {
+      if (s.analistaAtribuido) {
+        list.add(s.analistaAtribuido);
+      }
+    });
+    return ['Sem Atribuição', ...Array.from(list)];
+  }, [solicitacoes]);
 
   // Stages to categorize "Kanban by Status"
   const colunasStatus: { key: EtapaProcesso; label: string; desc: string; color: string; bgHeader: string }[] = [
@@ -219,7 +230,7 @@ export default function KanbanViews({
             </span>
 
             {/* Delete button option */}
-            {!isReadOnly && (
+            {!isReadOnly && sol.etapaAtual === 'cadastro' && (
               confirmDeleteId === sol.id ? (
                 <div className="flex items-center gap-1 bg-red-50 px-1 py-0.5 rounded border border-red-200 text-[9px] scale-95 transition-all">
                   <span className="text-red-750 font-bold">Apagar?</span>
@@ -326,9 +337,9 @@ export default function KanbanViews({
                 className="w-full text-[9.5px] p-1 border border-indigo-150 rounded bg-white text-slate-750 cursor-pointer outline-hidden"
               >
                 <option value="">Sem Atribuição</option>
-                <option value="Eng. André Silva">Eng. André Silva</option>
-                <option value="Engª. Paula Rezende">Engª. Paula Rezende</option>
-                <option value="Eng. Marcus Vinícius">Eng. Marcus Vinícius</option>
+                {listaAnalistas.filter(ana => ana !== 'Sem Atribuição').map(ana => (
+                  <option key={ana} value={ana}>{ana}</option>
+                ))}
               </select>
             </div>
           ) : (
@@ -452,28 +463,16 @@ export default function KanbanViews({
       {/* Search and context layout */}
       <div className="bg-slate-900 text-white rounded-xl p-5 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div />
+          <div className="flex items-center gap-2">
+            <span className="text-slate-205 font-sans font-semibold text-sm">Filtros de Pesquisa</span>
+            {filtrosAtivosCount > 0 && (
+              <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                {filtrosAtivosCount}
+              </span>
+            )}
+          </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
-            {/* Botão Filtros Avançados */}
-            <button
-              type="button"
-              onClick={() => setMostrarFiltrosAvancados(!mostrarFiltrosAvancados)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                mostrarFiltrosAvancados 
-                  ? 'bg-blue-500/25 border-blue-400/40 text-blue-200 shadow-3xs' 
-                  : 'bg-slate-850/60 border-slate-700 text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5 shrink-0" />
-              <span>Filtros Avançados</span>
-              {filtrosAtivosCount > 0 && (
-                <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">
-                  {filtrosAtivosCount}
-                </span>
-              )}
-            </button>
-
+          <div className="flex items-center gap-3 mt-2 md:mt-0 justify-end">
             <div className="text-right hidden sm:flex flex-col items-end shrink-0">
               <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">Tipo de Exibição</span>
               <span className="text-[9.5px] text-slate-500 font-bold leading-tight mt-0.5">Mudar o modo de visualizar</span>
@@ -483,15 +482,17 @@ export default function KanbanViews({
               onChange={(e) => onMudarViewMode(e.target.value as any)}
               className="px-3.5 py-2 text-xs border border-slate-700 bg-slate-800 rounded-lg text-slate-100 font-bold focus:outline-hidden focus:ring-1 focus:ring-blue-500 focus:border-blue-500 cursor-pointer shadow-3xs"
             >
-              <option value="lista">📋 Lista de Demandas</option>
+              <option value="lista">📋 Lista de Atribuição</option>
               <option value="kanban_status">📊 Kanban por Status</option>
+              {activeSubTask === 'analise_atribuicao' && (
+                <option value="kanban_analista">👥 Kanban por Analista</option>
+              )}
             </select>
           </div>
         </div>
 
         {/* Painel de Filtros Avançados dentro do card escuro do Kanban */}
-        {mostrarFiltrosAvancados && (
-          <div className="p-4 bg-slate-800/40 border border-slate-755/50 border-slate-700/50 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-3.5 animation-fadeIn text-left mt-1.5">
+        <div className="p-4 bg-slate-800/40 border border-slate-755/50 border-slate-700/50 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-3.5 animation-fadeIn text-left mt-1.5">
             {/* 1. ID de Obra */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">ID de Obra</label>
@@ -625,7 +626,6 @@ export default function KanbanViews({
               </div>
             )}
           </div>
-        )}
       </div>
 
       {mode === 'status' ? (

@@ -14,6 +14,7 @@ import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
 import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket } from 'lucide-react';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
+import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
 
 export default function App() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
@@ -22,7 +23,7 @@ export default function App() {
   const [abrirModalCadastro, setAbrirModalCadastro] = useState(false);
   const [solicitacaoEmEdicao, setSolicitacaoEmEdicao] = useState<Solicitacao | null>(null);
   const [mostrarMenuPerfil, setMostrarMenuPerfil] = useState(false);
-  const [viewMode, setViewMode] = useState<'lista' | 'kanban_status'>('lista');
+  const [viewMode, setViewMode] = useState<'lista' | 'kanban_status' | 'kanban_analista'>('lista');
 
   // NEW DUAL NAV ARCHITECTURE STATES
   const [activeModule, setActiveModule] = useState<'seguranca' | 'orcamento' | 'gestao_obras' | 'imoveis' | 'abertura_chamados'>('gestao_obras');
@@ -734,7 +735,7 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
                       {[
                         { id: 'cadastro', label: 'Lista de atendimentos', icon: ClipboardList },
-                        { id: 'novo_atendimento', label: 'Novo Atendimento', icon: Plus }
+                        { id: 'novo_atendimento', label: 'Atendimento Inicial', icon: Plus }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
@@ -855,7 +856,7 @@ export default function App() {
                     onClick={() => toggleCategory('execucao')}
                     className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-md text-left text-[10px] font-black text-slate-500 uppercase tracking-wider font-sans cursor-pointer group"
                   >
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5" id="execucao-de-obra-title">
                       <HardHat className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                       Execução De Obra
                     </span>
@@ -863,51 +864,46 @@ export default function App() {
                   </button>
 
                   {!collapsedCategories.execucao && (
-                    <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
+                    <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
                       {[
-                        { id: 'execucao_abertura', label: 'Abertura de Obra', icon: Building },
-                        { id: 'execucao', label: 'Medições', icon: Layers }
+                        { id: 'execucao_cadastro', label: 'Cadastro de Obras', func: 'cadastro', icon: Building2 },
+                        { id: 'execucao_acompanhamento', label: 'Execução', func: 'acompanhamento', icon: HardHat },
+                        { id: 'execucao_medicoes', label: 'Medições', func: 'financeiro técnico', icon: Layers },
+                        { id: 'execucao_contratos', label: 'Contratos', func: 'jurídico/financeiro', icon: ClipboardList },
+                        { id: 'execucao_aditivos', label: 'Aditivos', func: 'alterações contratuais', icon: Plus },
+                        { id: 'execucao_ajustes', label: 'Ajuste', func: 'alterações contratuais', icon: Calculator },
+                        { id: 'execucao_fiscalizacao', label: 'Fiscalização', func: 'controle campo', icon: ShieldCheck },
+                        { id: 'execucao_documentos', label: 'Documentos', func: 'GED', icon: UploadCloud }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
                         return (
                           <button
                             key={item.id}
+                            id={`subtask-${item.id}`}
                             onClick={() => {
                               setActiveSubTask(item.id);
                               setIdSolicitacaoSelecionada(null);
                             }}
-                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left transition-all duration-150 cursor-pointer ${
+                            className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${
                               isActive
-                                ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 pl-1.5 rounded-r-md'
-                                : 'hover:bg-slate-50/70 text-slate-600 pl-1.5'
+                                ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5'
+                                : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'
                             }`}
                           >
-                            <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                            <span className="text-xs font-sans">{item.label}</span>
+                            <div className="flex items-center gap-1.5 w-full">
+                              <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                              <span className="text-xs font-sans font-bold leading-tight">{item.label}</span>
+                            </div>
+                            <span className="text-[9px] font-mono font-medium text-slate-450 uppercase tracking-wider pl-4.5 block">
+                              {item.func}
+                            </span>
                           </button>
                         );
                       })}
                     </div>
                   )}
                 </div>
-
-                {/* 5. ADITIVOS E ALTERAÇÕES */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveSubTask('aditivos');
-                    setIdSolicitacaoSelecionada(null);
-                  }}
-                  className={`w-full flex items-center gap-2.5 px-2 py-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${
-                    activeSubTask === 'aditivos'
-                      ? 'bg-blue-50 border-l-2 border-blue-500 text-blue-800 font-bold'
-                      : 'hover:bg-slate-50 text-slate-500'
-                  }`}
-                >
-                  <Calculator className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                  <span className="text-[10px] uppercase font-black tracking-wider font-sans">Aditivos & Alterações</span>
-                </button>
 
                 {/* 6. ENCERRAMENTO */}
                 <div className="space-y-1">
@@ -1529,6 +1525,14 @@ export default function App() {
                 if (activeSubTask === 'execucao') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
                 if (activeSubTask === 'aditivos') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
                 if (activeSubTask === 'conclusao') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
+                
+                // 9 submodules
+                if (['execucao_cadastro', 'execucao_acompanhamento', 'execucao_contratos', 'execucao_fiscalizacao', 'execucao_documentos'].includes(activeSubTask)) {
+                  return s.etapaAtual === 'ordem_inicio' || s.etapaAtual === 'execucao';
+                }
+                if (['execucao_medicoes', 'execucao_aditivos', 'execucao_ajustes'].includes(activeSubTask)) {
+                  return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
+                }
                 return false;
               });
 
@@ -1539,8 +1543,10 @@ export default function App() {
                 if (!sol) return 'checklist';
                 if (subTask === 'cadastro' || subTask === 'analise') return 'checklist';
                 if (subTask === 'paf_autorizacao' || subTask === 'paf') return 'paf';
-                if (subTask === 'execucao_abertura' || subTask === 'execucao') return 'execucao';
-                if (subTask === 'aditivos') return 'aditivos';
+                if (subTask === 'execucao_abertura' || subTask === 'execucao_cadastro' || subTask === 'execucao_contratos') return 'ordem_inicio';
+                if (subTask === 'execucao' || subTask === 'execucao_acompanhamento' || subTask === 'execucao_medicoes' || subTask === 'execucao_fiscalizacao') return 'execucao';
+                if (subTask === 'aditivos' || subTask === 'execucao_aditivos') return 'aditivos';
+                if (subTask === 'execucao_ajustes') return 'ajustes';
                 if (subTask === 'conclusao') return 'conclusao';
                 return 'checklist';
               };
@@ -1553,7 +1559,15 @@ export default function App() {
                 execucao_abertura: 'Abertura de Obra',
                 execucao: 'Medições',
                 aditivos: 'Aditamentos e Alterações',
-                conclusao: 'Termo de Conclusão'
+                conclusao: 'Termo de Conclusão',
+                execucao_cadastro: 'Cadastro de Obras',
+                execucao_acompanhamento: 'Execução de Obra',
+                execucao_medicoes: 'Medições',
+                execucao_contratos: 'Contratos',
+                execucao_aditivos: 'Aditivos',
+                execucao_ajustes: 'Ajuste',
+                execucao_fiscalizacao: 'Fiscalização',
+                execucao_documentos: 'Documentos'
               };
 
               const stepConfig = [
@@ -1630,6 +1644,15 @@ export default function App() {
                         {activeSubTask === 'aditivos' && 'Gerencie acréscimos, supressões de valor e prorrogações de prazo do contrato.'}
                         {activeSubTask === 'ajustes' && 'Controle os ajustes e remanejamento de saldos da planilha orçamentária.'}
                         {activeSubTask === 'conclusao' && 'Proceda com as vistorias finais, emissão de termos e encerramento da obra.'}
+                        {/* 9 execution submodules descriptions */}
+                        {activeSubTask === 'execucao_cadastro' && 'Cadastre e visualize o dossiê detalhado das obras em andamento, incluindo contratos, prazos e faturamento.'}
+                        {activeSubTask === 'execucao_acompanhamento' && 'Acompanhe a evolução física das obras e o avanço técnico de cada etapa.'}
+                        {activeSubTask === 'execucao_medicoes' && 'Gerencie as medições físico-financeiras periódicas, notas fiscais e relatórios técnicos de faturamento.'}
+                        {activeSubTask === 'execucao_contratos' && 'Controle contratos associados, dados das empresas contratadas, garantias e vigências contratuais.'}
+                        {activeSubTask === 'execucao_aditivos' && 'Gerencie e registre acréscimos ou supressões de valor, bem como prorrogações de vigências do contrato.'}
+                        {activeSubTask === 'execucao_ajustes' && 'Controle os ajustes de saldo de planilha orçamentária e remanejamentos técnicos.'}
+                        {activeSubTask === 'execucao_fiscalizacao' && 'Monitore vistorias integradas de campo, diário oficial de obras e relatórios fotográficos de controle.'}
+                        {activeSubTask === 'execucao_documentos' && 'GED - Gerenciamento Eletrônico de Documentos com upload de certidões, planilhas e ARTs.'}
                       </p>
                     </div>
 
@@ -1804,40 +1827,7 @@ export default function App() {
               {/* VISTAS DE ACORDO COM O MÓDULO ATIVO */}
               {activeModule === 'gestao_obras' && (
                 <div className="w-full flex flex-col flex-1">
-                  {/* Banner de filtro para subtasks focadas */}
-                  {activeSubTask !== 'visao_geral' && activeSubTask !== 'cadastro' && (
-                    <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-xs flex items-center justify-between text-left">
-                      <div className="flex items-center gap-2 text-blue-900">
-                        <span className="font-extrabold">Filtro SGO Ativo:</span>
-                        <span className="font-medium">
-                          {activeSubTask === 'continuar_preenchimento' && "Etapa de Instrução Documental e Checklist de Atendimento Inicial"}
-                          {activeSubTask === 'analise' && "Etapa de Análise Técnica de Engenharia (DORE/MG)"}
-                          {activeSubTask === 'paf_autorizacao' && "Etapa de Autorização do PAF"}
-                          {activeSubTask === 'paf' && "Etapa de Homologação Financeira / Geração do PAF"}
-                          {activeSubTask === 'execucao_abertura' && "Etapa de Assinatura de Ordem de Início / Abertura de Obra"}
-                          {activeSubTask === 'execucao' && "Etapa de Acompanhamento de Execução & Gravação de Medições"}
-                          {activeSubTask === 'aditivos' && "Etapa de Gestão de Aditamentos / Acréscimos Contratuais"}
-                          {activeSubTask === 'conclusao' && "Etapa de Conclusão e Recebimento de Obras"}
-                        </span>
-                      </div>
-                      <span className="px-2.5 py-0.5 bg-blue-600 text-white font-extrabold text-[10px] rounded-full">
-                        {(() => {
-                          const list = solicitacoes.filter(s => {
-                            if (activeSubTask === 'continuar_preenchimento') return s.etapaAtual === 'cadastro' || s.etapaAtual === 'correcao';
-                            if (activeSubTask === 'analise') return s.etapaAtual === 'analise';
-                            if (activeSubTask === 'paf_autorizacao') return s.etapaAtual === 'paf_autorizacao';
-                            if (activeSubTask === 'paf') return s.etapaAtual === 'paf';
-                            if (activeSubTask === 'execucao_abertura') return s.etapaAtual === 'ordem_inicio' || s.etapaAtual === 'execucao';
-                            if (activeSubTask === 'execucao') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
-                            if (activeSubTask === 'aditivos') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
-                            if (activeSubTask === 'conclusao') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
-                            return true;
-                          });
-                          return `${list.length} ${list.length === 1 ? 'demanda' : 'demandas'}`;
-                        })()}
-                      </span>
-                    </div>
-                  )}
+
 
                   {activeSubTask === 'novo_atendimento' ? (
                     <NovoAtendimentoPanel
@@ -1849,6 +1839,7 @@ export default function App() {
                       onUpdateSolicitacao={handleUpdateSolicitacao}
                       usuariosSeguranca={usuariosSeguranca}
                       onEdit={setSolicitacaoEmEdicao}
+                      perfilUsuario={perfilUsuario}
                     />
                   ) : activeSubTask === 'analise_atribuicao' ? (
                     viewMode === 'lista' ? (
@@ -1871,12 +1862,21 @@ export default function App() {
                         onUpdate={handleUpdateSolicitacao}
                         onDelete={handleDeleteSolicitacao}
                         onEdit={setSolicitacaoEmEdicao}
-                        mode="status"
+                        mode={viewMode === 'kanban_analista' ? 'usuario' : 'status'}
                         viewMode={viewMode}
                         onMudarViewMode={(mode) => setViewMode(mode)}
                         onNovaSolicitacao={() => setAbrirModalCadastro(true)}
+                        activeSubTask={activeSubTask}
                       />
                     )
+                  ) : activeSubTask.startsWith('execucao_') ? (
+                    <ExecucaoSubmodulos
+                      activeSubTask={activeSubTask}
+                      solicitacoes={solicitacoes}
+                      onUpdate={handleUpdateSolicitacao}
+                      perfilUsuario={perfilUsuario}
+                      onSelect={(sol) => handleSelectSolicitacao(sol)}
+                    />
                   ) : activeSubTask.startsWith('relat_') ? (
                     <RelatoriosPanel
                       activeReportType={activeSubTask}
@@ -1899,6 +1899,14 @@ export default function App() {
                         if (activeSubTask === 'execucao') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
                         if (activeSubTask === 'aditivos') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
                         if (activeSubTask === 'conclusao') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
+                        
+                        // 9 submodules filters
+                        if (['execucao_cadastro', 'execucao_acompanhamento', 'execucao_contratos', 'execucao_fiscalizacao', 'execucao_documentos'].includes(activeSubTask)) {
+                          return s.etapaAtual === 'ordem_inicio' || s.etapaAtual === 'execucao';
+                        }
+                        if (['execucao_medicoes', 'execucao_aditivos', 'execucao_ajustes'].includes(activeSubTask)) {
+                          return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
+                        }
                         return true;
                       })}
                       onSelect={handleSelectSolicitacao}
@@ -1923,6 +1931,14 @@ export default function App() {
                         if (activeSubTask === 'execucao') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
                         if (activeSubTask === 'aditivos') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
                         if (activeSubTask === 'conclusao') return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
+                        
+                        // 9 submodules filters
+                        if (['execucao_cadastro', 'execucao_acompanhamento', 'execucao_contratos', 'execucao_fiscalizacao', 'execucao_documentos'].includes(activeSubTask)) {
+                          return s.etapaAtual === 'ordem_inicio' || s.etapaAtual === 'execucao';
+                        }
+                        if (['execucao_medicoes', 'execucao_aditivos', 'execucao_ajustes'].includes(activeSubTask)) {
+                          return (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF;
+                        }
                         return true;
                       })}
                       onSelect={handleSelectSolicitacao}
@@ -2551,6 +2567,8 @@ export default function App() {
         <NovaSolicitacaoModal
           onClose={() => setAbrirModalCadastro(false)}
           onSave={handleNovaSolicitacao}
+          perfilUsuario={perfilUsuario}
+          usuariosSeguranca={usuariosSeguranca}
         />
       )}
 

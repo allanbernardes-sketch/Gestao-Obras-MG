@@ -15,8 +15,8 @@ interface DashboardProps {
   onDelete: (id: string) => void;
   onUpdate?: (updated: Solicitacao) => void;
   onEdit?: (sol: Solicitacao) => void;
-  viewMode: 'lista' | 'kanban_status';
-  onMudarViewMode: (mode: 'lista' | 'kanban_status') => void;
+  viewMode: 'lista' | 'kanban_status' | 'kanban_analista';
+  onMudarViewMode: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
   activeSubTask?: string;
 }
 
@@ -46,7 +46,6 @@ export default function Dashboard({
   const [filtroDataFim, setFiltroDataFim] = useState('');
   const [filtroCodesc, setFiltroCodesc] = useState('');
   const [filtroSre, setFiltroSre] = useState('todos');
-  const [mostrarFiltrosAvancados, setMostrarFiltrosAvancados] = useState(true);
 
   const isReadOnly = activeSubTask === 'cadastro';
 
@@ -226,24 +225,14 @@ export default function Dashboard({
         {/* Barra Principal */}
         <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/50">
           <div className="flex flex-col sm:flex-row gap-3 flex-1 items-stretch md:items-center">
-            {/* Botão Filtros Avançados */}
-            <button
-              type="button"
-              onClick={() => setMostrarFiltrosAvancados(!mostrarFiltrosAvancados)}
-              className={`px-3.5 py-2 text-sm font-semibold rounded-lg border transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                mostrarFiltrosAvancados 
-                  ? 'bg-blue-50 border-blue-250 text-blue-700 shadow-3xs' 
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <Filter className="w-4 h-4 shrink-0" />
-              <span>Filtros Avançados</span>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-600 font-sans font-semibold text-sm">Filtros de Pesquisa</span>
               {filtrosAtivosCount > 0 && (
                 <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                   {filtrosAtivosCount}
                 </span>
               )}
-            </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3.5 mt-2 md:mt-0 justify-end">
@@ -263,9 +252,8 @@ export default function Dashboard({
         </div>
 
         {/* Painel de Filtros Avançados */}
-        {mostrarFiltrosAvancados && (
-          <div className="p-4 bg-slate-50/30 border-b border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-3.5 animation-fadeIn">
-            {/* 1. ID de Obra */}
+        <div className="p-4 bg-slate-50/30 border-b border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-3.5 animation-fadeIn">
+          {/* 1. ID de Obra */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">ID de Obra</label>
               <select
@@ -398,7 +386,6 @@ export default function Dashboard({
               </div>
             )}
           </div>
-        )}
 
         {/* Filtros específicos de perfil analista/gestor */}
         {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
@@ -476,20 +463,18 @@ export default function Dashboard({
             <table className="w-full text-left border-collapse font-sans text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 font-bold uppercase tracking-wider text-[10px] h-11">
-                  <th className="py-3 px-4 w-28">Obra ID</th>
-                  <th className="py-3 px-4">CODESC</th>
-                  <th className="py-3 px-4">Escola / Município</th>
-                  <th className="py-3 px-4">Regional (SRE)</th>
-                  <th className="py-3 px-4">Tipo / Demanda</th>
-                  <th className="py-3 px-4 text-xs font-bold">Tipo de Prédio</th>
-                  <th className="py-3 px-4 text-xs font-bold">Tipo Atendimento</th>
-                  <th className="py-3 px-4 text-xs font-bold">Sobre Atendimento Órgão</th>
-                  <th className="py-3 px-4">Data Criação</th>
-                  <th className="py-3 px-4">Responsável Técnico</th>
-                  <th className="py-3 px-4">Analista Atribuído</th>
-                  <th className="py-3 px-4 text-center">Checklist Docs</th>
-                  <th className="py-3 px-4">Etapa Atual</th>
-                  <th className="py-3 px-4 text-right w-36">Ações</th>
+                  <th className="py-3 px-4 w-28">OBRA ID</th>
+                  <th className="py-3 px-4">ESCOLA / LOCALIZAÇÃO</th>
+                  <th className="py-3 px-4">TIPO / DEMANDA</th>
+                  <th className="py-3 px-4">TIPO ATENDIMENTO</th>
+                  <th className="py-3 px-4 w-48">DESCRIÇÃO</th>
+                  <th className="py-3 px-4">VALOR PLANILHA</th>
+                  <th className="py-3 px-4">DATA CRIAÇÃO</th>
+                  <th className="py-3 px-4">RESPONSÁVEL (ENCAMINHOU)</th>
+                  <th className="py-3 px-4">ANALISTA DESIGNADO</th>
+                  <th className="py-3 px-4 text-center">CHECKLIST DOCS</th>
+                  <th className="py-3 px-4">ETAPA ATUAL</th>
+                  <th className="py-3 px-4 text-right w-36">AÇÕES</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -505,97 +490,89 @@ export default function Dashboard({
                       onClick={() => onSelect(sol)}
                       className="hover:bg-slate-50/70 transition-colors cursor-pointer group"
                     >
-                      {/* Obra ID */}
+                      {/* OBRA ID */}
                       <td className="py-4 px-4 font-mono font-bold text-slate-600 whitespace-nowrap">
                         <span>{sol.id}</span>
                       </td>
 
-                      {/* CODESC */}
-                      <td className="py-4 px-4 font-mono text-slate-500 whitespace-nowrap">
-                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 text-[10px] font-bold">
-                          {sol.codesc}
-                        </span>
-                      </td>
-
-                      {/* Escola / Município */}
+                      {/* ESCOLA / LOCALIZAÇÃO */}
                       <td className="py-4 px-4">
-                        <div className="font-bold text-slate-850 text-xs leading-snug max-w-xs md:max-w-sm truncate group-hover:text-blue-650 transition-colors text-left font-sans">
+                        <div className="font-bold text-slate-850 text-xs leading-snug font-sans text-left">
                           {sol.nomeEscola}
                         </div>
-                        <div className="text-[10px] text-slate-450 flex items-center gap-1 mt-0.5 text-left">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{sol.municipio}</span>
+                        <div className="text-[10px] text-slate-400 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-left font-sans">
+                          <span className="flex items-center gap-0.5">
+                            <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>{sol.municipio}</span>
+                          </span>
+                          <span>•</span>
+                          <span>SRE: <span className="font-semibold text-slate-600">{sol.sre}</span></span>
+                          <span>•</span>
+                          <span>CODESC: <span className="font-mono text-slate-600 font-semibold">{sol.codesc}</span></span>
                         </div>
                       </td>
 
-                      {/* Regional (SRE) */}
+                      {/* TIPO / DEMANDA */}
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-800 font-bold rounded border border-blue-150 text-[10px]">
-                          {sol.sre}
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-850 font-semibold border border-indigo-150 rounded text-[10px] tracking-wide uppercase">
+                          {sol.tipoObra || sol.tipo || 'REFORMA'}
                         </span>
                       </td>
 
-                      {/* Tipo / Demanda */}
-                      <td className="py-4 px-4">
-                        <span className="px-2 py-0.5 bg-indigo-55 text-indigo-900 font-medium rounded border border-indigo-150 text-[10px]">
-                          {sol.tipoObra || sol.tipo}
-                        </span>
-                      </td>
-
-                      {/* Tipo de Prédio */}
+                      {/* TIPO ATENDIMENTO */}
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-medium rounded border border-slate-200 text-[10px]">
-                          {sol.predio || 'Próprio Estadual'}
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-bold border border-emerald-150 rounded text-[10px] uppercase">
+                          {sol.tipoAtendimento || 'DIRETO'}
                         </span>
                       </td>
 
-                      {/* Tipo de Atendimento */}
+                      {/* DESCRIÇÃO */}
+                      <td className="py-4 px-4 max-w-[180px]">
+                        <span className="text-slate-500 text-[11px] block truncate" title={sol.descricaoFolhaRosto || sol.tipo}>
+                          {sol.descricaoFolhaRosto || sol.tipo || 'Sem descrição'}
+                        </span>
+                      </td>
+
+                      {/* VALOR PLANILHA */}
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-medium rounded border border-emerald-150 text-[10px]">
-                          {sol.tipoAtendimento || 'Direto'}
+                        <span className="font-bold text-slate-800 font-sans text-[11.5px]">
+                          R$ {(sol.valorPlanilha || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
 
-                      {/* Sobre Atendimento Órgão */}
-                      <td className="py-4 px-4">
-                        <span className="text-slate-600 font-medium text-[11px] block truncate max-w-[140px]" title={sol.atendimentoOrgao || 'Exclusivo'}>
-                          🎒 {sol.atendimentoOrgao || 'Exclusivo'}
-                        </span>
-                      </td>
-
-                      {/* Data de Criação */}
+                      {/* DATA CRIAÇÃO */}
                       <td className="py-4 px-4 font-mono text-slate-500 whitespace-nowrap">
                         {sol.dataCriacao}
                       </td>
 
-                      {/* Responsável da Demanda */}
-                      <td className="py-4 px-4 text-slate-650">
-                        <span className="text-slate-500 text-[11px] block truncate max-w-[140px]" title={sol.responsavel || 'Infra SRE'}>
+                      {/* RESPONSÁVEL (ENCAMINHOU) */}
+                      <td className="py-4 px-4 max-w-[140px]">
+                        <span className="text-slate-600 text-[11px] block truncate" title={sol.responsavel || 'Infra SRE'}>
                           🧑‍💻 {sol.responsavel || 'Infra SRE'}
                         </span>
                       </td>
 
-                      {/* Analista Atribuído */}
+                      {/* ANALISTA DESIGNADO */}
                       <td className="py-4 px-4 text-slate-650">
                         {sol.analistaAtribuido ? (
-                          <span className="font-semibold text-slate-700 bg-slate-100 border border-slate-205 px-1.5 py-0.5 rounded flex items-center gap-1 text-[10px] w-fit">
+                          <span className="font-semibold text-slate-705 bg-slate-100 border border-slate-205 px-2 py-0.5 rounded flex items-center gap-1.5 text-[10px] w-fit">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
                             {sol.analistaAtribuido}
                           </span>
                         ) : (
-                          <span className="font-semibold text-amber-700 bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded flex items-center gap-1 text-[10px] w-fit">
+                          <span className="font-semibold text-amber-700 bg-amber-50 border border-amber-200/50 px-2 py-0.5 rounded flex items-center gap-1.5 text-[10px] w-fit">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            Não Atribuído
+                            Não Designado
                           </span>
                         )}
                       </td>
 
-                      {/* Checklist Docs */}
-                      <td className="py-4 px-4 text-center">
-                        <div className="font-semibold text-slate-700">
+                      {/* CHECKLIST DOCS */}
+                      <td className="py-4 px-4 text-center whitespace-nowrap">
+                        <div className="font-bold text-slate-750 text-xs text-center">
                           {numAnexados} / {numTotal}
                         </div>
-                        <div className="text-[9px] text-slate-400">
+                        <div className="text-[9px] text-slate-400 mt-0.5 text-center">
                           {temRecusas ? (
                             <span className="text-red-650 font-bold">⚠️ Correções</span>
                           ) : numAnexados === numTotal ? (
@@ -606,7 +583,7 @@ export default function Dashboard({
                         </div>
                       </td>
 
-                      {/* Etapa Atual (Status) Badge */}
+                      {/* ETAPA ATUAL */}
                       <td className="py-4 px-4 whitespace-nowrap">
                         {sol.statusObra === 'Concluída' ? (
                           <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-200 rounded text-[10px] font-bold">
@@ -626,6 +603,10 @@ export default function Dashboard({
                           <span className="px-2 py-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 rounded text-[10px] font-bold">
                             Análise Técnica DORE
                           </span>
+                        ) : sol.etapaAtual === 'paf_autorizacao' ? (
+                          <span className="px-2 py-0.5 bg-pink-50 text-pink-800 border border-pink-200 rounded text-[10px] font-bold">
+                            Autorização PAF
+                          </span>
                         ) : sol.etapaAtual === 'paf' ? (
                           <span className="px-2 py-0.5 bg-cyan-50 text-cyan-800 border border-cyan-200 rounded text-[10px] font-bold">
                             Plano Atendimento Financeiro (PAF)
@@ -641,11 +622,11 @@ export default function Dashboard({
                         )}
                       </td>
 
-                      {/* Action buttons */}
+                      {/* AÇÕES */}
                       <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-2">
                           {/* SRE Technician recall action */}
-                          {!isReadOnly && perfilUsuario === 'tecnico_infra' && sol.etapaAtual === 'analise' && !sol.analistaAtribuido && onUpdate && (
+                          {perfilUsuario === 'tecnico_infra' && sol.etapaAtual === 'analise' && !sol.analistaAtribuido && onUpdate && (
                             confirmDevolverId === sol.id ? (
                               <div className="flex items-center gap-1 bg-amber-50 px-2 py-1 rounded border border-amber-250 text-[10px] shrink-0 text-left">
                                 <span className="text-amber-800 font-extrabold text-[9px]">Devolver?</span>
@@ -676,12 +657,12 @@ export default function Dashboard({
                                 <button
                                   type="button"
                                   onClick={() => setConfirmDevolverId(null)}
-                                  className="bg-slate-205 bg-slate-200 hover:bg-slate-350 hover:bg-slate-300 text-slate-700 font-bold px-1.5 py-0.5 rounded text-[9px] cursor-pointer"
+                                  className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-1.5 py-0.5 rounded text-[9px] cursor-pointer"
                                 >
                                   Não
                                 </button>
                               </div>
-                             ) : (
+                            ) : (
                               <button
                                 type="button"
                                 title="Solicitar Devolução do Processo (Resgatar)"
@@ -694,7 +675,7 @@ export default function Dashboard({
                             )
                           )}
 
-                          {!isReadOnly && (
+                          {sol.etapaAtual === 'cadastro' && (
                             confirmDeleteId === sol.id ? (
                               <div className="flex items-center gap-1 bg-red-50 px-2 py-1 rounded border border-red-200 text-[10px] shrink-0 text-left">
                                 <span className="text-red-700 font-extrabold text-[9px]">Apagar?</span>
@@ -737,20 +718,11 @@ export default function Dashboard({
                                   onClick={() => setConfirmDeleteId(sol.id)}
                                   className="p-1.5 hover:bg-red-50 hover:text-red-750 text-slate-400 rounded-lg transition shrink-0 cursor-pointer"
                                 >
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <Trash2 className="w-3.5 h-3.5 text-red-500" />
                                 </button>
                               </div>
                             )
                           )}
-
-                          <button
-                            type="button"
-                            onClick={() => onSelect(sol)}
-                            className="px-2.5 py-1 bg-slate-50 border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-800 rounded font-semibold text-[10.5px] transition flex items-center gap-0.5 shrink-0 cursor-pointer"
-                          >
-                            <span>Workspace</span>
-                            <ChevronRight className="w-3 h-3" />
-                          </button>
                         </div>
                       </td>
                     </tr>

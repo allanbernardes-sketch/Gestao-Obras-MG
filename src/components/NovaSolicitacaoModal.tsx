@@ -6,6 +6,8 @@ import { X, AlertCircle, Database, FileText, CheckCircle2 } from 'lucide-react';
 interface NovaSolicitacaoModalProps {
   onClose: () => void;
   onSave: (nova: Solicitacao) => void;
+  perfilUsuario?: string;
+  usuariosSeguranca?: { id: string; nome: string; perfil: string; depto?: string }[];
 }
 
 const baseDados = [
@@ -16,7 +18,7 @@ const baseDados = [
   { codesc: '1104', sre: 'SRE METROPOLITANA B', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSOR FRANCISCO BRANT' }
 ];
 
-export default function NovaSolicitacaoModal({ onClose, onSave }: NovaSolicitacaoModalProps) {
+export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, usuariosSeguranca }: NovaSolicitacaoModalProps) {
   const [codesc, setCodesc] = useState('');
   const [nomeEscola, setNomeEscola] = useState('');
   const [municipio, setMunicipio] = useState('');
@@ -39,7 +41,9 @@ export default function NovaSolicitacaoModal({ onClose, onSave }: NovaSolicitaca
   const [descricaoFolhaRosto, setDescricaoFolhaRosto] = useState('');
   const [valorPlanilha, setValorPlanilha] = useState('');
   const [iss, setIss] = useState('');
-  const [responsavel, setResponsavel] = useState('Eng. André Silva (DORE)');
+  
+  const activeUser = usuariosSeguranca?.find(u => u.perfil === perfilUsuario);
+  const responsavel = activeUser ? activeUser.nome : 'João Paulo Penfield';
 
   const [erro, setErro] = useState('');
 
