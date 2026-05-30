@@ -342,3 +342,133 @@ export const SOLICITACOES_INICIAIS: Solicitacao[] = [
     aditivos: []
   }
 ];
+
+export const NOTIFICACOES_INICIAIS = [
+  {
+    id: 'notif-1',
+    titulo: 'Novo pleito de ajuste de planilha',
+    mensagem: 'E.E. Padre Almir Neves cadastrou uma alteração de planilha física aguardando triagem.',
+    dataHora: '2026-05-30T21:14:00Z',
+    lida: false,
+    tipo: 'ajuste_pendente',
+    solicitacaoId: 'SOL-2026-001',
+    escola: 'E.E. Padre Almir Neves'
+  },
+  {
+    id: 'notif-2',
+    titulo: 'Processo retornado com Pendências',
+    mensagem: 'O processo da E.E. Milton Campos foi devolvido para a etapa de correção devido a divergências no laudo elétrico.',
+    dataHora: '2026-05-30T18:30:22Z',
+    lida: false,
+    tipo: 'processo_retrocesso',
+    solicitacaoId: 'SOL-2026-002',
+    escola: 'E.E. Milton Campos'
+  },
+  {
+    id: 'notif-3',
+    titulo: 'Pedido de Termo Aditivo de Prazo',
+    mensagem: 'O fiscal Insp. Mariana Souza solicitou aditivo temporal de 30 dias para a E.E. Juscelino Kubitschek.',
+    dataHora: '2026-05-30T10:45:10Z',
+    lida: true,
+    tipo: 'aditivo_pendente',
+    solicitacaoId: 'SOL-2026-003',
+    escola: 'E.E. Juscelino Kubitschek'
+  },
+  {
+    id: 'notif-4',
+    titulo: 'PAF Emitido e Homologado',
+    mensagem: 'Autorização orçamentária para a E.E. Milton Campos concluída com cotação final homologada.',
+    dataHora: '2026-05-29T15:24:00Z',
+    lida: true,
+    tipo: 'processo_avanco',
+    solicitacaoId: 'SOL-2026-002',
+    escola: 'E.E. Milton Campos'
+  },
+  {
+    id: 'notif-5',
+    titulo: 'Nova Solicitação Cadastrada',
+    mensagem: 'Uma nova demanda de reforma foi cadastrada para a E.E. Padre Almir Neves.',
+    dataHora: '2026-05-28T09:15:00Z',
+    lida: true,
+    tipo: 'sistema'
+  }
+];
+
+export const LOGS_INICIAIS = [
+  {
+    id: 'log-1',
+    dataHora: '2026-05-30T21:14:00Z',
+    usuario: 'Insp. Mariana Souza',
+    perfil: 'Fiscal de Obra',
+    acao: 'Solicitação de Ajuste de Planilha',
+    detalhe: 'Abriu pleito de ajuste nº 1 para E.E. Padre Almir Neves no montante de R$ 3.500,00.',
+    tipo: 'alerta',
+    solicitacaoId: 'SOL-2026-001',
+    escola: 'E.E. Padre Almir Neves'
+  },
+  {
+    id: 'log-2',
+    dataHora: '2026-05-30T18:30:22Z',
+    usuario: 'Flavia Borges',
+    perfil: 'Analista de Engenharia (DORE)',
+    acao: 'Rejeição de Dossiê Técnico',
+    detalhe: 'Documento "Projeto de Engenharia / Arquitetura" marcado como Recusado. Comentário: "A representação em corte está ilegível".',
+    tipo: 'erro',
+    solicitacaoId: 'SOL-2026-002',
+    escola: 'E.E. Milton Campos'
+  },
+  {
+    id: 'log-3',
+    dataHora: '2026-05-30T15:10:00Z',
+    usuario: 'Aline Davino',
+    perfil: 'Gestor Atendimento (DORE)',
+    acao: 'Atribuição Pronta',
+    detalhe: 'Atribuiu o processo SOL-2026-001 à analista Flavia Borges.',
+    tipo: 'sucesso',
+    solicitacaoId: 'SOL-2026-001',
+    escola: 'E.E. Padre Almir Neves'
+  },
+  {
+    id: 'log-4',
+    dataHora: '2026-05-30T10:45:10Z',
+    usuario: 'Insp. Mariana Souza',
+    perfil: 'Fiscal de Obra',
+    acao: 'Solicitação de Termo Aditivo',
+    detalhe: 'Cadastrou pedido de aditivo temporal de 30 dias para E.E. Juscelino Kubitschek. Justificativa: "Atraso nas fundações por chuvas contínuas no município".',
+    tipo: 'info',
+    solicitacaoId: 'SOL-2026-003',
+    escola: 'E.E. Juscelino Kubitschek'
+  },
+  {
+    id: 'log-5',
+    dataHora: '2026-05-29T15:20:00Z',
+    usuario: 'Silas Fagundes',
+    perfil: 'Gestor Geral (PAF)',
+    acao: 'Homologação do PAF',
+    detalhe: 'Homologação das dotações orçamentárias concluída para a E.E. Milton Campos com dotação total R$ 145.000,00.',
+    tipo: 'sucesso',
+    solicitacaoId: 'SOL-2026-002',
+    escola: 'E.E. Milton Campos'
+  },
+  {
+    id: 'log-6',
+    dataHora: '2026-05-29T11:00:15Z',
+    usuario: 'Rui Lages',
+    perfil: 'Administrativo DORE',
+    acao: 'Verificação Cadastral de Empresa',
+    detalhe: 'Situação cadastral da "IncorpObras Engenharia Ltda" consultada e validada como regular no Sicaf.',
+    tipo: 'info'
+  },
+  {
+    id: 'log-7',
+    dataHora: '2026-05-28T14:35:40Z',
+    usuario: 'João Paulo',
+    perfil: 'Técnico de Infraestrutura (SRE)',
+    acao: 'Novo Atendimento Escolar',
+    detalhe: 'Cadastrou demanda do tipo "Reforma Geral do Telhado" para a E.E. Padre Almir Neves.',
+    tipo: 'sucesso',
+    solicitacaoId: 'SOL-2026-001',
+    escola: 'E.E. Padre Almir Neves'
+  }
+];
+

@@ -144,7 +144,7 @@ export default function Dashboard({
 
     // Se o usuário logado for Analista DORE e estiver focado nas tarefas dele
     if (perfilUsuario === 'analista_dore' && filtroAtribuicao === 'minhas') {
-      return s.etapaAtual === 'analise' && s.analistaAtribuido === 'Eng. André Silva';
+      return s.etapaAtual === 'analise' && (s.analistaAtribuido === 'Eng. André Silva' || s.analistaAtribuido === 'Flavia Borges');
     }
 
     return true;

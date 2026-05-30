@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao, Aditivo, AjustePlanilha } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { gerarParecerIA } from './GeradorParecerIA';
+import ProcessAnalysisPanel from './ProcessAnalysisPanel';
 import { 
   ArrowLeft, Calendar, FileText, CheckCircle, XCircle, AlertCircle, AlertTriangle, TrendingUp,
   UploadCloud, Sparkles, DollarSign, Building, Plus, Trash2, 
@@ -114,6 +115,7 @@ interface SolicitacaoDetalhesProps {
   hideStepper?: boolean;
   hideTransitionButtons?: boolean;
   hideTabs?: boolean;
+  activeSubTask?: string;
 }
 
 export default function SolicitacaoDetalhes({ 
@@ -125,7 +127,8 @@ export default function SolicitacaoDetalhes({
   hideVoltar = false,
   hideStepper = false,
   hideTransitionButtons = false,
-  hideTabs = false
+  hideTabs = false,
+  activeSubTask
 }: SolicitacaoDetalhesProps) {
   // Navigation internal view
   const [activeTab, setActiveTab ] = useState<'checklist' | 'paf' | 'ordem_inicio' | 'execucao' | 'ajustes' | 'aditivos' | 'conclusao'>('checklist');
@@ -135,7 +138,10 @@ export default function SolicitacaoDetalhes({
       setActiveTab(forcedTab as any);
     }
   }, [forcedTab, solicitacao.id]);
-  const isMyAssignment = perfilUsuario === 'analista_dore' && solicitacao.analistaAtribuido === 'Eng. André Silva';
+  const isMyAssignment = perfilUsuario === 'analista_dore' && (
+    solicitacao.analistaAtribuido === 'Eng. André Silva' || 
+    solicitacao.analistaAtribuido === 'Flavia Borges'
+  );
 
   const handleDownloadDocument = (fileName: string, label: string) => {
     const textContent = `--- Governo do Estado de Minas Gerais ---
@@ -799,7 +805,7 @@ ${totalPendencias > 0
       observacoes: ajusteObservacoes,
       dataCriacao: new Date().toLocaleDateString('pt-BR'),
       status: 'analise_dore',
-      analistaAtribuido: 'Eng. André Silva',
+      analistaAtribuido: undefined,
       planilhaAjusteFileName: ajustePlanilhaFileName,
       planilhaAjusteFileSize: ajustePlanilhaFileSize,
       planilhaAjusteUploadedAt: ajustePlanilhaUploadedAt,
@@ -808,10 +814,20 @@ ${totalPendencias > 0
 
     onUpdate({
       ...solicitacao,
+      etapaAtual: 'analise' as const,
+      analistaAtribuido: undefined,
+      historicoEtapas: [
+        ...(solicitacao.historicoEtapas || []),
+        {
+          etapa: 'analise' as const,
+          data: new Date().toISOString().split('T')[0],
+          responsavel: 'Fiscal de Obra (Novo Pleito de Ajuste de Planilha)'
+        }
+      ],
       ajustes: [...(solicitacao.ajustes || []), novoAjuste]
     });
 
-    alert(`Solicitação de Ajuste de Planilha nº ${numeroNovo} cadastrada e enviada para Análise DORE!`);
+    alert(`Solicitação de Ajuste nº ${numeroNovo} cadastrada e encaminhada com sucesso para Análise Técnica da DORE para atribuição de um analista!`);
     
     // reset spreadsheet form values
     setAjustePlanilhaFileName('');
@@ -1080,6 +1096,16 @@ ${totalPendencias > 0
 
     onUpdate({
       ...solicitacao,
+      etapaAtual: 'analise' as const,
+      analistaAtribuido: undefined,
+      historicoEtapas: [
+        ...(solicitacao.historicoEtapas || []),
+        {
+          etapa: 'analise' as const,
+          data: new Date().toISOString().split('T')[0],
+          responsavel: 'Fiscal de Obra (Novo Pleito de Aditivo)'
+        }
+      ],
       aditivos: [...solicitacao.aditivos, novoAdt]
     });
 
@@ -1088,7 +1114,7 @@ ${totalPendencias > 0
     setNovoAditivoPrazo('');
     setNovoAditivoJust('');
     setMostrandoNovoAditivo(false);
-    alert('Nova solicitação de termo aditivo enviada para análise!');
+    alert('Nova solicitação de aditivo cadastrada e encaminhada com sucesso para Análise Técnica da DORE para atribuição de um analista!');
   };
 
   const alterarStatusAditivo = (aditivoId: string, status: 'Aprovado' | 'Recusado') => {
@@ -1428,7 +1454,8 @@ ${totalPendencias > 0
       )}
 
       {/* FICHA TÉCNICA DA DEMANDA (CODESC E EXTENSÕES) */}
-      <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs space-y-5">
+      {activeSubTask !== 'analise' && (
+        <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs space-y-5">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-wrap gap-2">
           <h2 className="text-xs font-semibold text-slate-450 uppercase tracking-wider flex items-center gap-2">
             <Info className="w-4 h-4 text-slate-450" />
@@ -1539,7 +1566,7 @@ ${totalPendencias > 0
             </span>
           </div>
 
-          {solicitacao.notificacao && (
+          {solicitacao.notificacao && solicitacao.notificacao !== 'Não há notificação' && (
             <div className="col-span-2">
               <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Notificação / Órgão Regulador</span>
               <span className="text-amber-800 font-semibold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs leading-normal block">
@@ -1725,7 +1752,8 @@ ${totalPendencias > 0
             </div>
           )}
         </div>
-      </div>
+        </div>
+      )}
 
       {/* ABAS DO WORKSPACE INTERNO - PROFESSIONAL POLISH */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -1815,7 +1843,24 @@ ${totalPendencias > 0
         )}
 
         {/* CONTEÚDO DA ABA 1: CHECKLIST DE DOCUMENTOS */}
-        {activeTab === 'checklist' && (
+        {activeTab === 'checklist' && activeSubTask === 'analise' && (
+          <ProcessAnalysisPanel
+            solicitacao={solicitacao}
+            perfilUsuario={perfilUsuario}
+            onUpdate={onUpdate}
+            hideTransitionButtons={hideTransitionButtons}
+            isMyAssignment={isMyAssignment}
+            finalizarAnaliseDore={finalizarAnaliseDore}
+            reviewAllWithIA={reviewAllWithIA}
+            solicitarDevolucaoProcesso={solicitarDevolucaoProcesso}
+            handleSimulatedUpload={handleSimulatedUpload}
+            handleAISmartAnalysis={handleAISmartAnalysis}
+            removerDocumento={removerDocumento}
+          />
+        )}
+
+        {/* CONTEÚDO DA ABA 1: CHECKLIST DE DOCUMENTOS */}
+        {activeTab === 'checklist' && activeSubTask !== 'analise' && (
           <div className="p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-100 mb-6">
               <div>
@@ -1908,7 +1953,7 @@ ${totalPendencias > 0
                       onClick={() => {
                         onUpdate({
                           ...solicitacao,
-                          analistaAtribuido: 'Eng. André Silva'
+                          analistaAtribuido: 'Flavia Borges'
                         });
                       }}
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer"
@@ -2313,7 +2358,7 @@ ${totalPendencias > 0
                       Como aprovar e avançar este processo para a etapa de Autorização do PAF?
                     </p>
                     <p className="mt-1 leading-relaxed">
-                      Para visualizar os botões de aprovação de análise do processo, altere o seu perfil para <strong className="underline">Analista de Engenharia (DORE)</strong> no painel de perfis da barra lateral esquerda e certifique-se de que a demanda está atribuída para <strong className="underline">Eng. André Silva</strong> (ou clique no botão "Atribuir a mim e Analisar" no topo do checklist).
+                      Para visualizar os botões de aprovação de análise do processo, altere o seu perfil para <strong className="underline">Analista de Engenharia (DORE)</strong> no painel de perfis da barra lateral esquerda e certifique-se de que a demanda está atribuída para <strong className="underline">Flavia Borges</strong> ou <strong className="underline">Eng. André Silva</strong> (ou clique no botão "Atribuir a mim e Analisar" no topo do checklist).
                     </p>
                   </div>
                 )}

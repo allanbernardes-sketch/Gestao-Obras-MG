@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Solicitacao, DocumentoChecklist, EtapaProcesso } from '../types';
+import { Solicitacao, DocumentoChecklist, EtapaProcesso, syncChecklistDocs } from '../types';
 import { X, AlertCircle, FileText, UploadCloud, Trash2, Check, Sparkles, Building, Settings, Landmark, FileSpreadsheet, Layers } from 'lucide-react';
 
 interface EditarSolicitacaoModalProps {
@@ -22,6 +22,7 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
   const [orgaoTombador, setOrgaoTombador] = useState(solicitacao.orgaoTombador || '');
   const [coabitado, setCoabitado] = useState(solicitacao.coabitado || 'NÃO');
   const [tipoCoabitado, setTipoCoabitado] = useState(solicitacao.tipoCoabitado || '');
+  const [notificacao, setNotificacao] = useState(solicitacao.notificacao || 'Não há notificação');
   
   const [tipoObra, setTipoObra] = useState(solicitacao.tipoObra || 'REFORMA');
   const [tipoAtendimento, setTipoAtendimento] = useState(solicitacao.tipoAtendimento || 'NORMAL');
@@ -39,6 +40,19 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
   const [documentos, setDocumentos] = useState<DocumentoChecklist[]>(solicitacao.documentos || []);
 
   const [erro, setErro] = useState('');
+
+  // Sync documents list with changes in notificacao and formaAtendimento when editing
+  React.useEffect(() => {
+    setDocumentos(prev => {
+      const syncedDocs = syncChecklistDocs(prev, notificacao, formaAtendimento);
+      const lengthChanged = syncedDocs.length !== prev.length;
+      const idsChanged = syncedDocs.some((d, idx) => d.id !== prev[idx]?.id);
+      if (lengthChanged || idsChanged) {
+        return syncedDocs;
+      }
+      return prev;
+    });
+  }, [notificacao, formaAtendimento]);
 
   // Currency helper formatting
   const formatBRL = (value: string): string => {
@@ -169,6 +183,7 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
       descricaoFolhaRosto,
       observacoesFicha,
       etapaAtual,
+      notificacao,
       documentos
     };
 
@@ -409,6 +424,23 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
                     <option value="Coabitado com outro órgão estadual">Coabitado com outro órgão estadual</option>
                     <option value="Coabitado com outra municipal">Coabitado com outra municipal</option>
                     <option value="Coabitado com instituto federal">Coabitado com instituto federal</option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Há alguma notificação?
+                  </label>
+                  <select
+                    value={notificacao || 'Não há notificação'}
+                    onChange={(e) => setNotificacao(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-250 bg-white text-slate-800 rounded-lg focus:ring-2 focus:ring-blue-550/15 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="Não há notificação">Não há notificação</option>
+                    <option value="Ministério Publico">Ministério Publico</option>
+                    <option value="Prefeitura">Prefeitura</option>
+                    <option value="Defesa Civil">Defesa Civil</option>
+                    <option value="TCE">TCE</option>
                   </select>
                 </div>
 

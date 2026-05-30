@@ -26,7 +26,7 @@ import {
   Trash2,
   UploadCloud
 } from 'lucide-react';
-import { Solicitacao, EtapaProcesso, DocumentoChecklist } from '../types';
+import { Solicitacao, EtapaProcesso, DocumentoChecklist, syncChecklistDocs } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 
 // DEFAULT AUTOPREFILL BASE DATA
@@ -48,6 +48,8 @@ interface NovoAtendimentoPanelProps {
   usuariosSeguranca: { id: string; nome: string; perfil: string; depto?: string }[];
   onEdit?: (sol: Solicitacao) => void;
   perfilUsuario?: string;
+  atendimentoEmEdicaoDirect?: Solicitacao | null;
+  onLimparEdicaoDirect?: () => void;
 }
 
 export function NovoAtendimentoPanel({ 
@@ -56,7 +58,9 @@ export function NovoAtendimentoPanel({
   onUpdateSolicitacao, 
   usuariosSeguranca,
   onEdit,
-  perfilUsuario
+  perfilUsuario,
+  atendimentoEmEdicaoDirect,
+  onLimparEdicaoDirect
 }: NovoAtendimentoPanelProps) {
   // Navigation: 'form' | 'checklist' | 'intermediaria'
   const [currentView, setCurrentView] = useState<'form' | 'checklist' | 'intermediaria'>('form');
@@ -78,7 +82,7 @@ export function NovoAtendimentoPanel({
   const [numPaf, setNumPaf] = useState('');
   const [anoEmenda, setAnoEmenda] = useState('');
   const [formaAtendimento, setFormaAtendimento] = useState('VIA CAIXA ESCOLAR');
-  const [notificacao, setNotificacao] = useState('');
+  const [notificacao, setNotificacao] = useState('Não há notificação');
   const [descricaoFolhaRosto, setDescricaoFolhaRosto] = useState('');
   const [valorPlanilha, setValorPlanilha] = useState('');
   const [iss, setIss] = useState('');
@@ -101,11 +105,48 @@ export function NovoAtendimentoPanel({
       justificativa: undefined
     }))
   );
+  const [outrosDocumentosChecklist, setOutrosDocumentosChecklist] = useState<DocumentoChecklist[]>([]);
+  const [novoCustomDocNome, setNovoCustomDocNome] = useState('');
   
   // Search & Filter state inside Intermediate screen
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAtendimentoForEdit, setSelectedAtendimentoForEdit] = useState<Solicitacao | null>(null);
   const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
+
+  // Synchronize with direct editing requested from the parent dashboard
+  React.useEffect(() => {
+    if (atendimentoEmEdicaoDirect) {
+      setSelectedAtendimentoForEdit(atendimentoEmEdicaoDirect);
+    } else {
+      setSelectedAtendimentoForEdit(null);
+    }
+  }, [atendimentoEmEdicaoDirect]);
+
+  // Synchronize documentosChecklist with notificacao and formaAtendimento during creation
+  React.useEffect(() => {
+    setDocumentosChecklist(prev => {
+      return syncChecklistDocs(prev, notificacao, formaAtendimento);
+    });
+  }, [notificacao, formaAtendimento]);
+
+  // Synchronize inline loaded/edited solicitation documents with fields
+  React.useEffect(() => {
+    if (selectedAtendimentoForEdit) {
+      const syncedDocs = syncChecklistDocs(
+        selectedAtendimentoForEdit.documentos || [],
+        selectedAtendimentoForEdit.notificacao,
+        selectedAtendimentoForEdit.formaAtendimento
+      );
+      const lengthChanged = syncedDocs.length !== (selectedAtendimentoForEdit.documentos || []).length;
+      const idsChanged = syncedDocs.some((d, idx) => d.id !== selectedAtendimentoForEdit.documentos?.[idx]?.id);
+      if (lengthChanged || idsChanged) {
+        setSelectedAtendimentoForEdit({
+          ...selectedAtendimentoForEdit,
+          documentos: syncedDocs
+        });
+      }
+    }
+  }, [selectedAtendimentoForEdit?.notificacao, selectedAtendimentoForEdit?.formaAtendimento]);
   
   // Format BRL string helpers
   const formatBRL = (value: string): string => {
@@ -219,6 +260,58 @@ export function NovoAtendimentoPanel({
     }));
   };
 
+  // Custom step 2 document creators and upload flow helpers
+  const handleAddCustomDocStep2 = () => {
+    if (!novoCustomDocNome.trim()) return;
+    const nuevo: DocumentoChecklist = {
+      id: `doc_custom_${Date.now()}`,
+      nome: novoCustomDocNome.trim(),
+      obrigatorio: false,
+      desc: 'Documento complementar indicado pelo Técnico de Infraestrutura.',
+      status: 'pendente'
+    };
+    setOutrosDocumentosChecklist(prev => [...prev, nuevo]);
+    setNovoCustomDocNome('');
+  };
+
+  const handleSimularUploadCustomDocStep2 = (docId: string) => {
+    setOutrosDocumentosChecklist(prev => prev.map(doc => {
+      if (doc.id === docId) {
+        return {
+          ...doc,
+          status: 'aprovado' as const,
+          fileName: `outro_doc_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`,
+          fileSize: '750 KB',
+          uploadedAt: new Date().toISOString().split('T')[0]
+        };
+      }
+      return doc;
+    }));
+  };
+
+  const handleRealUploadCustomDocStep2 = (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOutrosDocumentosChecklist(prev => prev.map(doc => {
+      if (doc.id === docId) {
+        return {
+          ...doc,
+          status: 'aprovado' as const,
+          fileName: file.name,
+          fileSize: file.size > 1024 * 1024 
+            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
+            : `${(file.size / 1024).toFixed(0)} KB`,
+          uploadedAt: new Date().toISOString().split('T')[0]
+        };
+      }
+      return doc;
+    }));
+  };
+
+  const handleRemoverCustomDocStep2 = (docId: string) => {
+    setOutrosDocumentosChecklist(prev => prev.filter(doc => doc.id !== docId));
+  };
+
   // Simulate attaching all documents for instant completion
   const handleAnexarTodosControle = () => {
     const mockFiles = [
@@ -255,6 +348,7 @@ export function NovoAtendimentoPanel({
         ...(!isDraft ? [{ etapa: 'analise' as EtapaProcesso, data: new Date().toISOString().split('T')[0], responsavel: responsavel || 'Téc. de Infraestrutura' }] : [])
       ],
       documentos: documentosChecklist,
+      outrosDocumentos: outrosDocumentosChecklist,
       medicoes: [],
       aditivos: [],
       ajustes: [],
@@ -308,6 +402,8 @@ export function NovoAtendimentoPanel({
     setObservacoesFicha('');
     setErro('');
     setSelectedAtendimentoForEdit(null);
+    setOutrosDocumentosChecklist([]);
+    setNovoCustomDocNome('');
     setDocumentosChecklist(
       CHECKLIST_PADRAO.map((doc, idx) => ({
         ...doc,
@@ -337,11 +433,7 @@ export function NovoAtendimentoPanel({
 
   // Load a solicitation for editing/editing in place
   const selectForEdit = (sol: Solicitacao) => {
-    if (onEdit) {
-      onEdit(sol);
-    } else {
-      setSelectedAtendimentoForEdit(sol);
-    }
+    setSelectedAtendimentoForEdit(sol);
   };
 
   // Handler for in-place edit update
@@ -645,6 +737,23 @@ export function NovoAtendimentoPanel({
                   />
                 </div>
               )}
+
+              <div className="sm:col-span-3">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 font-sans">
+                  Há alguma notificação? *
+                </label>
+                <select
+                  value={notificacao || 'Não há notificação'}
+                  onChange={(e) => setNotificacao(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-850"
+                >
+                  <option value="Não há notificação">Não há notificação</option>
+                  <option value="Ministério Publico">Ministério Publico</option>
+                  <option value="Prefeitura">Prefeitura</option>
+                  <option value="Defesa Civil">Defesa Civil</option>
+                  <option value="TCE">TCE</option>
+                </select>
+              </div>
             </div>
 
             {/* SEÇÃO 3: Detalhamento Técnico e Demanda */}
@@ -854,99 +963,313 @@ export function NovoAtendimentoPanel({
             </button>
           </div>
 
-          {/* List of checklist documents inside step 2 */}
-          <div className="space-y-4">
-            {documentosChecklist.map((doc, idx) => {
-              const isUploaded = doc.fileName !== undefined;
-              return (
-                <div 
-                  key={doc.id} 
-                  className={`p-4 rounded-xl border transition-all ${
-                    isUploaded 
-                      ? 'border-emerald-200 bg-emerald-50/5'
-                      : 'border-slate-200 hover:border-slate-300 bg-white shadow-3xs'
-                  }`}
-                >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    {/* Left details */}
-                    <div className="max-w-xl text-left">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                          isUploaded 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                            : 'bg-slate-100 text-slate-600 border border-slate-200'
-                        }`}>
-                          Item {idx + 1}
-                        </span>
-                        <h4 className="font-sans font-extrabold text-slate-800 text-sm">
-                          {doc.nome}
-                        </h4>
-                        {doc.obrigatorio ? (
-                          <span className="text-[10px] font-black text-red-500 uppercase tracking-wide">Obrigatório</span>
-                        ) : (
-                          <span className="text-[10px] font-medium text-slate-400 capitalize">Opcional</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-1 font-sans">
-                        {doc.desc}
-                      </p>
+          {/* List of checklist documents inside step 2 (Categorized) */}
+          <div className="space-y-6">
+            
+            {/* 1. DOCUMENTOS OBRIGATÓRIOS */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-widest font-mono flex items-center gap-1.5 border-b border-slate-150 pb-2 text-left">
+                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                📌 Documentos Obrigatórios ({documentosChecklist.filter(d => d.obrigatorio).length})
+              </h3>
 
-                      {/* File item if uploaded */}
-                      {isUploaded && (
-                        <div className="mt-2.5 flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono">
-                          <FileText className="w-4 h-4 text-blue-500 shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
-                            <span className="text-[10px] text-slate-400">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
+              <div className="space-y-3">
+                {documentosChecklist.filter(d => d.obrigatorio).map((doc) => {
+                  const isUploaded = doc.fileName !== undefined;
+                  return (
+                    <div 
+                      key={doc.id} 
+                      className={`p-4 rounded-xl border transition-all ${
+                        isUploaded 
+                          ? 'border-emerald-200 bg-emerald-50/5'
+                          : 'border-slate-200 hover:border-slate-300 bg-white shadow-3xs'
+                      }`}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="max-w-xl text-left">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-sans font-extrabold text-slate-800 text-sm">
+                              {doc.nome}
+                            </h4>
+                            <span className="text-[10px] font-black text-red-500 uppercase tracking-wide">Obrigatório</span>
                           </div>
-                          
+                          <p className="text-xs text-slate-500 mt-1 font-sans">
+                            {doc.desc}
+                          </p>
+
+                          {/* File item if uploaded */}
+                          {isUploaded && (
+                            <div className="mt-2.5 flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono">
+                              <FileText className="w-4 h-4 text-blue-500 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
+                                <span className="text-[10px] text-slate-400">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
+                              </div>
+                              
+                              <button
+                                type="button"
+                                onClick={() => handleRemoverDocChecklist(doc.id)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition cursor-pointer"
+                                title="Remover arquivo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right side controls */}
+                        <div className="flex justify-end items-center gap-2 shrink-0">
+                          <input 
+                            type="file" 
+                            id={`file-input-checklist-${doc.id}`}
+                            className="hidden"
+                            onChange={(e) => handleRealUploadChecklist(doc.id, e)}
+                          />
                           <button
                             type="button"
-                            onClick={() => handleRemoverDocChecklist(doc.id)}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition cursor-pointer"
-                            title="Remover arquivo"
+                            onClick={() => {
+                              const fileInput = document.getElementById(`file-input-checklist-${doc.id}`);
+                              if (fileInput) fileInput.click();
+                            }}
+                            className="px-3.5 py-1.5 border border-slate-220 text-slate-700 font-extrabold text-xs rounded-lg hover:bg-slate-50 shrink-0 transition flex items-center gap-1.5 cursor-pointer shadow-3xs"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+                            <span>{isUploaded ? 'Substituir' : 'Anexar'}</span>
                           </button>
+
+                          {!isUploaded && (
+                            <button
+                              type="button"
+                              onClick={() => handleSimularUploadDocChecklist(doc.id, `doc_analise_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`)}
+                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-105 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
+                            >
+                              Simular
+                            </button>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                    {/* Right side upload button/trigger */}
-                    <div className="flex justify-end items-center gap-2 shrink-0">
-                      <input 
-                        type="file" 
-                        id={`file-input-checklist-${doc.id}`}
-                        className="hidden"
-                        onChange={(e) => handleRealUploadChecklist(doc.id, e)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const fileInput = document.getElementById(`file-input-checklist-${doc.id}`);
-                          if (fileInput) fileInput.click();
-                        }}
-                        className="px-3.5 py-1.5 border border-slate-220 text-slate-700 font-extrabold text-xs rounded-lg hover:bg-slate-50 shrink-0 transition flex items-center gap-1.5 cursor-pointer shadow-3xs"
-                      >
-                        <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
-                        <span>{isUploaded ? 'Substituir Código' : 'Anexar Documento'}</span>
-                      </button>
+            {/* 2. DOCUMENTOS OPCIONAIS */}
+            <div className="space-y-3 pt-2">
+              <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-widest font-mono flex items-center gap-1.5 border-b border-slate-150 pb-2 text-left">
+                <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                📂 Documentos Não-Obrigatórios ({documentosChecklist.filter(d => !d.obrigatorio).length})
+              </h3>
 
-                      {/* Manual mock simulator option */}
-                      {!isUploaded && (
-                        <button
-                          type="button"
-                          onClick={() => handleSimularUploadDocChecklist(doc.id, `doc_analise_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`)}
-                          className="px-2 py-1.5 bg-blue-50 hover:bg-blue-105 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
-                        >
-                          Auto-Simular
-                        </button>
-                      )}
+              <div className="space-y-3">
+                {documentosChecklist.filter(d => !d.obrigatorio).map((doc) => {
+                  const isUploaded = doc.fileName !== undefined;
+                  return (
+                    <div 
+                      key={doc.id} 
+                      className={`p-4 rounded-xl border transition-all ${
+                        isUploaded 
+                          ? 'border-emerald-200 bg-emerald-50/5'
+                          : 'border-slate-200 hover:border-slate-300 bg-white shadow-3xs'
+                      }`}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="max-w-xl text-left">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-sans font-extrabold text-slate-800 text-sm">
+                              {doc.nome}
+                            </h4>
+                            <span className="text-[10px] font-medium text-slate-400 capitalize">Opcional</span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1 font-sans">
+                            {doc.desc}
+                          </p>
+
+                          {/* File item if uploaded */}
+                          {isUploaded && (
+                            <div className="mt-2.5 flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono">
+                              <FileText className="w-4 h-4 text-blue-500 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
+                                <span className="text-[10px] text-slate-450">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
+                              </div>
+                              
+                              <button
+                                type="button"
+                                onClick={() => handleRemoverDocChecklist(doc.id)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition cursor-pointer"
+                                title="Remover arquivo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Right side controls */}
+                        <div className="flex justify-end items-center gap-2 shrink-0">
+                          <input 
+                            type="file" 
+                            id={`file-input-checklist-${doc.id}`}
+                            className="hidden"
+                            onChange={(e) => handleRealUploadChecklist(doc.id, e)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const fileInput = document.getElementById(`file-input-checklist-${doc.id}`);
+                              if (fileInput) fileInput.click();
+                            }}
+                            className="px-3.5 py-1.5 border border-slate-220 text-slate-700 font-extrabold text-xs rounded-lg hover:bg-slate-50 shrink-0 transition flex items-center gap-1.5 cursor-pointer shadow-3xs"
+                          >
+                            <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+                            <span>{isUploaded ? 'Substituir' : 'Anexar'}</span>
+                          </button>
+
+                          {!isUploaded && (
+                            <button
+                              type="button"
+                              onClick={() => handleSimularUploadDocChecklist(doc.id, `doc_analise_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`)}
+                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-105 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
+                            >
+                              Simular
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. OUTROS DOCUMENTOS */}
+            <div className="space-y-3 pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-150 pb-2 text-left">
+                <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  🔧 Outros Documentos ({outrosDocumentosChecklist.length})
+                </h3>
+
+                {/* Form to add other custom documents */}
+                <div className="flex items-center gap-2 max-w-sm w-full">
+                  <input 
+                    type="text"
+                    placeholder="Adicione um laudo técnico extra se desejar..."
+                    value={novoCustomDocNome}
+                    onChange={(e) => setNovoCustomDocNome(e.target.value)}
+                    className="px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs flex-1 focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomDocStep2}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-extrabold rounded-lg inline-flex items-center gap-1 transition cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-3 h-3 text-white" />
+                    + Adicionar Campo
+                  </button>
                 </div>
-              );
-            })}
+              </div>
+
+              <div className="space-y-3">
+                {outrosDocumentosChecklist.length === 0 ? (
+                  <div className="p-6 border border-dashed border-slate-250 rounded-xl bg-slate-50/50 text-center text-xs text-slate-400 font-sans">
+                    Nenhum documento customizado complementar adicionado ao atendimento. Use o adicionador no topo da seção para criar campos sob demanda.
+                  </div>
+                ) : (
+                  outrosDocumentosChecklist.map((doc) => {
+                    const isUploaded = doc.fileName !== undefined;
+                    return (
+                      <div 
+                        key={doc.id} 
+                        className={`p-4 rounded-xl border transition-all ${
+                          isUploaded 
+                            ? 'border-emerald-200 bg-emerald-50/5'
+                            : 'border-slate-200 hover:border-slate-300 bg-white shadow-3xs'
+                        }`}
+                      >
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="max-w-xl text-left">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-sans font-extrabold text-slate-800 text-sm">
+                                {doc.nome}
+                              </h4>
+                              <span className="text-[10px] bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 uppercase text-indigo-750 font-bold tracking-wider font-mono">Personalizado</span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1 font-sans">
+                              {doc.desc}
+                            </p>
+
+                            {/* File item if uploaded */}
+                            {isUploaded && (
+                              <div className="mt-2.5 flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono">
+                                <FileText className="w-4 h-4 text-blue-500 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
+                                  <span className="text-[10px] text-slate-450 font-medium">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
+                                </div>
+                                
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoverCustomDocStep2(doc.id)}
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition cursor-pointer"
+                                  title="Remover campo"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Right side controls */}
+                          <div className="flex justify-end items-center gap-2 shrink-0">
+                            <input 
+                              type="file" 
+                              id={`file-input-checklist-${doc.id}`}
+                              className="hidden"
+                              onChange={(e) => handleRealUploadCustomDocStep2(doc.id, e)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const fileInput = document.getElementById(`file-input-checklist-${doc.id}`);
+                                if (fileInput) fileInput.click();
+                              }}
+                              className="px-3.5 py-1.5 border border-slate-220 text-slate-700 font-extrabold text-xs rounded-lg hover:bg-slate-50 shrink-0 transition flex items-center gap-1.5 cursor-pointer shadow-3xs"
+                            >
+                              <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+                              <span>{isUploaded ? 'Substituir' : 'Anexar'}</span>
+                            </button>
+
+                            {!isUploaded && (
+                              <button
+                                type="button"
+                                onClick={() => handleSimularUploadCustomDocStep2(doc.id)}
+                                className="px-2 py-1.5 bg-blue-50 hover:bg-blue-105 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
+                              >
+                                Simular
+                              </button>
+                            )}
+
+                            {!isUploaded && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoverCustomDocStep2(doc.id)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition cursor-pointer"
+                              >
+                                Excluir
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
           </div>
 
           {/* Stepper Actions block at the bottom */}
@@ -974,13 +1297,12 @@ export function NovoAtendimentoPanel({
                 onClick={() => {
                   const missingMandatory = documentosChecklist.filter(d => d.obrigatorio && !d.fileName);
                   if (missingMandatory.length > 0) {
-                    const confirmSend = window.confirm(
-                      `Aviso: Para enviar o Atendimento para análise da engenharia técnica, é altamente recomendável instruir todos os anexos obrigatórios.\n\n` +
+                    alert(
+                      `Não é possível cadastrar e encaminhar para a DORE. Para registrar o Atendimento no fluxo técnico, todos os documentos obrigatórios devem estar devidamente anexados ao checklist.\n\n` +
                       `Documentos obrigatórios ausentes:\n` +
-                      missingMandatory.map(m => `- ${m.nome}`).join('\n') +
-                      `\n\nDeseja registrar o Atendimento no status de pendência técnica e prosseguir mesmo assim?`
+                      missingMandatory.map(m => `- ${m.nome}`).join('\n')
                     );
-                    if (!confirmSend) return;
+                    return;
                   }
                   handleFinalizarEGravar(false);
                 }}
@@ -1228,6 +1550,23 @@ export function NovoAtendimentoPanel({
                 </select>
               </div>
 
+               <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Há alguma notificação?
+                </label>
+                <select
+                  value={selectedAtendimentoForEdit.notificacao || 'Não há notificação'}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, notificacao: e.target.value })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium cursor-pointer"
+                >
+                  <option value="Não há notificação">Não há notificação</option>
+                  <option value="Ministério Publico">Ministério Publico</option>
+                  <option value="Prefeitura">Prefeitura</option>
+                  <option value="Defesa Civil">Defesa Civil</option>
+                  <option value="TCE">TCE</option>
+                </select>
+              </div>
+
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Fase / Etapa de Fluxo
@@ -1331,21 +1670,77 @@ export function NovoAtendimentoPanel({
             </div>
 
             {/* Ações */}
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-between items-center pt-4 border-t border-slate-200/60 mt-6 md:flex-row flex-col gap-3">
               <button
                 type="button"
-                onClick={() => setSelectedAtendimentoForEdit(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                onClick={() => {
+                  setSelectedAtendimentoForEdit(null);
+                  if (onLimparEdicaoDirect) onLimparEdicaoDirect();
+                }}
+                className="px-4 py-2 border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
               >
-                Voltar à Lista Visual
+                <ArrowLeft className="w-4 h-4" />
+                <span>Voltar à Lista Visual</span>
               </button>
               
-              <button
-                type="submit"
-                className="px-5 py-2 hover:shadow-md bg-amber-500 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1 cursor-pointer transition-all"
-              >
-                Salvar Alterações e Continuar
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedAtendimentoForEdit) return;
+                    // Update as draft
+                    const updated = {
+                      ...selectedAtendimentoForEdit,
+                      etapaAtual: 'cadastro' as const
+                    };
+                    onUpdateSolicitacao(updated);
+                    setSelectedAtendimentoForEdit(null);
+                    if (onLimparEdicaoDirect) onLimparEdicaoDirect();
+                    alert('Alterações salvas como rascunho com sucesso!');
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-755 hover:text-slate-900 rounded-lg text-xs font-bold transition cursor-pointer"
+                >
+                  Salvar como Rascunho
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedAtendimentoForEdit) return;
+                    // Validate mandatory checklist documents
+                    const missingMandatory = selectedAtendimentoForEdit.documentos.filter(d => d.obrigatorio && !d.fileName);
+                    if (missingMandatory.length > 0) {
+                      alert(
+                        `Não é possível encaminhar para a DORE. Para encaminhar o Atendimento, todos os documentos obrigatórios devem estar devidamente anexados ao checklist.\n\n` +
+                        `Documentos obrigatórios ausentes:\n` +
+                        missingMandatory.map(m => `- ${m.nome}`).join('\n')
+                      );
+                      return;
+                    }
+
+                    const updated = {
+                      ...selectedAtendimentoForEdit,
+                      etapaAtual: 'analise' as const,
+                      historicoEtapas: [
+                        ...selectedAtendimentoForEdit.historicoEtapas,
+                        { 
+                          etapa: 'analise' as const, 
+                          data: new Date().toISOString().split('T')[0], 
+                          responsavel: selectedAtendimentoForEdit.responsavel || 'Téc. de Infraestrutura' 
+                        }
+                      ]
+                    };
+                    onUpdateSolicitacao(updated);
+                    setSelectedAtendimentoForEdit(null);
+                    if (onLimparEdicaoDirect) onLimparEdicaoDirect();
+                    alert('Atendimento encaminhado para a DORE com sucesso!');
+                  }}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Finalizar e Encaminhar para DORE</span>
+                </button>
+              </div>
             </div>
           </form>
         </div>
@@ -1646,6 +2041,7 @@ interface AtribuicaoPanelProps {
   onAssign: (solId: string, usrId: string) => void;
   viewMode?: 'lista' | 'kanban_status' | 'kanban_analista';
   onMudarViewMode?: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
+  perfilUsuario?: string;
 }
 
 export function AtribuicaoPanel({ 
@@ -1655,7 +2051,8 @@ export function AtribuicaoPanel({
   atribuicoes, 
   onAssign,
   viewMode,
-  onMudarViewMode
+  onMudarViewMode,
+  perfilUsuario = 'gestor_dore'
 }: AtribuicaoPanelProps) {
   const [feedbackMsg, setFeedbackMsg] = useState<{ [solId: string]: string }>({});
 
@@ -1668,6 +2065,7 @@ export function AtribuicaoPanel({
   const [filtroResponsavel, setFiltroResponsavel] = useState('todos');
   const [filtroDataInicio, setFiltroDataInicio] = useState('');
   const [filtroDataFim, setFiltroDataFim] = useState('');
+  const [filtroAtribuicao, setFiltroAtribuicao] = useState<'todos' | 'minhas'>('todos');
 
   const analistasSgo = usuariosSeguranca.filter(
     u => u.perfil === 'analista_dore' || u.perfil === 'tecnico_infra' || u.perfil === 'fiscal_obra'
@@ -1725,6 +2123,15 @@ export function AtribuicaoPanel({
     if (filtroDataInicio && sol.dataCriacao && sol.dataCriacao < filtroDataInicio) return false;
     if (filtroDataFim && sol.dataCriacao && sol.dataCriacao > filtroDataFim) return false;
 
+    // 8. Atribuição focada
+    if (perfilUsuario === 'analista_dore' && filtroAtribuicao === 'minhas') {
+      const isMyAssign = sol.analistaAtribuido === 'Eng. André Silva' || sol.analistaAtribuido === 'Flavia Borges' || sol.analistaAtribuido === 'Eng. André';
+      if (!isMyAssign) return false;
+    } else if (perfilUsuario === 'gestor_dore' && filtroAtribuicao === 'minhas') {
+      const noAssign = !sol.analistaAtribuido;
+      if (!noAssign) return false;
+    }
+
     return true;
   });
 
@@ -1732,12 +2139,46 @@ export function AtribuicaoPanel({
     // Save locally
     onAssign(sol.id, usrId);
 
+    if (!usrId) {
+      const updated: Solicitacao = {
+        ...sol,
+        analistaAtribuido: undefined,
+        historicoEtapas: [
+          ...sol.historicoEtapas,
+          { 
+            etapa: sol.etapaAtual, 
+            data: new Date().toISOString().split('T')[0], 
+            responsavel: `Gestor DORE (Atribuição Removida)` 
+          }
+        ]
+      };
+      
+      onUpdateSolicitacao(updated);
+
+      // Flash feedback
+      setFeedbackMsg(prev => ({ ...prev, [sol.id]: 'Atribuição removida!' }));
+      setTimeout(() => {
+        setFeedbackMsg(prev => ({ ...prev, [sol.id]: '' }));
+      }, 2000);
+      return;
+    }
+
     // Also update main global object
     const selectedUser = analistasSgo.find(u => u.id === usrId);
     if (selectedUser) {
       const updated: Solicitacao = {
         ...sol,
         analistaAtribuido: selectedUser.nome,
+        aditivos: (sol.aditivos || []).map(a => 
+          a.status === 'Pendente' && !a.analistaAtribuido 
+            ? { ...a, analistaAtribuido: selectedUser.nome } 
+            : a
+        ),
+        ajustes: (sol.ajustes || []).map(a => 
+          a.status === 'analise_dore' && !a.analistaAtribuido 
+            ? { ...a, analistaAtribuido: selectedUser.nome } 
+            : a
+        ),
         historicoEtapas: [
           ...sol.historicoEtapas,
           { 
@@ -1935,6 +2376,67 @@ export function AtribuicaoPanel({
         )}
       </div>
 
+      {/* VISÃO FOCADA POR ATRIBUIÇÃO DE ANALISTAS - MOVED AS REQUESTED */}
+      <div className="bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-650 font-medium mb-6">
+        <span className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-blue-600 shrink-0" />
+          <span className="font-extrabold text-slate-750 font-sans text-xs uppercase tracking-wide">Visão focada por atribuição de analistas:</span>
+        </span>
+        {perfilUsuario === 'analista_dore' && (
+          <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 select-none shrink-0">
+            <button
+              type="button"
+              onClick={() => setFiltroAtribuicao('minhas')}
+              className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
+                filtroAtribuicao === 'minhas'
+                  ? 'bg-blue-650 text-white shadow-3xs'
+                  : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
+              }`}
+            >
+              Minhas Demandas Designadas (Eng. André / Flávia)
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroAtribuicao('todos')}
+              className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
+                filtroAtribuicao === 'todos'
+                  ? 'bg-blue-650 text-white shadow-3xs'
+                  : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
+              }`}
+            >
+              Todas as Demandas
+            </button>
+          </div>
+        )}
+
+        {perfilUsuario === 'gestor_dore' && (
+          <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 select-none shrink-0">
+            <button
+              type="button"
+              onClick={() => setFiltroAtribuicao('minhas')}
+              className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
+                filtroAtribuicao === 'minhas'
+                  ? 'bg-indigo-650 text-white shadow-3xs'
+                  : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
+              }`}
+            >
+              Exibir Apenas Não Atribuídos (Aguardando Designação)
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroAtribuicao('todos')}
+              className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
+                filtroAtribuicao === 'todos'
+                  ? 'bg-indigo-650 text-white shadow-3xs'
+                  : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
+              }`}
+            >
+              Exibir Todas as Demandas
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse font-sans text-xs">
           <thead>
@@ -2075,33 +2577,33 @@ export function AtribuicaoPanel({
 
                   {/* 9. ANALISTA DESIGNADO */}
                   <td className="py-4 px-4 whitespace-nowrap">
-                    <div className="flex flex-col gap-1.5 max-w-[180px]">
-                      {sol.analistaAtribuido ? (
-                        <span className="px-2.5 py-1 text-[9.5px] font-bold text-blue-700 bg-blue-50/20 border border-blue-200 rounded-md inline-flex items-center gap-1 w-fit">
-                          {sol.analistaAtribuido}
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1.5 text-[9.5px] font-bold text-amber-600 bg-amber-50/20 border border-amber-200 rounded-md inline-flex items-center gap-1.5 leading-none w-fit">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                          Não Atribuído
-                        </span>
-                      )}
-                      
+                    <div className="flex flex-col gap-1 max-w-[220px]">
                       <select
                         value={currentAssignId}
                         onChange={(e) => handleAssignAnalyst(sol, e.target.value)}
-                        className="text-[10px] px-2 py-1.5 bg-white border border-slate-200 rounded-md focus:outline-hidden focus:ring-1 focus:ring-blue-500 text-slate-700 font-bold max-w-[160px] cursor-pointer"
+                        className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold cursor-pointer transition-all duration-150 w-full min-w-[210px] ${
+                          sol.analistaAtribuido 
+                            ? 'border-blue-500 text-blue-700 shadow-3xs' 
+                            : 'border-slate-300 text-slate-500 font-medium'
+                        }`}
                       >
-                        <option value="">Alterar atribuição...</option>
-                        {analistasSgo.map(usr => (
-                          <option key={usr.id} value={usr.id}>
-                            {usr.nome} ({usr.perfil === 'fiscal_obra' ? 'Fiscal' : 'DORE'})
-                          </option>
-                        ))}
+                        <option value="" className="text-slate-450 font-bold bg-white text-center py-2">
+                          -- Não Atribuído --
+                        </option>
+                        {analistasSgo.map(usr => {
+                          const formattedLabel = usr.perfil === 'fiscal_obra' 
+                            ? `${usr.nome} (Fiscal)` 
+                            : `${usr.nome} (DORE)`;
+                          return (
+                            <option key={usr.id} value={usr.id} className="text-slate-800 bg-white font-bold py-2">
+                              {formattedLabel}
+                            </option>
+                          );
+                        })}
                       </select>
 
                       {feedbackMsg[sol.id] && (
-                        <span className="text-[9.5px] font-bold text-emerald-600 block animate-bounce">
+                        <span className="text-[9px] font-bold text-blue-600 block animate-pulse text-center">
                           {feedbackMsg[sol.id]}
                         </span>
                       )}

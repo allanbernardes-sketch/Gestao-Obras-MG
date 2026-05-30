@@ -4,17 +4,20 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario } from './types';
-import { SOLICITACOES_INICIAIS } from './initialData';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog } from './types';
+import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
 import Dashboard from './components/Dashboard';
 import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock } from 'lucide-react';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
+import AcompanhamentoPaf from './components/AcompanhamentoPaf';
+import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
+
 
 export default function App() {
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
@@ -22,11 +25,75 @@ export default function App() {
   const [idSolicitacaoSelecionada, setIdSolicitacaoSelecionada] = useState<string | null>(null);
   const [abrirModalCadastro, setAbrirModalCadastro] = useState(false);
   const [solicitacaoEmEdicao, setSolicitacaoEmEdicao] = useState<Solicitacao | null>(null);
+  const [atendimentoEmEdicaoDirect, setAtendimentoEmEdicaoDirect] = useState<Solicitacao | null>(null);
   const [mostrarMenuPerfil, setMostrarMenuPerfil] = useState(false);
+  const [mostrarMenuNotif, setMostrarMenuNotif] = useState(false);
   const [viewMode, setViewMode] = useState<'lista' | 'kanban_status' | 'kanban_analista'>('lista');
 
+  // CUSTOM LOGS AND NOTIFICATIONS PERSISTED IN LOCALSTORAGE
+  const [notifications, setNotifications] = useState<Notificacao[]>(() => {
+    try {
+      const cached = localStorage.getItem('sgo_notifications');
+      return cached ? JSON.parse(cached) : NOTIFICACOES_INICIAIS;
+    } catch {
+      return NOTIFICACOES_INICIAIS;
+    }
+  });
+
+  const [logs, setLogs] = useState<SistemaLog[]>(() => {
+    try {
+      const cached = localStorage.getItem('sgo_logs');
+      return cached ? JSON.parse(cached) : LOGS_INICIAIS;
+    } catch {
+      return LOGS_INICIAIS;
+    }
+  });
+
+  const registrarLog = (acao: string, detalhe: string, tipo: 'info' | 'sucesso' | 'alerta' | 'erro', solicitacaoId?: string, escola?: string) => {
+    const novoLog: SistemaLog = {
+      id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      dataHora: new Date().toISOString(),
+      usuario: perfilUsuario === 'tecnico_infra' ? 'João Paulo' :
+               perfilUsuario === 'gestor_dore' ? 'Aline Davino' :
+               perfilUsuario === 'analista_dore' ? 'Flavia Borges' :
+               perfilUsuario === 'gestor_paf' ? 'Silas Fagundes' :
+               perfilUsuario === 'administrativo_dore' ? 'Rui Lages' :
+               perfilUsuario === 'fiscal_obra' ? 'Insp. Mariana Souza' : 'Usuário SGO',
+      perfil: perfilUsuario === 'tecnico_infra' ? 'Técnico de Infraestrutura SRE' :
+              perfilUsuario === 'gestor_dore' ? 'Gestor Atendimento DORE' :
+              perfilUsuario === 'analista_dore' ? 'Analista de Engenharia DORE' :
+              perfilUsuario === 'gestor_paf' ? 'Gestor Geral (PAF)' :
+              perfilUsuario === 'administrativo_dore' ? 'Administrativo DORE' :
+              perfilUsuario === 'fiscal_obra' ? 'Fiscalização de Campo' : 'Operador',
+      acao,
+      detalhe,
+      tipo,
+      solicitacaoId,
+      escola
+    };
+    const novosLogs = [novoLog, ...logs];
+    setLogs(novosLogs);
+    localStorage.setItem('sgo_logs', JSON.stringify(novosLogs));
+  };
+
+  const criarNotificacao = (titulo: string, mensagem: string, tipo: 'processo_avanco' | 'processo_retrocesso' | 'aditivo_pendente' | 'ajuste_pendente' | 'sistema' | 'alerta', solicitacaoId?: string, escola?: string) => {
+    const novaNotif: Notificacao = {
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      titulo,
+      mensagem,
+      dataHora: new Date().toISOString(),
+      lida: false,
+      tipo,
+      solicitacaoId,
+      escola
+    };
+    const novasNotifs = [novaNotif, ...notifications];
+    setNotifications(novasNotifs);
+    localStorage.setItem('sgo_notifications', JSON.stringify(novasNotifs));
+  };
+
   // NEW DUAL NAV ARCHITECTURE STATES
-  const [activeModule, setActiveModule] = useState<'seguranca' | 'orcamento' | 'gestao_obras' | 'imoveis' | 'abertura_chamados'>('gestao_obras');
+  const [activeModule, setActiveModule] = useState<'seguranca' | 'orcamento' | 'gestao_obras' | 'imoveis' | 'abertura_chamados' | 'central_logs'>('gestao_obras');
   const [activeSubTask, setActiveSubTask] = useState<string>('visao_geral');
   const [selectedSchoolsPorSubtask, setSelectedSchoolsPorSubtask] = useState<{ [subtask: string]: string }>({});
   const [schoolSearchQuery, setSchoolSearchQuery] = useState('');
@@ -37,6 +104,16 @@ export default function App() {
   const [filterSre, setFilterSre] = useState('');
   const [filterMunicipio, setFilterMunicipio] = useState('');
   const [filterEscola, setFilterEscola] = useState('');
+
+  // FILTERS STATE FOR "2. ANÁLISE TÉCNICA" (ProcessAnalysisPanel)
+  const [filterAnaliseIdText, setFilterAnaliseIdText] = useState('');
+  const [filterAnaliseCodescText, setFilterAnaliseCodescText] = useState('');
+  const [filterAnaliseMunicipioText, setFilterAnaliseMunicipioText] = useState('');
+  const [filterAnaliseSreText, setFilterAnaliseSreText] = useState('');
+  const [filterAnaliseEscolaText, setFilterAnaliseEscolaText] = useState('');
+  const [filterAnaliseResponsavelText, setFilterAnaliseResponsavelText] = useState('');
+  const [filterAnaliseDataInicio, setFilterAnaliseDataInicio] = useState('');
+  const [filterAnaliseDataFim, setFilterAnaliseDataFim] = useState('');
   
   // REJECTION STATE FOR "3. AUTORIZAÇÃO DO PAF"
   const [rejectingSchoolId, setRejectingSchoolId] = useState<string | null>(null);
@@ -58,6 +135,12 @@ export default function App() {
     { id: 'END-03', cep: '39100-000', rua: 'Praça Conselheiro Matta', numero: '82', bairro: 'Centro', cidade: 'Diamantina', estado: 'MG', escola: 'E.E. Juscelino Kubitschek' },
     { id: 'END-04', cep: '37500-050', rua: 'Rua Francisco Masseli', numero: '345', bairro: 'Bonsucesso', cidade: 'Itajubá', estado: 'MG', escola: 'E.E. Wenceslau Braz' },
     { id: 'END-05', cep: '37550-000', rua: 'Av. Vicente Simões', numero: '101', bairro: 'Centro', cidade: 'Pouso Alegre', estado: 'MG', escola: 'E.E. Delfim Moreira' }
+  ]);
+
+  const [empresasSeguranca, setEmpresasSeguranca] = useState<EmpresaSeguranca[]>([
+    { id: 'EMP-01', nome: 'Construtora Mantiqueira Ltda', cnpj: '45.123.456/0001-80', responsavelTecnico: 'Eng. Roberto Albuquerque', situacaoCadastral: 'Regular', telefone: '(31) 3244-9088', email: 'contato@mantiqueira.com.br' },
+    { id: 'EMP-02', nome: 'IncorpObras Engenharia Ltda', cnpj: '12.987.654/0001-20', responsavelTecnico: 'Arq. Sandra de Oliveira', situacaoCadastral: 'Regular', telefone: '(34) 3821-2244', email: 'comercial@incorpobras.com.br' },
+    { id: 'EMP-03', nome: 'Construtora do Estado S.A.', cnpj: '01.242.000/0001-33', responsavelTecnico: 'Eng. Gustavo Mendonça', situacaoCadastral: 'Regular', telefone: '(31) 3212-0055', email: 'licitacoes@construtoraestado.com.br' }
   ]);
 
   // COLLAPSIBLE MENU CATEGORIES FOR GESTÃO DE OBRAS
@@ -192,6 +275,39 @@ export default function App() {
     setEscMunicipio('');
     
     alert(`Escola "${escNome}" cadastrada com sucesso! Uma demanda SGO foi iniciada e enviada para a fila de checklist de documentos.`);
+  };
+
+  // SEGURANÇA FORM STATES - EMPRESA
+  const [empNome, setEmpNome] = useState('');
+  const [empCnpj, setEmpCnpj] = useState('');
+  const [empResp, setEmpResp] = useState('');
+  const [empSit, setEmpSit] = useState<string>('Regular');
+  const [empTel, setEmpTel] = useState('');
+  const [empMail, setEmpMail] = useState('');
+
+  const handleCadastrarEmpresa = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empNome || !empCnpj) {
+      alert('Por favor, informe a Razão Social e o CNPJ da empresa.');
+      return;
+    }
+    const nova: EmpresaSeguranca = {
+      id: `EMP-${String(empresasSeguranca.length + 1).padStart(2, '0')}`,
+      nome: empNome,
+      cnpj: empCnpj,
+      responsavelTecnico: empResp || 'Não Especificado',
+      situacaoCadastral: empSit,
+      telefone: empTel || '---',
+      email: empMail || '---'
+    };
+    setEmpresasSeguranca([...empresasSeguranca, nova]);
+    setEmpNome('');
+    setEmpCnpj('');
+    setEmpResp('');
+    setEmpSit('Regular');
+    setEmpTel('');
+    setEmpMail('');
+    alert(`Empresa "${empNome}" pré-cadastrada e homologada com sucesso no módulo de Segurança.`);
   };
 
   // Initialize from LocalStorage or the rich pre-defined mock set
@@ -426,8 +542,149 @@ export default function App() {
   };
 
   const handleUpdateSolicitacao = (updated: Solicitacao) => {
+    const old = solicitacoes.find(s => s.id === updated.id);
     const novas = solicitacoes.map(s => s.id === updated.id ? updated : s);
     atualizarEGuardarSolicitacoes(novas);
+
+    if (old) {
+      // 1. Check if step/etapa was transitioned
+      if (old.etapaAtual !== updated.etapaAtual) {
+        const stepLabels: Record<string, string> = {
+          cadastro: 'Cadastro de Demanda SGO',
+          analise: 'Análise Técnica (DORE)',
+          correcao: 'Correção de Dossiê Técnico',
+          paf_autorizacao: 'Autorização do PAF (SAF/PAF)',
+          paf: 'Geração de PAF Orçamentário',
+          execucao: 'Execução e Fiscalização da Obra',
+          ordem_inicio: 'Ordem de Início emitida',
+          cancelado: 'Cancelada'
+        };
+        const de = stepLabels[old.etapaAtual] || old.etapaAtual;
+        const para = stepLabels[updated.etapaAtual] || updated.etapaAtual;
+        
+        const isProgression = ['analise', 'paf_autorizacao', 'paf', 'execucao'].includes(updated.etapaAtual);
+        const tipoNotif = isProgression ? 'processo_avanco' : 'processo_retrocesso';
+        const tipoLog = isProgression ? 'sucesso' : 'erro';
+
+        criarNotificacao(
+          `Trâmite de Processo: ${updated.nomeEscola}`,
+          `O status do processo transitou de [${de}] para [${para}].`,
+          tipoNotif,
+          updated.id,
+          updated.nomeEscola
+        );
+
+        registrarLog(
+          `Transição de Etapa: ${para}`,
+          `O processo correspondente migrou da etapa de [${de}] para [${para}] de forma regulamentar.`,
+          tipoLog,
+          updated.id,
+          updated.nomeEscola
+        );
+      }
+
+      // 2. Check if a new aditivo was added
+      const oldAditivosCount = old.aditivos?.length || 0;
+      const newAditivosCount = updated.aditivos?.length || 0;
+      if (newAditivosCount > oldAditivosCount) {
+        const newAdt = updated.aditivos?.[0]; // Usually added at index 0
+        if (newAdt) {
+          criarNotificacao(
+            `Solicitação de Termo Aditivo: ${updated.nomeEscola}`,
+            `Um pleito de termo aditivo do tipo [${newAdt.tipo}] no valor de R$ ${(newAdt.valorAditivo || 0).toLocaleString('pt-BR')} foi encaminhado para análise.`,
+            'aditivo_pendente',
+            updated.id,
+            updated.nomeEscola
+          );
+
+          registrarLog(
+            `Cadastro de Aditivo (${newAdt.tipo})`,
+            `Novo pleito de termo aditivo cadastrado no montante financeiro líquido de R$ ${(newAdt.valorAditivo || 0).toLocaleString('pt-BR')}. Justificativa: "${newAdt.justificativa}".`,
+            'alerta',
+            updated.id,
+            updated.nomeEscola
+          );
+        }
+      }
+
+      // 3. Check if an aditivo was approved or rejected
+      const oldPendingAdtsIds = (old.aditivos || []).filter(a => a.status === 'Pendente').map(a => a.id);
+      const newlyEvaluatedAdts = (updated.aditivos || []).filter(a => !oldPendingAdtsIds.includes(a.id) || a.status !== 'Pendente');
+      newlyEvaluatedAdts.forEach(adt => {
+        const oldAdtVal = (old.aditivos || []).find(o => o.id === adt.id);
+        if (oldAdtVal && oldAdtVal.status !== adt.status) {
+          const statusLabel = adt.status === 'Aprovado' ? 'Homologado e Aprovado' : 'Recusado / Indeferido';
+          const severity = adt.status === 'Aprovado' ? 'sucesso' : 'erro';
+          
+          criarNotificacao(
+            `Resultado de Termo Aditivo: ${updated.nomeEscola}`,
+            `O pleito de aditivo de ${adt.tipo} foi ${statusLabel} pela DORE SGO.`,
+            adt.status === 'Aprovado' ? 'processo_avanco' : 'processo_retrocesso',
+            updated.id,
+            updated.nomeEscola
+          );
+
+          registrarLog(
+            `Termo Aditivo ${adt.status}`,
+            `Decisão proferida sobre o pleito secundário. Despacho Técnico de Engenharia: "${adt.parecerConsolidado || 'Despacho padrão de engenharia registrado'}".`,
+            severity,
+            updated.id,
+            updated.nomeEscola
+          );
+        }
+      });
+
+      // 4. Check if a new ajuste was added
+      const oldAjustesCount = old.ajustes?.length || 0;
+      const newAjustesCount = updated.ajustes?.length || 0;
+      if (newAjustesCount > oldAjustesCount) {
+        const newAju = updated.ajustes?.[0]; // index 0 or end as well, in types adjustment can be added at top/bottom
+        if (newAju) {
+          criarNotificacao(
+            `Ajuste de Planilha de Obras: ${updated.nomeEscola}`,
+            `Um pedido de alteração de planilha (Ajuste nº ${newAju.numero}) foi encaminhado para a engenharia da DORE.`,
+            'ajuste_pendente',
+            updated.id,
+            updated.nomeEscola
+          );
+
+          registrarLog(
+            `Cadastro de Ajuste (Nº ${newAju.numero})`,
+            `Uma nova planilha modificada contendo acréscimos e supressões de serviços foi submetida para avaliação.`,
+            'alerta',
+            updated.id,
+            updated.nomeEscola
+          );
+        }
+      }
+
+      // 5. Check if an ajuste was approved or rejected
+      const oldAnaliseAjuIds = (old.ajustes || []).filter(a => a.status === 'analise_dore').map(a => a.id);
+      const newlyEvaluatedAjus = (updated.ajustes || []).filter(a => !oldAnaliseAjuIds.includes(a.id) || a.status !== 'analise_dore');
+      newlyEvaluatedAjus.forEach(aju => {
+        const oldAjuVal = (old.ajustes || []).find(o => o.id === aju.id);
+        if (oldAjuVal && oldAjuVal.status !== aju.status) {
+          const statusLabel = aju.status === 'validado' ? 'Homologado e Aprovado' : 'Devolvido para Correção';
+          const severity = aju.status === 'validado' ? 'sucesso' : 'erro';
+
+          criarNotificacao(
+            `Resultado de Ajuste de Planilha: ${updated.nomeEscola}`,
+            `O Ajuste de Planilha de Obras nº ${aju.numero} foi ${statusLabel} pela engenharia da DORE.`,
+            aju.status === 'validado' ? 'processo_avanco' : 'processo_retrocesso',
+            updated.id,
+            updated.nomeEscola
+          );
+
+          registrarLog(
+            `Ajuste de Planilha ${aju.status === 'validado' ? 'Aprovado' : 'Recusado'}`,
+            `Avaliação concluída do ajuste de planilha de serviços. Parecer Conclusivo: "${aju.parecerDore || 'Despacho padrão registrado'}".`,
+            severity,
+            updated.id,
+            updated.nomeEscola
+          );
+        }
+      });
+    }
   };
 
   const handleDeleteSolicitacao = (id: string) => {
@@ -439,8 +696,14 @@ export default function App() {
     let targetSubTask = 'cadastro';
     const etapa = sol.etapaAtual;
     if (etapa === 'cadastro' || etapa === 'correcao') {
-      targetSubTask = 'cadastro';
-      setSolicitacaoEmEdicao(sol);
+      if (perfilUsuario === 'tecnico_infra' && etapa === 'cadastro') {
+        targetSubTask = 'novo_atendimento';
+        setAtendimentoEmEdicaoDirect(sol);
+        setSolicitacaoEmEdicao(null);
+      } else {
+        targetSubTask = 'cadastro';
+        setSolicitacaoEmEdicao(sol);
+      }
     } else if (etapa === 'analise') {
       targetSubTask = 'analise';
     } else if (etapa === 'paf_autorizacao') {
@@ -485,10 +748,127 @@ export default function App() {
         </div>
 
         {/* Informação do Usuário Simulado com Avatar e Cargo */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-5">
+          {/* CENTRAL DE NOTIFICAÇÕES - HEADER FAST VIEW */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setMostrarMenuNotif(!mostrarMenuNotif);
+                setMostrarMenuPerfil(false);
+              }}
+              className="relative p-2 text-slate-300 hover:text-white hover:bg-blue-900/60 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0 border border-slate-500/10"
+              title="Notificações do Sistema"
+            >
+              <Bell className="w-4.5 h-4.5" />
+              {notifications.filter(n => !n.lida).length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-rose-600 border border-[#13264d] text-[9px] font-black text-white rounded-full min-w-[15px] h-[15px] px-0.5 flex items-center justify-center animate-pulse">
+                  {notifications.filter(n => !n.lida).length}
+                </span>
+              )}
+            </button>
+
+            {mostrarMenuNotif && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMostrarMenuNotif(false);
+                  }} 
+                />
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-xl py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                  <div className="px-3.5 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-[10px] font-black text-[#13264d] uppercase tracking-wider font-sans">
+                      Notificações Recentes
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const lidas = notifications.map(n => ({ ...n, lida: true }));
+                        setNotifications(lidas);
+                        localStorage.setItem('sgo_notifications', JSON.stringify(lidas));
+                      }}
+                      className="text-[9px] text-[#13264d] hover:text-[#18397a] font-bold tracking-tight bg-blue-50/70 hover:bg-blue-50 px-2 py-0.5 rounded transition"
+                    >
+                      Lidas tudo
+                    </button>
+                  </div>
+                  
+                  <div className="max-h-[280px] overflow-y-auto divide-y divide-slate-100">
+                    {notifications.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 space-y-1">
+                        <Bell className="w-6 h-6 mx-auto text-slate-350" />
+                        <p className="text-[10px] font-bold">Sem notificações pendentes.</p>
+                      </div>
+                    ) : (
+                      notifications.slice(0, 4).map(notif => (
+                        <div 
+                          key={notif.id}
+                          className={`p-3 flex gap-2.5 hover:bg-slate-50 transition-colors relative ${!notif.lida ? 'bg-blue-50/[0.12]' : ''}`}
+                        >
+                          <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                            notif.tipo === 'processo_avanco' ? 'bg-emerald-500' :
+                            notif.tipo === 'processo_retrocesso' ? 'bg-rose-500' :
+                            notif.tipo === 'aditivo_pendente' ? 'bg-indigo-500' :
+                            notif.tipo === 'ajuste_pendente' ? 'bg-amber-500' : 'bg-slate-400'
+                          }`} />
+                          
+                          <div className="flex-1 space-y-0.5">
+                            <p className="text-[11px] font-bold text-slate-800 leading-snug font-sans">
+                              {notif.titulo}
+                            </p>
+                            <p className="text-[10px] text-slate-500 leading-normal line-clamp-2">
+                              {notif.mensagem}
+                            </p>
+                            <div className="flex items-center justify-between pt-1">
+                              <span className="text-[8.5px] text-slate-400 font-mono font-medium">
+                                {new Date(notif.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              {!notif.lida && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const lidas = notifications.map(n => n.id === notif.id ? { ...n, lida: true } : n);
+                                    setNotifications(lidas);
+                                    localStorage.setItem('sgo_notifications', JSON.stringify(lidas));
+                                  }}
+                                  className="text-[9px] text-[#13264d] font-bold tracking-tight hover:underline"
+                                >
+                                  Lida
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="px-3 pt-2 pb-0.5 border-t border-slate-100 flex justify-center">
+                    <button
+                      onClick={() => {
+                        setActiveModule('central_logs');
+                        setActiveSubTask('visao_geral');
+                        setMostrarMenuNotif(false);
+                      }}
+                      className="w-full py-1 text-center text-[10px] font-bold text-[#13264d] hover:bg-slate-50 rounded-lg transition"
+                    >
+                      Ver Tudo (Logs & Auditoria) →
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="relative">
             <div 
-              onClick={() => setMostrarMenuPerfil(!mostrarMenuPerfil)}
+              onClick={() => {
+                setMostrarMenuPerfil(!mostrarMenuPerfil);
+                setMostrarMenuNotif(false);
+              }}
               className="flex items-center gap-2 text-xs cursor-pointer select-none p-1.5 hover:bg-blue-900/60 rounded-lg transition-colors"
             >
               <div className="w-8 h-8 rounded-full bg-blue-800 flex items-center justify-center text-xs text-white font-bold border border-blue-600 shrink-0">
@@ -678,6 +1058,30 @@ export default function App() {
             <span className="text-[8px] font-bold tracking-tight">Chamados</span>
           </button>
 
+          {/* 6. CENTRAL DE LOGS E NOTIFICAÇÕES */}
+          <button
+            type="button"
+            title="Log do Sistema & Auditoria"
+            onClick={() => {
+              setActiveModule('central_logs');
+              setActiveSubTask('visao_geral');
+              setIdSolicitacaoSelecionada(null);
+            }}
+            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
+              activeModule === 'central_logs'
+                ? 'bg-blue-620 bg-blue-600 text-white border-blue-500 shadow-md'
+                : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
+            }`}
+          >
+            <span className="relative">
+              <FileClock className="w-4 h-4 flex-shrink-0" />
+              {notifications.filter(n => !n.lida).length > 0 && (
+                <span className="absolute -top-1 -right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
+              )}
+            </span>
+            <span className="text-[8px] font-bold tracking-tight">Logs</span>
+          </button>
+
           <div className="mt-auto border-t border-slate-550/35 pt-4 w-10 flex flex-col items-center">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="SGO Online" />
           </div>
@@ -779,7 +1183,7 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
                       {[
                         { id: 'analise_atribuicao', label: 'Atribuição', icon: Users },
-                        { id: 'analise', label: 'Análise do Processo', icon: FileText }
+                        { id: 'analise', label: 'Atribuição Técnica', icon: FileText }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
@@ -822,8 +1226,9 @@ export default function App() {
                   {!collapsedCategories.paf && (
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
                       {[
-                        { id: 'paf', label: 'Geração de PAF', icon: Landmark },
-                        { id: 'paf_autorizacao', label: 'Autorizações', icon: CheckCircle }
+                        { id: 'paf_acompanhamento', label: 'Acompanhamento de PAF', icon: ClipboardList },
+                        { id: 'paf_autorizacao', label: 'Autorizações', icon: CheckCircle },
+                        { id: 'paf', label: 'Geração de PAF', icon: Landmark }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
@@ -867,12 +1272,11 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
                       {[
                         { id: 'execucao_cadastro', label: 'Cadastro de Obras', func: 'cadastro', icon: Building2 },
-                        { id: 'execucao_acompanhamento', label: 'Execução', func: 'acompanhamento', icon: HardHat },
+                        { id: 'execucao_acompanhamento', label: 'Acompanhamento da Obra', func: 'Dashboard, Diário, Vistorias', icon: HardHat },
                         { id: 'execucao_medicoes', label: 'Medições', func: 'financeiro técnico', icon: Layers },
                         { id: 'execucao_contratos', label: 'Contratos', func: 'jurídico/financeiro', icon: ClipboardList },
                         { id: 'execucao_aditivos', label: 'Aditivos', func: 'alterações contratuais', icon: Plus },
                         { id: 'execucao_ajustes', label: 'Ajuste', func: 'alterações contratuais', icon: Calculator },
-                        { id: 'execucao_fiscalizacao', label: 'Fiscalização', func: 'controle campo', icon: ShieldCheck },
                         { id: 'execucao_documentos', label: 'Documentos', func: 'GED', icon: UploadCloud }
                       ].map(item => {
                         const Icon = item.icon;
@@ -1014,6 +1418,7 @@ export default function App() {
                   { id: 'cadastro_usuario', label: 'Controle de Usuários', desc: 'Cadastro de analistas e fiscais', icon: UserPlus },
                   { id: 'cadastro_enderecos', label: 'Cadastro de Endereços', desc: 'Dossiê geográfico de escolas', icon: MapPin },
                   { id: 'cadastro_escolas', label: 'Cadastro de Escolas SGO', desc: 'Instanciar escolas no fluxo', icon: Building2 },
+                  { id: 'cadastro_empresas', label: 'Cadastro de Empresas', desc: 'Empresas contratadas homologadas', icon: Building },
                 ].map((item) => {
                   const Icon = item.icon;
                   const isActive = activeSubTask === item.id;
@@ -1160,12 +1565,64 @@ export default function App() {
               </div>
             </div>
           )}
+
+          {activeModule === 'central_logs' && (
+            <div className="space-y-4">
+              <div className="border-b border-slate-100 pb-3 mb-2">
+                <span className="text-[9px] font-extrabold text-blue-600 uppercase tracking-widest block font-sans">
+                  Controle & Auditoria
+                </span>
+                <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 mt-0.5 font-sans">
+                  <FileClock className="w-4 h-4 text-blue-600 shrink-0" />
+                  Logs e Alertas
+                </h3>
+              </div>
+
+              <div className="space-y-1.5">
+                {[
+                  { id: 'visao_geral', label: 'Monitor de Alertas', desc: 'Central de notificações e avisos', icon: Bell },
+                  { id: 'logs_auditoria', label: 'Logs de Auditoria', desc: 'Rastreabilidade de alterações', icon: FileClock }
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeSubTask === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveSubTask(item.id);
+                        setIdSolicitacaoSelecionada(null);
+                      }}
+                      className={`w-full flex flex-col items-start px-3 py-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${
+                        isActive
+                          ? 'bg-blue-50 border border-blue-105 text-blue-800 font-semibold'
+                          : 'hover:bg-slate-50 border border-transparent text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                        <span className="text-xs font-bold font-sans">{item.label}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 block ml-5.5 leading-tight font-sans mt-0.5">
+                        {item.desc}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* WORKSPACE CENTRAL DE CONTEÚDO */}
         <main className="flex-1 overflow-y-auto bg-slate-50 p-6 sm:p-8 flex flex-col min-w-0">
           
-          {activeModule === 'gestao_obras' && activeSubTask === 'paf_autorizacao' && !idSolicitacaoSelecionada ? (
+          {activeModule === 'gestao_obras' && activeSubTask === 'paf_acompanhamento' && !idSolicitacaoSelecionada ? (
+            <AcompanhamentoPaf
+              solicitacoes={solicitacoes}
+              onSelectSolicitacao={(id) => setIdSolicitacaoSelecionada(id)}
+              perfilUsuario={perfilUsuario}
+            />
+          ) : activeModule === 'gestao_obras' && activeSubTask === 'paf_autorizacao' && !idSolicitacaoSelecionada ? (
             (() => {
               const schoolsInAutorizacao = solicitacoes.filter(s => s.etapaAtual === 'paf_autorizacao');
               
@@ -1357,8 +1814,8 @@ export default function App() {
                               <th className="py-3 px-4">SRE</th>
                               <th className="py-3 px-4">Município</th>
                               <th className="py-3 px-4">Tipo de Obra</th>
-                              <th className="py-3 px-4">Tipo Atendimento</th>
-                              <th className="py-3 px-4 text-right">Valor Estimado</th>
+                              <th className="py-3 px-4">Tipo de atendimento</th>
+                              <th className="py-3 px-4 text-right">Valor</th>
                               <th className="py-3 px-4 text-center w-56">Autorizar PAF?</th>
                             </tr>
                           </thead>
@@ -1539,6 +1996,14 @@ export default function App() {
               const activeSchoolId = selectedSchoolsPorSubtask[activeSubTask] || (listFiltered.length > 0 ? listFiltered[0].id : '');
               const activeSchool = listFiltered.find(s => s.id === activeSchoolId) || (listFiltered.length > 0 ? listFiltered[0] : null);
 
+              // Predefined sets of available option values for Análise Técnica filters
+              const idsDisponiveis = Array.from(new Set(listFiltered.map(s => s.id)));
+              const codescsDisponiveis = Array.from(new Set(listFiltered.map(s => s.codesc)));
+              const municipiosDisponiveis = Array.from(new Set(listFiltered.map(s => s.municipio)));
+              const regionaisDisponiveis = Array.from(new Set(listFiltered.map(s => s.sre)));
+              const escolasDisponiveis = Array.from(new Set(listFiltered.map(s => s.nomeEscola)));
+              const responsaveisDisponiveis = Array.from(new Set(listFiltered.map(s => s.responsavel || 'Não Informado')));
+
               const getForcedTab = (subTask: string, sol: Solicitacao | null) => {
                 if (!sol) return 'checklist';
                 if (subTask === 'cadastro' || subTask === 'analise') return 'checklist';
@@ -1553,7 +2018,8 @@ export default function App() {
 
               const subTaskLabels: { [key: string]: string } = {
                 cadastro: 'Lista de Atendimentos',
-                analise: 'Análise do Processo',
+                analise: 'Atribuição Técnica',
+                paf_acompanhamento: 'Acompanhamento de PAF',
                 paf_autorizacao: 'Autorizações',
                 paf: 'Geração do PAF',
                 execucao_abertura: 'Abertura de Obra',
@@ -1627,150 +2093,322 @@ export default function App() {
                   )}
 
                   {/* CABEÇALHO DA FILA E SELETOR DE ATENDIMENTO - LIGHTENED THE COLOR */}
-                  <div className="bg-gradient-to-r from-blue-50/65 to-indigo-50/45 border border-blue-100/90 text-slate-800 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-left">
-                    <div className="space-y-1">
-                      <span className="px-2 py-0.5 bg-blue-600 text-white font-extrabold text-[10px] rounded uppercase tracking-wider font-mono">
-                        AMBIENTE WORKSPACE SGO
-                      </span>
-                      <h2 className="text-base sm:text-lg font-extrabold font-sans tracking-tight text-slate-855 flex items-center gap-2">
-                        <HardHat className="text-blue-600 w-5 h-5 shrink-0" />
-                        Ambiente de {subTaskLabels[activeSubTask]}
-                      </h2>
-                      <p className="text-xs text-slate-600 max-w-xl font-sans font-medium">
-                        {activeSubTask === 'cadastro' && 'Visualize o dossiê consolidado de todas as demandas e atendimentos cadastrados.'}
-                        {activeSubTask === 'analise' && 'Avalie documentação técnica de engenharia, anexe pareceres técnicos e resolva pendências.'}
-                        {activeSubTask === 'paf' && 'Configure códigos de liberação financeira e de faturamento.'}
-                        {activeSubTask === 'execucao' && 'Forneça a Ordem de Início, calendarize cronogramas, acompanhe as obras e medições físico-financeiras.'}
-                        {activeSubTask === 'aditivos' && 'Gerencie acréscimos, supressões de valor e prorrogações de prazo do contrato.'}
-                        {activeSubTask === 'ajustes' && 'Controle os ajustes e remanejamento de saldos da planilha orçamentária.'}
-                        {activeSubTask === 'conclusao' && 'Proceda com as vistorias finais, emissão de termos e encerramento da obra.'}
-                        {/* 9 execution submodules descriptions */}
-                        {activeSubTask === 'execucao_cadastro' && 'Cadastre e visualize o dossiê detalhado das obras em andamento, incluindo contratos, prazos e faturamento.'}
-                        {activeSubTask === 'execucao_acompanhamento' && 'Acompanhe a evolução física das obras e o avanço técnico de cada etapa.'}
-                        {activeSubTask === 'execucao_medicoes' && 'Gerencie as medições físico-financeiras periódicas, notas fiscais e relatórios técnicos de faturamento.'}
-                        {activeSubTask === 'execucao_contratos' && 'Controle contratos associados, dados das empresas contratadas, garantias e vigências contratuais.'}
-                        {activeSubTask === 'execucao_aditivos' && 'Gerencie e registre acréscimos ou supressões de valor, bem como prorrogações de vigências do contrato.'}
-                        {activeSubTask === 'execucao_ajustes' && 'Controle os ajustes de saldo de planilha orçamentária e remanejamentos técnicos.'}
-                        {activeSubTask === 'execucao_fiscalizacao' && 'Monitore vistorias integradas de campo, diário oficial de obras e relatórios fotográficos de controle.'}
-                        {activeSubTask === 'execucao_documentos' && 'GED - Gerenciamento Eletrônico de Documentos com upload de certidões, planilhas e ARTs.'}
-                      </p>
-                    </div>
-
-                    {listFiltered.length > 0 && (
-                      <div className="shrink-0 space-y-1.5 md:min-w-[340px] relative">
-                        <label className="text-[10px] font-bold text-blue-700 block uppercase font-mono tracking-wider">
-                          Selecione a Escola Ativa desta Etapa:
-                        </label>
-                        
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-                            className="w-full px-3 py-2 text-xs bg-white border border-slate-250 text-slate-750 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans cursor-pointer font-bold shadow-xs text-left pr-8 flex items-center justify-between"
-                          >
-                            <span className="truncate">
-                              {activeSchool 
-                                ? `${activeSchool.codesc} - ${activeSchool.nomeEscola} (${activeSchool.sre}) - ${activeSchool.id}` 
-                                : 'Selecione uma escola...'}
-                            </span>
-                            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                          </button>
-
-                          {isSelectorOpen && (
-                            <>
-                              {/* Invisible overlay for clicking outside to close */}
-                              <div 
-                                className="fixed inset-0 z-40 cursor-default" 
-                                onClick={() => setIsSelectorOpen(false)} 
-                              />
-                              
-                              <div className="absolute right-0 top-full mt-1.5 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col z-50 animate-fade-in shadow-xl">
-                                {/* Search input */}
-                                <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-                                  <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                  <input
-                                    type="text"
-                                    placeholder="Escreva para procurar o CODESC..."
-                                    value={schoolSearchQuery}
-                                    onChange={(e) => setSchoolSearchQuery(e.target.value)}
-                                    autoFocus
-                                    className="w-full bg-transparent border-none text-xs text-slate-750 focus:outline-none focus:ring-0 font-sans font-semibold placeholder-slate-400"
-                                  />
-                                  {schoolSearchQuery && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setSchoolSearchQuery('')}
-                                      className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                </div>
-
-                                {/* Filtered results */}
-                                <div className="overflow-y-auto max-h-48 divide-y divide-slate-105">
-                                  {(() => {
-                                    const searchLower = schoolSearchQuery.toLowerCase().trim();
-                                    const filteredList = listFiltered.filter(s => {
-                                      if (!searchLower) return true;
-                                      return (
-                                        s.codesc.toLowerCase().includes(searchLower) ||
-                                        s.nomeEscola.toLowerCase().includes(searchLower) ||
-                                        s.sre.toLowerCase().includes(searchLower) ||
-                                        s.id.toLowerCase().includes(searchLower)
-                                      );
-                                    });
-
-                                    if (filteredList.length === 0) {
-                                      return (
-                                        <div className="p-3 text-xs text-slate-405 text-center font-sans font-medium">
-                                          Nenhum CODESC ou escola encontrado
-                                        </div>
-                                      );
-                                    }
-
-                                    return filteredList.map(s => {
-                                      const isCurrent = s.id === activeSchoolId;
-                                      return (
-                                        <button
-                                          key={s.id}
-                                          type="button"
-                                          onClick={() => {
-                                            setSelectedSchoolsPorSubtask(prev => ({
-                                              ...prev,
-                                              [activeSubTask]: s.id
-                                            }));
-                                            setIsSelectorOpen(false);
-                                          }}
-                                          className={`w-full text-left px-3 py-2 text-xs transition-colors font-sans flex flex-col gap-0.5 cursor-pointer hover:bg-blue-50 ${
-                                            isCurrent ? 'bg-blue-50 font-bold border-l-2 border-blue-600' : 'text-slate-700'
-                                          }`}
-                                        >
-                                          <span className="font-bold text-slate-800">
-                                            {s.codesc} - {s.nomeEscola}
-                                          </span>
-                                          <span className="text-[10px] text-slate-400 flex items-center justify-between">
-                                            <span>{s.sre}</span>
-                                            <span className="font-mono text-[9px] bg-slate-100 px-1 py-0.2 rounded border border-slate-200/50">
-                                              ID: {s.id}
-                                            </span>
-                                          </span>
-                                        </button>
-                                      );
-                                    });
-                                  })()}
-                                </div>
-                              </div>
-                            </>
-                          )}
+                  {activeSubTask === 'analise' ? (
+                    <div id="paf-autorizacao-workspace" className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs text-left text-slate-800 space-y-4">
+                      {/* Top Row with Header and Step Queue Info */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div className="flex items-center gap-2">
+                          <Search className="w-4 h-4 text-blue-600" />
+                          <h3 className="text-xs font-black font-sans uppercase tracking-wider text-slate-700">
+                            🔍 FILTROS DE PESQUISA (ANÁLISE TÉCNICA)
+                          </h3>
                         </div>
-
-                        <span className="text-[9px] text-slate-500 block font-mono text-right font-semibold">
-                          Fila: {listFiltered.length} {listFiltered.length === 1 ? 'demanda' : 'demandas'} aguardando atendimento
+                        <span className="text-[11px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded font-mono">
+                          Fila da Etapa: {listFiltered.length} de {solicitacoes.filter(s => s.etapaAtual === 'analise').length} demandas analisáveis
                         </span>
                       </div>
-                    )}
-                  </div>
+
+                      {/* Dropdowns and Date Fields Grid */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                        {/* ID DE OBRA */}
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">ID DE OBRA</label>
+                          <select
+                            value={filterAnaliseIdText}
+                            onChange={(e) => setFilterAnaliseIdText(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="">Todos os IDs</option>
+                            {idsDisponiveis.map(val => (
+                              <option key={val} value={val}>{val}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* CODESC */}
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">CODESC</label>
+                          <select
+                            value={filterAnaliseCodescText}
+                            onChange={(e) => setFilterAnaliseCodescText(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="">Todos os CODESC</option>
+                            {codescsDisponiveis.map(val => (
+                              <option key={val} value={val}>{val}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* MUNICÍPIO */}
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">MUNICÍPIO</label>
+                          <select
+                            value={filterAnaliseMunicipioText}
+                            onChange={(e) => setFilterAnaliseMunicipioText(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="">Todos os Municípios</option>
+                            {municipiosDisponiveis.map(val => (
+                              <option key={val} value={val}>{val}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* REGIONAL (SRE) */}
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">REGIONAL (SRE)</label>
+                          <select
+                            value={filterAnaliseSreText}
+                            onChange={(e) => setFilterAnaliseSreText(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="">Todas as Regionais</option>
+                            {regionaisDisponiveis.map(val => (
+                              <option key={val} value={val}>{val}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* ESCOLA */}
+                        <div className="flex flex-col space-y-1 flex-1">
+                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">ESCOLA</label>
+                          <select
+                            value={filterAnaliseEscolaText}
+                            onChange={(e) => setFilterAnaliseEscolaText(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="">Todas as Escolas</option>
+                            {escolasDisponiveis.map(val => (
+                              <option key={val} value={val}>{val}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* RESPONSÁVEL */}
+                        <div className="flex flex-col space-y-1">
+                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">RESPONSÁVEL</label>
+                          <select
+                            value={filterAnaliseResponsavelText}
+                            onChange={(e) => setFilterAnaliseResponsavelText(e.target.value)}
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            <option value="">Todos os Responsáveis</option>
+                            {responsaveisDisponiveis.map(val => (
+                              <option key={val} value={val}>{val}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* DATA DE CRIAÇÃO (Custom style input picker) */}
+                        <div className="flex flex-col space-y-1 col-span-2 sm:col-span-1">
+                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">DATA DE CRIAÇÃO</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="date"
+                              value={filterAnaliseDataInicio}
+                              onChange={(e) => setFilterAnaliseDataInicio(e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-bold text-slate-750 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <span className="text-slate-400 text-xs">à</span>
+                            <input
+                              type="date"
+                              value={filterAnaliseDataFim}
+                              onChange={(e) => setFilterAnaliseDataFim(e.target.value)}
+                              className="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-bold text-slate-750 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Row with Select for Atendimento pills */}
+                      <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3">
+                        <span className="text-[10px] font-black text-slate-450 tracking-wider uppercase font-mono">
+                          SELECIONE PARA ATENDIMENTO:
+                        </span>
+                        
+                        <div className="flex flex-wrap gap-2">
+                          {listFiltered
+                            .filter(school => {
+                              if (filterAnaliseIdText && school.id !== filterAnaliseIdText) return false;
+                              if (filterAnaliseCodescText && school.codesc !== filterAnaliseCodescText) return false;
+                              if (filterAnaliseMunicipioText && school.municipio !== filterAnaliseMunicipioText) return false;
+                              if (filterAnaliseSreText && school.sre !== filterAnaliseSreText) return false;
+                              if (filterAnaliseEscolaText && school.nomeEscola !== filterAnaliseEscolaText) return false;
+                              if (filterAnaliseResponsavelText && (school.responsavel || 'Não Informado') !== filterAnaliseResponsavelText) return false;
+                              return true;
+                            })
+                            .map(school => {
+                              const isSelected = school.id === activeSchoolId;
+                              return (
+                                <button
+                                  key={school.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedSchoolsPorSubtask(prev => ({
+                                      ...prev,
+                                      [activeSubTask]: school.id
+                                    }));
+                                  }}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all shadow-3xs cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-blue-600 border border-blue-600 text-white font-extrabold shadow-sm'
+                                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold'
+                                  }`}
+                                >
+                                  {school.nomeEscola} ({school.id.replace('SOL-2026-', '')})
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gradient-to-r from-blue-50/65 to-indigo-50/45 border border-blue-100/90 text-slate-800 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-left">
+                      <div className="space-y-1">
+                        <span className="px-2 py-0.5 bg-blue-600 text-white font-extrabold text-[10px] rounded uppercase tracking-wider font-mono">
+                          AMBIENTE WORKSPACE SGO
+                        </span>
+                        <h2 className="text-base sm:text-lg font-extrabold font-sans tracking-tight text-slate-855 flex items-center gap-2">
+                          <HardHat className="text-blue-600 w-5 h-5 shrink-0" />
+                          Ambiente de {subTaskLabels[activeSubTask]}
+                        </h2>
+                        <p className="text-xs text-slate-600 max-w-xl font-sans font-medium">
+                          {activeSubTask === 'cadastro' && 'Visualize o dossiê consolidado de todas as demandas e atendimentos cadastrados.'}
+                          {activeSubTask === 'analise' && 'Avalie documentação técnica de engenharia, anexe pareceres técnicos e resolva pendências.'}
+                          {activeSubTask === 'paf' && 'Configure códigos de liberação financeira e de faturamento.'}
+                          {activeSubTask === 'execucao' && 'Forneça a Ordem de Início, calendarize cronogramas, acompanhe as obras e medições físico-financeiras.'}
+                          {activeSubTask === 'aditivos' && 'Gerencie acréscimos, supressões de valor e prorrogações de prazo do contrato.'}
+                          {activeSubTask === 'ajustes' && 'Controle os ajustes e remanejamento de saldos da planilha orçamentária.'}
+                          {activeSubTask === 'conclusao' && 'Proceda com as vistorias finais, emissão de termos e encerramento da obra.'}
+                          {/* 9 execution submodules descriptions */}
+                          {activeSubTask === 'execucao_cadastro' && 'Cadastre e visualize o dossiê detalhado das obras em andamento, incluindo contratos, prazos e faturamento.'}
+                          {activeSubTask === 'execucao_acompanhamento' && 'Acompanhe a evolução física das obras e o avanço técnico de cada etapa.'}
+                          {activeSubTask === 'execucao_medicoes' && 'Gerencie as medições físico-financeiras periódicas, notas fiscais e relatórios técnicos de faturamento.'}
+                          {activeSubTask === 'execucao_contratos' && 'Controle contratos associados, dados das empresas contratadas, garantias e vigências contratuais.'}
+                          {activeSubTask === 'execucao_aditivos' && 'Gerencie e registre acréscimos ou supressões de valor, bem como prorrogações de vigências do contrato.'}
+                          {activeSubTask === 'execucao_ajustes' && 'Controle os ajustes de saldo de planilha orçamentária e remanejamentos técnicos.'}
+                          {activeSubTask === 'execucao_fiscalizacao' && 'Monitore vistorias integradas de campo, diário oficial de obras e relatórios fotográficos de controle.'}
+                          {activeSubTask === 'execucao_documentos' && 'GED - Gerenciamento Eletrônico de Documentos com upload de certidões, planilhas e ARTs.'}
+                        </p>
+                      </div>
+
+                      {listFiltered.length > 0 && (
+                        <div className="shrink-0 space-y-1.5 md:min-w-[340px] relative">
+                          <label className="text-[10px] font-bold text-blue-700 block uppercase font-mono tracking-wider">
+                            Selecione a Escola Ativa desta Etapa:
+                          </label>
+                          
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+                              className="w-full px-3 py-2 text-xs bg-white border border-slate-250 text-slate-750 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans cursor-pointer font-bold shadow-xs text-left pr-8 flex items-center justify-between"
+                            >
+                              <span className="truncate">
+                                {activeSchool 
+                                  ? `${activeSchool.codesc} - ${activeSchool.nomeEscola} (${activeSchool.sre}) - ${activeSchool.id}` 
+                                  : 'Selecione uma escola...'}
+                              </span>
+                              <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                            </button>
+
+                            {isSelectorOpen && (
+                              <>
+                                {/* Invisible overlay for clicking outside to close */}
+                                <div 
+                                  className="fixed inset-0 z-40 cursor-default" 
+                                  onClick={() => setIsSelectorOpen(false)} 
+                                />
+                                
+                                <div className="absolute right-0 top-full mt-1.5 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col z-50 animate-fade-in shadow-xl">
+                                  {/* Search input */}
+                                  <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                                    <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                    <input
+                                      type="text"
+                                      placeholder="Escreva para procurar o CODESC..."
+                                      value={schoolSearchQuery}
+                                      onChange={(e) => setSchoolSearchQuery(e.target.value)}
+                                      autoFocus
+                                      className="w-full bg-transparent border-none text-xs text-slate-750 focus:outline-none focus:ring-0 font-sans font-semibold placeholder-slate-400"
+                                    />
+                                    {schoolSearchQuery && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSchoolSearchQuery('')}
+                                        className="p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  {/* Filtered results */}
+                                  <div className="overflow-y-auto max-h-48 divide-y divide-slate-105">
+                                    {(() => {
+                                      const searchLower = schoolSearchQuery.toLowerCase().trim();
+                                      const filteredList = listFiltered.filter(s => {
+                                        if (!searchLower) return true;
+                                        return (
+                                          s.codesc.toLowerCase().includes(searchLower) ||
+                                          s.nomeEscola.toLowerCase().includes(searchLower) ||
+                                          s.sre.toLowerCase().includes(searchLower) ||
+                                          s.id.toLowerCase().includes(searchLower)
+                                        );
+                                      });
+
+                                      if (filteredList.length === 0) {
+                                        return (
+                                          <div className="p-3 text-xs text-slate-405 text-center font-sans font-medium">
+                                            Nenhum CODESC ou escola encontrado
+                                          </div>
+                                        );
+                                      }
+
+                                      return filteredList.map(s => {
+                                        const isCurrent = s.id === activeSchoolId;
+                                        return (
+                                          <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedSchoolsPorSubtask(prev => ({
+                                                ...prev,
+                                                [activeSubTask]: s.id
+                                              }));
+                                              setIsSelectorOpen(false);
+                                            }}
+                                            className={`w-full text-left px-3 py-2 text-xs transition-colors font-sans flex flex-col gap-0.5 cursor-pointer hover:bg-blue-50 ${
+                                              isCurrent ? 'bg-blue-50 font-bold border-l-2 border-blue-600' : 'text-slate-700'
+                                            }`}
+                                          >
+                                            <span className="font-bold text-slate-800">
+                                              {s.codesc} - {s.nomeEscola}
+                                            </span>
+                                            <span className="text-[10px] text-slate-400 flex items-center justify-between">
+                                              <span>{s.sre}</span>
+                                              <span className="font-mono text-[9px] bg-slate-100 px-1 py-0.2 rounded border border-slate-200/50">
+                                                ID: {s.id}
+                                              </span>
+                                            </span>
+                                          </button>
+                                        );
+                                      });
+                                    })()}
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          <span className="text-[9px] text-slate-500 block font-mono text-right font-semibold">
+                            Fila: {listFiltered.length} {listFiltered.length === 1 ? 'demanda' : 'demandas'} aguardando atendimento
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="w-full flex flex-col space-y-6">
                     {activeSchool ? (
@@ -1785,6 +2423,7 @@ export default function App() {
                         hideStepper={true}
                         hideTransitionButtons={activeSubTask !== 'continuar_preenchimento'}
                         hideTabs={true}
+                        activeSubTask={activeSubTask}
                       />
                     </div>
                   ) : (
@@ -1820,6 +2459,7 @@ export default function App() {
               perfilUsuario={perfilUsuario}
               onVoltar={() => setIdSolicitacaoSelecionada(null)}
               onUpdate={handleUpdateSolicitacao}
+              activeSubTask={activeSubTask}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col">
@@ -1840,6 +2480,8 @@ export default function App() {
                       usuariosSeguranca={usuariosSeguranca}
                       onEdit={setSolicitacaoEmEdicao}
                       perfilUsuario={perfilUsuario}
+                      atendimentoEmEdicaoDirect={atendimentoEmEdicaoDirect}
+                      onLimparEdicaoDirect={() => setAtendimentoEmEdicaoDirect(null)}
                     />
                   ) : activeSubTask === 'analise_atribuicao' ? (
                     viewMode === 'lista' ? (
@@ -1853,6 +2495,7 @@ export default function App() {
                         }}
                         viewMode={viewMode}
                         onMudarViewMode={(mode) => setViewMode(mode)}
+                        perfilUsuario={perfilUsuario}
                       />
                     ) : (
                       <KanbanViews
@@ -1876,6 +2519,7 @@ export default function App() {
                       onUpdate={handleUpdateSolicitacao}
                       perfilUsuario={perfilUsuario}
                       onSelect={(sol) => handleSelectSolicitacao(sol)}
+                      empresasSeguranca={empresasSeguranca}
                     />
                   ) : activeSubTask.startsWith('relat_') ? (
                     <RelatoriosPanel
@@ -1915,7 +2559,14 @@ export default function App() {
                       onMudarPerfil={(perf) => setPerfilUsuario(perf)}
                       onDelete={handleDeleteSolicitacao}
                       onUpdate={handleUpdateSolicitacao}
-                      onEdit={setSolicitacaoEmEdicao}
+                      onEdit={(sol) => {
+                        if (perfilUsuario === 'tecnico_infra' && sol.etapaAtual === 'cadastro') {
+                          setAtendimentoEmEdicaoDirect(sol);
+                          setActiveSubTask('novo_atendimento');
+                        } else {
+                          setSolicitacaoEmEdicao(sol);
+                        }
+                      }}
                       viewMode={viewMode}
                       onMudarViewMode={(mode) => setViewMode(mode)}
                       activeSubTask={activeSubTask}
@@ -2410,6 +3061,172 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* SUBTASK CADASTRO DE EMPRESAS */}
+                  {activeSubTask === 'cadastro_empresas' && (
+                    <div className="space-y-6 animate-in fade-in duration-200">
+                      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-3xs text-left">
+                        <h2 className="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
+                          <Building className="w-5 h-5 text-rose-650 text-rose-650 shrink-0" />
+                          Cadastro de Empresas Contratadas Pré-Homologadas (Segurança)
+                        </h2>
+                        <p className="text-xs text-slate-500 mb-6">
+                          Cadastre previamente as construtoras, engenharias e empresas licitantes autorizadas. Estas empresas estarão disponíveis para vinculação imediata nos contratos vigentes de reformas escolares no fluxo SGO.
+                        </p>
+
+                        <form onSubmit={handleCadastrarEmpresa} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Razão Social / Nome Fantasia *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={empNome}
+                              onChange={(e) => setEmpNome(e.target.value)}
+                              placeholder="ex: Construtora Mantiqueira Ltda"
+                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              CNPJ da Empresa *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={empCnpj}
+                              onChange={(e) => setEmpCnpj(e.target.value)}
+                              placeholder="ex: 00.000.000/0001-00"
+                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden font-mono"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Responsável Técnico (Engenheiro/Arquiteto)
+                            </label>
+                            <input
+                              type="text"
+                              value={empResp}
+                              onChange={(e) => setEmpResp(e.target.value)}
+                              placeholder="ex: Eng. Alberto Albuquerque"
+                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Situação Cadastral *
+                            </label>
+                            <select
+                              value={empSit}
+                              onChange={(e) => setEmpSit(e.target.value)}
+                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden cursor-pointer"
+                            >
+                              <option value="Regular">Regular (Homologada)</option>
+                              <option value="Pendente">Pendente (Falta Análise Fiscal)</option>
+                              <option value="Bloqueado">Bloqueado (Inadimplência ou Sanção)</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              Telefone de Contato
+                            </label>
+                            <input
+                              type="text"
+                              value={empTel}
+                              onChange={(e) => setEmpTel(e.target.value)}
+                              placeholder="ex: (31) 3244-9088"
+                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                              E-mail Corporativo
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="email"
+                                value={empMail}
+                                onChange={(e) => setEmpMail(e.target.value)}
+                                placeholder="ex: contato@empresa.com.br"
+                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
+                              />
+                              <button
+                                type="submit"
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer inline-flex items-center whitespace-nowrap"
+                              >
+                                Cadastrar
+                              </button>
+                            </div>
+                          </div>
+                        </form>
+                      </div>
+
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-3xs">
+                        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center text-left">
+                          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                            Empresas Cadastradas ({empresasSeguranca.length})
+                          </h3>
+                        </div>
+
+                        <div className="overflow-x-auto text-left">
+                          <table className="w-full border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase bg-slate-50">
+                                <th className="py-2.5 px-4 w-12 text-center text-slate-400">ID</th>
+                                <th className="py-2.5 px-4 text-slate-400">Empresa / Razão Social</th>
+                                <th className="py-2.5 px-4 text-slate-400">CNPJ</th>
+                                <th className="py-2.5 px-4 text-slate-400">Responsável Técnico</th>
+                                <th className="py-2.5 px-4 text-slate-400">Contato</th>
+                                <th className="py-2.5 px-4 text-center text-slate-400">Situação</th>
+                                <th className="py-2.5 px-4 text-center text-slate-400">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {empresasSeguranca.map(emp => (
+                                <tr key={emp.id} className="border-b border-slate-100 hover:bg-slate-50/20 text-xs">
+                                  <td className="py-3 px-4 font-mono font-bold text-slate-500 text-center">{emp.id}</td>
+                                  <td className="py-3 px-4 font-bold text-slate-800">🏢 {emp.nome}</td>
+                                  <td className="py-3 px-4 text-slate-500 font-mono text-[11px] font-bold">{emp.cnpj}</td>
+                                  <td className="py-3 px-4 font-medium text-slate-700">{emp.responsavelTecnico}</td>
+                                  <td className="py-3 px-4">
+                                    <div className="text-slate-500 text-[11px]">{emp.telefone}</div>
+                                    <div className="text-slate-400 text-[10px] font-mono">{emp.email}</div>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <span className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold ${
+                                      emp.situacaoCadastral === 'Regular' ? 'bg-emerald-100 text-emerald-800' :
+                                      emp.situacaoCadastral === 'Pendente' ? 'bg-amber-100 text-amber-800' :
+                                      'bg-rose-100 text-rose-800'
+                                    }`}>
+                                      {emp.situacaoCadastral}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEmpresasSeguranca(empresasSeguranca.filter(e => e.id !== emp.id));
+                                      }}
+                                      className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer p-1"
+                                      title="Remover Empresa"
+                                    >
+                                      🗑️
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
               )}
 
@@ -2546,6 +3363,39 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+              )}
+
+              {activeModule === 'central_logs' && (
+                <CentralNotificacoesLogs
+                  notifications={notifications}
+                  logs={logs}
+                  solicitacoes={solicitacoes}
+                  perfilUsuario={perfilUsuario}
+                  onSelectSolicitacao={(id, subTask) => {
+                    const sol = solicitacoes.find(s => s.id === id);
+                    if (sol) {
+                      handleSelectSolicitacao(sol);
+                      if (subTask) setActiveSubTask(subTask);
+                    }
+                  }}
+                  onMarkAsRead={(id) => {
+                    const updated = notifications.map(n => n.id === id ? { ...n, lida: true } : n);
+                    setNotifications(updated);
+                    localStorage.setItem('sgo_notifications', JSON.stringify(updated));
+                  }}
+                  onMarkAllAsRead={() => {
+                    const lidas = notifications.map(n => ({ ...n, lida: true }));
+                    setNotifications(lidas);
+                    localStorage.setItem('sgo_notifications', JSON.stringify(lidas));
+                  }}
+                  onClearNotifications={() => {
+                    setNotifications([]);
+                    localStorage.setItem('sgo_notifications', JSON.stringify([]));
+                  }}
+                  onAddSimulatedLog={(action, detail, tipo) => {
+                    registrarLog(action, detail, tipo);
+                  }}
+                />
               )}
 
             </div>

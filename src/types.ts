@@ -22,6 +22,13 @@ export interface Medicao {
   empresaCnpj?: string;
   fileName?: string;
   fotos?: string[];
+  numeroMedicao?: string | number;
+  periodoMedicao?: string;
+  responsavelMedicao?: string;
+  observacoes?: string;
+  porcentagemFisica?: number;
+  relatorioFiscalizacaoFileName?: string;
+  boletimMedicaoFileName?: string;
 }
 
 export interface Aditivo {
@@ -37,6 +44,14 @@ export interface Aditivo {
   analistaAtribuido?: string;
   numeroAditivo?: string;
   parecerConsolidado?: string;
+  
+  // Detalhamento estendido do pedido de aditivo/ajuste
+  supressao?: number;
+  reprogramacao?: 'Sim' | 'Não';
+  saldoComplementar?: 'Sim' | 'Não';
+  valorAditivo?: number;  // Valor do aditivo líquido
+  percentualContrato?: number;
+  checklistDocs?: { item: string; checked: boolean }[];
 }
 
 export interface AjustePlanilha {
@@ -59,6 +74,14 @@ export interface AjustePlanilha {
   planilhaAjusteFileSize?: string;
   planilhaAjusteUploadedAt?: string;
   parecerDore?: string;
+
+  // Detalhamento estendido do pedido de ajuste
+  supressao?: number;
+  reprogramacao?: 'Sim' | 'Não';
+  saldoComplementar?: 'Sim' | 'Não';
+  valorAditivo?: number; // Valor líquido do ajuste
+  percentualContrato?: number;
+  checklistDocs?: { item: string; checked: boolean }[];
 }
 
 export interface Solicitacao {
@@ -110,6 +133,14 @@ export interface Solicitacao {
   empresaContratada?: string;
   cnpjEmpresa?: string;
   statusContratoEmpresa?: 'Ativa' | 'Distratada';
+  contratoValorInicial?: number;
+  contratoDataAssinatura?: string;
+  contratoInicioVigencia?: string;
+  contratoFimVigencia?: string;
+  garantiaExigida?: 'Fiança Bancária' | 'Seguro Garantia' | 'Caução em Dinheiro' | 'Títulos da Dívida Pública' | 'Sem Garantia' | string;
+  garantiaValor?: number;
+  garantiaTipo?: string;
+  garantiaValidade?: string;
   empresasAnteriores?: { 
     id: string; 
     nome: string; 
@@ -175,6 +206,129 @@ export interface Solicitacao {
   planilhaMedicaoFinalFileName?: string;
   planilhaMedicaoFinalFileSize?: string;
   planilhaMedicaoFinalUploadedAt?: string;
+
+  // Validações da aba Análise de Processo
+  validacaoEscolar?: 'validado' | 'nao_validado' | 'editado';
+  motivoNaoValidacaoEscolar?: string;
+  validacaoPatrimonial?: 'validado' | 'nao_validado' | 'editado';
+  motivoNaoValidacaoPatrimonial?: string;
+  validacaoFormaOcupacao?: 'validado' | 'nao_validado' | 'editado';
+  validacaoPredioEscola?: 'validado' | 'nao_validado' | 'editado';
+  validacaoTombamento?: 'validado' | 'nao_validado' | 'editado';
+  validacaoCoabitado?: 'validado' | 'nao_validado' | 'editado';
+  validacaoTecnica?: 'validado' | 'nao_validado' | 'editado';
+  motivoNaoValidacaoTecnica?: string;
+  validacaoReferenciaDotacao?: 'validado' | 'nao_validado' | 'editado';
+  motivoNaoValidacaoReferenciaDotacao?: string;
+  observacoesAnalistaDadosGerais?: string;
+  observacoesAnalistaChecklist?: string;
+  outrosDocumentos?: DocumentoChecklist[];
+
+  // Submenu de Acompanhamento da Obra
+  diariosObra?: {
+    id: string;
+    data: string;
+    texto: string;
+    autor: string;
+    categoria?: 'Ocorrência' | 'Clima' | 'Trabalho' | 'Materiais' | 'Equipe' | 'Segurança';
+    anexoFoto?: string;
+  }[];
+  restricoesObra?: {
+    id: string;
+    descricao: string;
+    dataIdentificacao: string;
+    impacto: 'Alto' | 'Médio' | 'Baixo';
+    status: 'Ativa' | 'Resolvida';
+    previsaoResolucao?: string;
+    resolvidaEm?: string;
+    parecerResolucao?: string;
+    categoria?: 'Financeira' | 'Ambiental' | 'Técnica' | 'Climática' | 'Fornecedor' | 'Outros';
+  }[];
+  vistoriasObra?: {
+    id: string;
+    dataVistoria: string;
+    vistoriador: string;
+    laudoResumido: string;
+    resultado: 'Aprovada' | 'Aprovada com Ressalvas' | 'Reprovada';
+    fotosLaudos?: string[];
+  }[];
 }
 
 export type PerfilUsuario = 'tecnico_infra' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore';
+
+export function syncChecklistDocs(
+  documentos: DocumentoChecklist[] = [],
+  notificacao?: string,
+  formaAtendimento?: string
+): DocumentoChecklist[] {
+  let updated = [...documentos];
+
+  // 1. Handle notification proof
+  const needsNotif = notificacao && notificacao !== 'Não há notificação';
+  const hasNotif = updated.some(d => d.id === 'doc_notificacao');
+
+  if (needsNotif && !hasNotif) {
+    updated.push({
+      id: 'doc_notificacao',
+      nome: 'Comprovante da Notificação',
+      obrigatorio: true,
+      desc: 'Documento de comprovação da notificação emitida pelo Órgão Regulador.',
+      status: 'pendente'
+    });
+  } else if (!needsNotif && hasNotif) {
+    updated = updated.filter(d => d.id !== 'doc_notificacao');
+  }
+
+  // 2. Handle sem ônus resource proof
+  const needsSemOnus = formaAtendimento && formaAtendimento.toUpperCase() === 'SEM ÔNUS';
+  const hasSemOnus = updated.some(d => d.id === 'doc_recurso_sem_onus');
+
+  if (needsSemOnus && !hasSemOnus) {
+    updated.push({
+      id: 'doc_recurso_sem_onus',
+      nome: 'Comprovação de Recurso (Sem Ônus)',
+      obrigatorio: true,
+      desc: 'Documento de comprovação de recurso para atendimento sem ônus para o Estado.',
+      status: 'pendente'
+    });
+  } else if (!needsSemOnus && hasSemOnus) {
+    updated = updated.filter(d => d.id !== 'doc_recurso_sem_onus');
+  }
+
+  return updated;
+}
+
+export interface EmpresaSeguranca {
+  id: string;
+  nome: string;
+  cnpj: string;
+  responsavelTecnico?: string;
+  situacaoCadastral?: 'Pendente' | 'Regular' | 'Bloqueado' | string;
+  telefone?: string;
+  email?: string;
+}
+
+export interface SistemaLog {
+  id: string;
+  dataHora: string;
+  usuario: string;
+  perfil: string;
+  acao: string;
+  detalhe: string;
+  tipo: 'info' | 'sucesso' | 'alerta' | 'erro';
+  solicitacaoId?: string;
+  escola?: string;
+}
+
+export interface Notificacao {
+  id: string;
+  titulo: string;
+  mensagem: string;
+  dataHora: string;
+  lida: boolean;
+  tipo: 'processo_avanco' | 'processo_retrocesso' | 'aditivo_pendente' | 'ajuste_pendente' | 'sistema' | 'alerta';
+  solicitacaoId?: string;
+  escola?: string;
+}
+
+

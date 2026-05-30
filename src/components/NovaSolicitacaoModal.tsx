@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Solicitacao, DocumentoChecklist } from '../types';
+import { Solicitacao, DocumentoChecklist, syncChecklistDocs } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { X, AlertCircle, Database, FileText, CheckCircle2 } from 'lucide-react';
 
@@ -37,7 +37,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
   const [numPaf, setNumPaf] = useState('');
   const [anoEmenda, setAnoEmenda] = useState('');
   const [formaAtendimento, setFormaAtendimento] = useState('VIA CAIXA ESCOLAR');
-  const [notificacao, setNotificacao] = useState('');
+  const [notificacao, setNotificacao] = useState('Não há notificação');
   const [descricaoFolhaRosto, setDescricaoFolhaRosto] = useState('');
   const [valorPlanilha, setValorPlanilha] = useState('');
   const [iss, setIss] = useState('');
@@ -124,7 +124,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
       return;
     }
 
-    const checklistReset: DocumentoChecklist[] = CHECKLIST_PADRAO.map(doc => ({
+    const baseChecklist: DocumentoChecklist[] = CHECKLIST_PADRAO.map(doc => ({
       ...doc,
       status: 'pendente',
       fileName: undefined,
@@ -132,6 +132,8 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
       uploadedAt: undefined,
       justificativa: undefined
     }));
+
+    const checklistReset = syncChecklistDocs(baseChecklist, notificacao, formaAtendimento);
 
     const nova: Solicitacao = {
       id: `SOL-2026-${Math.floor(100 + Math.random() * 900)}`,
@@ -397,6 +399,23 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                 <option value="Coabitado com outro órgão estadual">Coabitado com outro órgão estadual</option>
                 <option value="Coabitado com outra municipal">Coabitado com outra municipal</option>
                 <option value="Coabitado com instituto federal">Coabitado com instituto federal</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5 font-sans">
+                Há alguma notificação? *
+              </label>
+              <select
+                value={notificacao || 'Não há notificação'}
+                onChange={(e) => setNotificacao(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 bg-white transition-all font-sans cursor-pointer text-slate-705 font-medium"
+              >
+                <option value="Não há notificação">Não há notificação</option>
+                <option value="Ministério Publico">Ministério Publico</option>
+                <option value="Prefeitura">Prefeitura</option>
+                <option value="Defesa Civil">Defesa Civil</option>
+                <option value="TCE">TCE</option>
               </select>
             </div>
           </div>
