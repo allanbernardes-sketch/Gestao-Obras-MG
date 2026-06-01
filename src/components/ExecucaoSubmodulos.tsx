@@ -4,7 +4,7 @@ import {
   UploadCloud, LayoutGrid, DollarSign, Calendar, MapPin, Search, CheckCircle, 
   Trash2, AlertCircle, Sparkles, User, FileText, ChevronRight, Scale, Clock,
   FileCheck, FileUp, Zap, HelpCircle, History, Info, Trash, RefreshCw, Eye,
-  TrendingUp, Edit, ClipboardCheck, Wrench, ArrowRight
+  TrendingUp, Edit, ClipboardCheck, Wrench, ArrowRight, Lock, Filter
 } from 'lucide-react';
 import { Solicitacao, Medicao, Aditivo, AjustePlanilha, PerfilUsuario, EmpresaSeguranca } from '../types';
 
@@ -15,6 +15,7 @@ interface ExecucaoSubmodulosProps {
   perfilUsuario: PerfilUsuario;
   onSelect: (sol: Solicitacao) => void;
   empresasSeguranca?: EmpresaSeguranca[];
+  setActiveSubTask?: (subTask: string) => void;
 }
 
 export default function ExecucaoSubmodulos({ 
@@ -23,7 +24,8 @@ export default function ExecucaoSubmodulos({
   onUpdate, 
   perfilUsuario, 
   onSelect,
-  empresasSeguranca = []
+  empresasSeguranca = [],
+  setActiveSubTask
 }: ExecucaoSubmodulosProps) {
   // Common state: active selected construction (defaults to first available in execution stage)
   const [selectedSolId, setSelectedSolId] = useState<string>(() => {
@@ -75,6 +77,47 @@ export default function ExecucaoSubmodulos({
   const handlePropagateUpdate = (updatedSol: Solicitacao) => {
     onUpdate(updatedSol);
     showSuccess('Alterações salvas com sucesso no banco consolidado!');
+  };
+
+  const hasContract = useMemo(() => {
+    if (!selectedSol) return false;
+    return !!selectedSol.contratoValorInicial && !!selectedSol.contratoDataAssinatura;
+  }, [selectedSol]);
+
+  const renderBlockedScreen = () => {
+    const schoolName = selectedSol?.nomeEscola || 'Obra Selecionada';
+    return (
+      <div id="contract-required-lock-gate" className="bg-white rounded-2xl border border-rose-200 p-8 shadow-sm text-center max-w-2xl mx-auto my-8 space-y-5">
+        <div className="w-16 h-16 bg-rose-50 border border-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-650 animate-pulse">
+          <Lock className="w-8 h-8 text-rose-600" />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-base font-bold text-slate-800 font-sans flex items-center justify-center gap-1.5 font-sans">
+            <span>🔒</span>
+            <span>Módulo Bloqueado — Contrato Requerido</span>
+          </h3>
+          <p className="text-xs text-slate-500 font-sans leading-relaxed">
+            De acordo com as diretrizes regulamentares da DORE no SGO, após o cadastro inicial de uma obra escolar, o <b>Contrato correspondente deve ser obrigatoriamente registrado</b>.
+          </p>
+          <p className="text-xs text-slate-500 font-sans leading-relaxed">
+            As seções de <b>Medições Físico-Financeiras</b>, <b>Termos Aditivos</b> e <b>Ajustes de Planilha</b> estão bloqueadas para o atendimento abaixo até que o respectivo contrato seja registrado e salvo.
+          </p>
+          <div className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-650 font-mono inline-block">
+            Obra sob Foco: <b className="text-slate-850">{schoolName}</b>
+          </div>
+        </div>
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setActiveSubTask && setActiveSubTask('execucao_contratos')}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition duration-150 flex items-center gap-1.5 mx-auto cursor-pointer shadow-3xs"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>👉 Ir para Gestão de Contratos de Obra</span>
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -131,37 +174,39 @@ export default function ExecucaoSubmodulos({
         </div>
 
         {/* Workspace select selector */}
-        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col md:flex-row gap-3 items-center">
-          <span className="text-xs font-black uppercase text-slate-500 font-sans tracking-wider shrink-0 flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5 text-blue-500" />
-            Obra sob Foco:
-          </span>
-          <select
-            id="foco-obra-select"
-            value={selectedSolId}
-            onChange={(e) => setSelectedSolId(e.target.value)}
-            className="flex-1 w-full text-xs font-bold p-2 border border-slate-300 rounded-xl bg-slate-50 hover:bg-white text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-3xs"
-          >
-            <option value="">-- Selecione uma Escola em Execução --</option>
-            {execSols.map(sol => (
-              <option key={sol.id} value={sol.id}>
-                {sol.nomeEscola} ({sol.municipio} • R$ {(sol.valorPlanilha || sol.valorHomologadoContratacao || 0).toLocaleString('pt-BR')})
-              </option>
-            ))}
-          </select>
+        {activeSubTask !== 'execucao_cadastro' && activeSubTask !== 'execucao_contratos' && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col md:flex-row gap-3 items-center">
+            <span className="text-xs font-black uppercase text-slate-500 font-sans tracking-wider shrink-0 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-blue-500" />
+              Obra sob Foco:
+            </span>
+            <select
+              id="foco-obra-select"
+              value={selectedSolId}
+              onChange={(e) => setSelectedSolId(e.target.value)}
+              className="flex-1 w-full text-xs font-bold p-2 border border-slate-300 rounded-xl bg-slate-50 hover:bg-white text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-3xs"
+            >
+              <option value="">-- Selecione uma Escola em Execução --</option>
+              {execSols.map(sol => (
+                <option key={sol.id} value={sol.id}>
+                  {sol.nomeEscola} ({sol.municipio} • R$ {(sol.valorPlanilha || sol.valorHomologadoContratacao || 0).toLocaleString('pt-BR')})
+                </option>
+              ))}
+            </select>
 
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-            <input
-              id="search-obras-sub"
-              type="text"
-              placeholder="Filtrar escolas..."
-              value={filtroTexto}
-              onChange={(e) => setFiltroTexto(e.target.value)}
-              className="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-            />
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+              <input
+                id="search-obras-sub"
+                type="text"
+                placeholder="Filtrar escolas..."
+                value={filtroTexto}
+                onChange={(e) => setFiltroTexto(e.target.value)}
+                className="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* SUBMODULE RENDERING ROUTER */}
@@ -175,6 +220,7 @@ export default function ExecucaoSubmodulos({
           onUpdate={handlePropagateUpdate} 
           onSelect={onSelect}
           setFocoObra={setSelectedSolId}
+          setActiveSubTask={setActiveSubTask}
         />
       )}
 
@@ -188,10 +234,12 @@ export default function ExecucaoSubmodulos({
 
       {/* 3. MEDIÇÕES */}
       {activeSubTask === 'execucao_medicoes' && (
-        <SubMedicoes 
-          currentSol={selectedSol} 
-          onUpdate={handlePropagateUpdate} 
-        />
+        hasContract ? (
+          <SubMedicoes 
+            currentSol={selectedSol} 
+            onUpdate={handlePropagateUpdate} 
+          />
+        ) : renderBlockedScreen()
       )}
 
       {/* 4. CONTRATOS */}
@@ -200,23 +248,30 @@ export default function ExecucaoSubmodulos({
           currentSol={selectedSol} 
           onUpdate={handlePropagateUpdate} 
           empresasSeguranca={empresasSeguranca}
+          todasSolicitacoes={solicitacoes}
+          selectedSolId={selectedSolId}
+          setSelectedSolId={setSelectedSolId}
         />
       )}
 
       {/* 5. ADITIVOS */}
       {activeSubTask === 'execucao_aditivos' && (
-        <SubAditivos 
-          currentSol={selectedSol} 
-          onUpdate={handlePropagateUpdate} 
-        />
+        hasContract ? (
+          <SubAditivos 
+            currentSol={selectedSol} 
+            onUpdate={handlePropagateUpdate} 
+          />
+        ) : renderBlockedScreen()
       )}
 
       {/* 6. AJUSTE */}
       {activeSubTask === 'execucao_ajustes' && (
-        <SubAjustes 
-          currentSol={selectedSol} 
-          onUpdate={handlePropagateUpdate} 
-        />
+        hasContract ? (
+          <SubAjustes 
+            currentSol={selectedSol} 
+            onUpdate={handlePropagateUpdate} 
+          />
+        ) : renderBlockedScreen()
       )}
 
       {/* 7. FISCALIZAÇÃO */}
@@ -224,6 +279,7 @@ export default function ExecucaoSubmodulos({
         <SubFiscalizacao 
           currentSol={selectedSol} 
           onUpdate={handlePropagateUpdate} 
+          solicitacoes={solicitacoes}
         />
       )}
 
@@ -243,16 +299,94 @@ export default function ExecucaoSubmodulos({
 // SUBMODULES COMPONENT IMPLEMENTATIONS
 // ==========================================================
 
+// --- HELPER TO CALCULATE ALLOCATION POINTS FOR FISCAL ENGINEERS ---
+export function getFiscalPoints(fiscalName: string, allSolicitacoes: Solicitacao[]): number {
+  if (!fiscalName) return 0;
+  // Filter active works in execution/started assigned to this fiscal
+  const activeWorks = allSolicitacoes.filter(
+    s => (s.etapaAtual === 'execucao' || s.etapaAtual === 'ordem_inicio') && 
+         s.fiscalObraAtribuido === fiscalName
+  );
+  
+  return activeWorks.reduce((acc, s) => {
+    const cls = (s.classeObra || '').toUpperCase().trim();
+    if (cls === 'IV' || cls.includes('SPECIAL') || cls.includes('MUITO ALTA') || cls === 'CLASSE IV' || cls.includes('CLASSE 4')) {
+      return acc + 4;
+    }
+    if (cls === 'III' || cls.includes('GRANDE') || cls === 'CLASSE III' || cls.includes('CLASSE 3')) {
+      return acc + 3;
+    }
+    if (cls === 'II' || cls.includes('MÉDIO') || cls.includes('MEDIO') || cls === 'CLASSE II' || cls.includes('CLASSE 2')) {
+      return acc + 2;
+    }
+    // Default to 1 point for Class I, Pequeno Porte, or undefined
+    return acc + 1;
+  }, 0);
+}
+
 // --- 1. SUB CADASTRO DE OBRAS ---
-function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, onSelect, setFocoObra }: { 
+function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, onSelect, setFocoObra, setActiveSubTask }: { 
   solicitacoes: Solicitacao[]; 
   todasSolicitacoes: Solicitacao[];
   currentSol: Solicitacao | null; 
   onUpdate: (sol: Solicitacao) => void;
   onSelect: (sol: Solicitacao) => void;
   setFocoObra: (id: string) => void;
+  setActiveSubTask?: (subTask: string) => void;
 }) {
   const [showNovoForm, setShowNovoForm] = useState(false);
+  
+  // Estados para Filtros de Pesquisa Avançados
+  const [filtroIdObra, setFiltroIdObra] = useState('todos');
+  const [filtroCodescObra, setFiltroCodescObra] = useState('todos');
+  const [filtroMunicipioObra, setFiltroMunicipioObra] = useState('todos');
+  const [filtroSreObra, setFiltroSreObra] = useState('todos');
+  const [filtroEscolaObra, setFiltroEscolaObra] = useState('todos');
+  const [filtroResponsavelObra, setFiltroResponsavelObra] = useState('todos');
+  const [filtroStatusObra, setFiltroStatusObra] = useState('todos');
+
+  // Filtragem inicial: somente processos que passaram do status de geração de PAF
+  const listProcessosObra = useMemo(() => {
+    return todasSolicitacoes.filter(s => 
+      s.etapaAtual === 'ordem_inicio' || s.etapaAtual === 'execucao' || !!s.numeroPAF
+    );
+  }, [todasSolicitacoes]);
+
+  // Opções exclusivas extraídas dos processos qualificados
+  const uniqueIds = useMemo(() => Array.from(new Set(listProcessosObra.map(s => s.id).filter(Boolean))).sort(), [listProcessosObra]);
+  const uniqueCodescs = useMemo(() => Array.from(new Set(listProcessosObra.map(s => s.codesc).filter(Boolean))).sort(), [listProcessosObra]);
+  const uniqueMunicipios = useMemo(() => Array.from(new Set(listProcessosObra.map(s => s.municipio).filter(Boolean))).sort(), [listProcessosObra]);
+  const uniqueSres = useMemo(() => Array.from(new Set(listProcessosObra.map(s => s.sre).filter(Boolean))).sort(), [listProcessosObra]);
+  const uniqueEscolas = useMemo(() => Array.from(new Set(listProcessosObra.map(s => s.nomeEscola).filter(Boolean))).sort(), [listProcessosObra]);
+  const uniqueResponsaveis = useMemo(() => Array.from(new Set(listProcessosObra.map(s => s.fiscalObraAtribuido || 'Não Definido').filter(Boolean))).sort(), [listProcessosObra]);
+
+  const getObraComputedStatus = (s: Solicitacao) => {
+    if (s.statusObra === 'Concluída') return 'Concluída';
+    if (s.statusObra === 'Paralisada') return 'Paralisada';
+    if (s.statusObra === 'Em Andamento') return 'Em execução';
+    if (s.contratoValorInicial && s.contratoDataAssinatura) {
+      return 'Em contratação Cadastro do contrato';
+    }
+    return 'Em processo de contratação';
+  };
+
+  const obrasFiltradas = useMemo(() => {
+    return listProcessosObra.filter(sol => {
+      if (filtroIdObra !== 'todos' && sol.id !== filtroIdObra) return false;
+      if (filtroCodescObra !== 'todos' && sol.codesc !== filtroCodescObra) return false;
+      if (filtroMunicipioObra !== 'todos' && sol.municipio !== filtroMunicipioObra) return false;
+      if (filtroSreObra !== 'todos' && sol.sre !== filtroSreObra) return false;
+      if (filtroEscolaObra !== 'todos' && sol.nomeEscola !== filtroEscolaObra) return false;
+      
+      const resp = sol.fiscalObraAtribuido || 'Não Definido';
+      if (filtroResponsavelObra !== 'todos' && resp !== filtroResponsavelObra) return false;
+      
+      const computedStatus = getObraComputedStatus(sol);
+      if (filtroStatusObra !== 'todos' && computedStatus !== filtroStatusObra) return false;
+      
+      return true;
+    });
+  }, [listProcessosObra, filtroIdObra, filtroCodescObra, filtroMunicipioObra, filtroSreObra, filtroEscolaObra, filtroResponsavelObra, filtroStatusObra]);
   
   // Selection of approved technical services
   const [vincularExistente, setVincularExistente] = useState(true);
@@ -377,10 +511,10 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
     setPontuacaoComplexidade(complexidadeCalculada.pontuacao);
   }, [complexidadeCalculada]);
 
-  // Filter possible approved services for import
+  // Filter possible approved services for import - only those that have been authorized and PAF generated
   const atendimentosDisponiveis = useMemo(() => {
     return todasSolicitacoes.filter(
-      s => s.etapaAtual !== 'execucao' && s.etapaAtual !== 'ordem_inicio' && s.etapaAtual !== 'cancelado'
+      s => (s.etapaAtual === 'paf' || s.etapaAtual === 'ordem_inicio') && !!s.numeroPAF
     );
   }, [todasSolicitacoes]);
 
@@ -505,44 +639,46 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-      <div className="lg:col-span-2 space-y-4">
-        
-        {/* Header toolbar for listing */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-4 rounded-xl border border-slate-200 gap-3 shadow-3xs">
-          <div>
-            <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
-              <ClipboardCheck className="w-4.5 h-4.5 text-blue-600" />
-              Obras Oficializadas (SGO Ativo)
-            </h2>
-            <p className="text-[10px] text-slate-500">Listagem de escolas com convênio ou execução técnica cadastrada</p>
-          </div>
-          <button
-            id="btn-registra-obra-obras"
-            onClick={() => setShowNovoForm(!showNovoForm)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-lg cursor-pointer transition-colors shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            Cadastrar Oficialmente Obra
-          </button>
+    <div className="space-y-6 animate-fadeIn">
+      
+      {/* Header toolbar for listing */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-2xl border border-slate-200 gap-3 shadow-3xs">
+        <div>
+          <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+            <ClipboardCheck className="w-4.5 h-4.5 text-blue-600" />
+            Obras Oficializadas (SGO Ativo)
+          </h2>
+          <p className="text-[10px] text-slate-500">Listagem de escolas com convênio ou execução técnica cadastrada em largura cheia</p>
         </div>
+        <button
+          id="btn-registra-obra-obras"
+          onClick={() => setShowNovoForm(true)}
+          className="flex items-center gap-1.5 px-3.5 py-2 text-xs text-white font-bold bg-blue-600 hover:bg-blue-700 rounded-xl cursor-pointer transition-colors shrink-0 shadow-xs"
+        >
+          <Plus className="w-4 h-4" />
+          Cadastrar Oficialmente Obra
+        </button>
+      </div>
 
-        {/* Form Wizard - New register */}
-        {showNovoForm && (
-          <form onSubmit={submitNovaObra} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 animate-scaleIn">
-            
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2.5">
-              <h3 className="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" /> 
-                Oficialização de Novo Cadastro de Obra
-              </h3>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-slate-500 font-bold">Modo:</span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-50 border border-amber-205 text-amber-700 font-bold">
-                  SGO-IMPORT-ENGINE
-                </span>
+      {/* Form Wizard - New register as a beautiful modal */}
+      {showNovoForm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-4 animate-scaleIn">
+            <form onSubmit={submitNovaObra} className="space-y-4">
+              
+              <div className="flex justify-between items-center border-b border-slate-150 pb-3">
+                <h3 className="text-[12px] font-black uppercase text-slate-800 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" /> 
+                  Oficialização de Novo Cadastro de Obra
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowNovoForm(false)}
+                  className="text-slate-400 hover:text-slate-600 text-lg font-extrabold bg-slate-100 hover:bg-slate-200 px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  ×
+                </button>
               </div>
-            </div>
 
             {/* Toggle import VS scratch */}
             <div className="bg-white p-3 rounded-xl border border-slate-200/80 grid grid-cols-2 gap-2 text-center">
@@ -781,9 +917,10 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                   </div>
                 </div>
 
-                <div>
+                <div id="wrapper-fiscal-selection" className="col-span-1 md:col-span-2">
                   <label className="text-[10px] font-bold text-slate-500 block mb-1">Definir Fiscal de Acompanhamento Técnico*</label>
                   <select
+                    id="select-fiscal-obra"
                     value={fiscalObraAtribuido}
                     onChange={(e) => setFiscalObraAtribuido(e.target.value)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden"
@@ -793,39 +930,39 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                     <option value="Eng. Marcos Pontes">Eng. Marcos Pontes (CREA 95.841/D)</option>
                     <option value="Enga. Luciana Duarte">Enga. Luciana Duarte (CREA 168.990/D)</option>
                   </select>
-                </div>
 
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Empresa Construtora Responsável</label>
-                  <input
-                    type="text"
-                    value={empresaInput}
-                    onChange={(e) => setEmpresaInput(e.target.value)}
-                    placeholder="Ex. Construtora Minas Gerais Ltda."
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-hidden"
-                  />
-                </div>
+                  {fiscalObraAtribuido && (() => {
+                    const currentPoints = getFiscalPoints(fiscalObraAtribuido, todasSolicitacoes);
+                    const incomingPoints = complexidadeCalculada.classe === 'IV' ? 4 : complexidadeCalculada.classe === 'III' ? 3 : complexidadeCalculada.classe === 'II' ? 2 : 1;
+                    const totalSimulated = currentPoints + incomingPoints;
+                    
+                    let isSuperAllocated = totalSimulated > 35;
+                    let badgeBg = isSuperAllocated 
+                      ? 'bg-rose-50 border-rose-250 text-rose-800' 
+                      : totalSimulated >= 25 
+                        ? 'bg-amber-50 border-amber-250 text-amber-850' 
+                        : 'bg-emerald-50 border-emerald-250 text-emerald-800';
+                        
+                    let dotColor = isSuperAllocated 
+                      ? 'bg-rose-600 animate-ping' 
+                      : totalSimulated >= 25 
+                        ? 'bg-amber-500' 
+                        : 'bg-emerald-500';
 
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">CNPJ da Empresa Construtora</label>
-                  <input
-                    type="text"
-                    value={cnpjInput}
-                    onChange={(e) => setCnpjInput(e.target.value)}
-                    placeholder="Ex. 12.345.678/0001-90"
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Valor Homologado da Contratação (R$)</label>
-                  <input
-                    type="number"
-                    value={valorHomologadoInput}
-                    onChange={(e) => setValorHomologadoInput(e.target.value)}
-                    placeholder="Ex. 445000"
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-mono text-emerald-800 font-bold focus:outline-hidden"
-                  />
+                    return (
+                      <div id="fiscal-allocation-semaphore-detail" className={`mt-2 p-2.5 rounded-xl border ${badgeBg} text-[10px] transition-all flex flex-col gap-1`}>
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                          <span className="uppercase tracking-wider">
+                            {isSuperAllocated ? '🚨 SUPER-ALOCADO (CRÍTICO)' : totalSimulated >= 25 ? '⚠️ ALOCAÇÃO ALTA (ATENÇÃO)' : '✅ ALOCAÇÃO REGULAR (OK)'}
+                          </span>
+                        </div>
+                        <p className="opacity-90">
+                          Este fiscal possui <strong>{currentPoints} pontos</strong> alocados em obras ativas. Com esta nova obra (Classe {complexidadeCalculada.classe}, <strong>+{incomingPoints} pts</strong>), passará a tener <strong>{totalSimulated} / 35 pontos</strong> recomendados.
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -836,6 +973,10 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                 <Calendar className="w-3.5 h-3.5 text-blue-500" />
                 Registrar Prazos da Ordem de Serviço
               </h4>
+
+              <p className="text-[10.5px] text-slate-600 leading-relaxed bg-slate-50 border-l-2 border-slate-400 p-2.5 rounded-r-lg">
+                ℹ️ <strong>Nota Técnica:</strong> O registro do prazo estimado para a ordem de serviço constitui uma estimativa de prazos a ser calculada e analisada, servindo para determinar e validar a classe de complexidade técnica da obra e estruturar o repasse adequado das diretrizes para a devida contratação da mesma.
+              </p>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
@@ -892,177 +1033,438 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                 Finalizar e Registrar
               </button>
             </div>
-          </form>
-        )}
-
-        {/* List Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {solicitacoes.map(sol => {
-            const sumMedicoes = sol.medicoes?.reduce((sum, m) => sum + m.valor, 0) || 0;
-            const percentage = (sol.valorPlanilha || 1) > 0 ? (sumMedicoes / (sol.valorPlanilha || 1)) * 100 : 0;
-            const isFocussed = currentSol?.id === sol.id;
-
-            return (
-              <div 
-                key={sol.id} 
-                className={`bg-white rounded-2xl border p-4 hover:shadow-md transition-all relative ${
-                  isFocussed ? 'ring-2 ring-blue-500 border-transparent shadow-xs' : 'border-slate-200'
-                }`}
-              >
-                <div className="flex justify-between items-start gap-2 mb-2">
-                  <span className="text-[9px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-bold uppercase">
-                    CODESC {sol.codesc}
-                  </span>
-                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase ${
-                    sol.statusObra === 'Em Andamento' ? 'bg-amber-50 text-amber-700 border border-amber-200/50' : 
-                    sol.statusObra === 'Concluída' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/50' :
-                    sol.statusObra === 'Paralisada' ? 'bg-rose-50 text-rose-700 border border-rose-200/50' :
-                    'bg-slate-50 text-slate-500 border border-slate-200'
-                  }`}>
-                    {sol.statusObra || 'Não Iniciada'}
-                  </span>
-                </div>
-
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-tight line-clamp-2 min-h-[32px]">
-                  {sol.nomeEscola}
-                </h3>
-
-                <div className="flex items-center gap-1.5 mt-2 mb-3 text-[10px] text-slate-500">
-                  <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span>{sol.municipio} • {sol.sre}</span>
-                </div>
-
-                {/* Progress bar info */}
-                <div className="space-y-1 mb-4">
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-slate-400">Progresso Físico</span>
-                    <span className="font-mono font-bold text-slate-800">{percentage.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        percentage > 75 ? 'bg-emerald-500' :
-                        percentage > 35 ? 'bg-amber-500' : 'bg-blue-500'
-                      }`}
-                      style={{ width: `${Math.min(100, percentage)}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Card footer details and primary actions */}
-                <div className="flex justify-between items-center pt-3 @border-t border-slate-50">
-                  <div className="text-left">
-                    <div className="text-[9px] text-slate-400 uppercase font-black">Empresa Contratada</div>
-                    <div className="text-[10px] text-slate-700 font-bold truncate max-w-[120px]">{sol.empresaContratada || 'Aguardando Ordem'}</div>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setFocoObra(sol.id)}
-                      className="px-2.5 py-1 text-[9.5px] font-extrabold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer"
-                    >
-                      Focalizar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(sol)}
-                      className="px-2.5 py-1 text-[9.5px] font-extrabold text-white bg-slate-800 hover:bg-slate-900 rounded-lg cursor-pointer flex items-center gap-1"
-                    >
-                      <Eye className="w-3 h-3" /> Abrir Dossiê
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+            </form>
+          </div>
         </div>
+      )}
+
+        {/* Filtros de Pesquisa (Divididos) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-3xs mb-4 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4.5 h-4.5 text-blue-600" />
+              <span className="text-xs font-black uppercase text-slate-700 tracking-wider font-sans">
+                Filtros de Pesquisa
+              </span>
+            </div>
+            {(filtroIdObra !== 'todos' || filtroCodescObra !== 'todos' || filtroMunicipioObra !== 'todos' || filtroSreObra !== 'todos' || filtroEscolaObra !== 'todos' || filtroResponsavelObra !== 'todos' || filtroStatusObra !== 'todos') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFiltroIdObra('todos');
+                  setFiltroCodescObra('todos');
+                  setFiltroMunicipioObra('todos');
+                  setFiltroSreObra('todos');
+                  setFiltroEscolaObra('todos');
+                  setFiltroResponsavelObra('todos');
+                  setFiltroStatusObra('todos');
+                }}
+                className="text-[11px] text-blue-605 hover:text-blue-800 hover:underline font-bold transition duration-150 cursor-pointer"
+              >
+                Limpar Filtros
+              </button>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            {/* ID de Obra */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">ID de Obra</label>
+              <select
+                value={filtroIdObra}
+                onChange={(e) => setFiltroIdObra(e.target.value)}
+                className="text-[11px] p-2 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer w-full text-ellipsis overflow-hidden"
+              >
+                <option value="todos">Todos</option>
+                {uniqueIds.map(id => (
+                  <option key={id} value={id}>{id}</option>
+                ))}
+              </select>
+            </div>
+            
+            {/* CODESC */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">CODESC</label>
+              <select
+                value={filtroCodescObra}
+                onChange={(e) => setFiltroCodescObra(e.target.value)}
+                className="text-[11px] p-2 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer w-full text-ellipsis overflow-hidden"
+              >
+                <option value="todos">Todos</option>
+                {uniqueCodescs.map(codesc => (
+                  <option key={codesc} value={codesc}>{codesc}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Município */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Município</label>
+              <select
+                value={filtroMunicipioObra}
+                onChange={(e) => setFiltroMunicipioObra(e.target.value)}
+                className="text-[11px] p-2 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer w-full text-ellipsis overflow-hidden"
+              >
+                <option value="todos">Todos</option>
+                {uniqueMunicipios.map(muni => (
+                  <option key={muni} value={muni}>{muni}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Regional (SRE) */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Regional (SRE)</label>
+              <select
+                value={filtroSreObra}
+                onChange={(e) => setFiltroSreObra(e.target.value)}
+                className="text-[11px] p-2 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer w-full text-ellipsis overflow-hidden"
+              >
+                <option value="todos">Todos</option>
+                {uniqueSres.map(sre => (
+                  <option key={sre} value={sre}>{sre}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Escola */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Escola</label>
+              <select
+                value={filtroEscolaObra}
+                onChange={(e) => setFiltroEscolaObra(e.target.value)}
+                className="text-[11px] p-2 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer w-full text-ellipsis overflow-hidden"
+              >
+                <option value="todos">Todos</option>
+                {uniqueEscolas.map(esc => (
+                  <option key={esc} value={esc}>{esc}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Responsável */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Responsável (Fiscal)</label>
+              <select
+                value={filtroResponsavelObra}
+                onChange={(e) => setFiltroResponsavelObra(e.target.value)}
+                className="text-[11px] p-2 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer w-full text-ellipsis overflow-hidden"
+              >
+                <option value="todos">Todos</option>
+                {uniqueResponsaveis.map(resp => (
+                  <option key={resp} value={resp}>{resp}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Status</label>
+              <select
+                value={filtroStatusObra}
+                onChange={(e) => setFiltroStatusObra(e.target.value)}
+                className="text-[11px] p-2 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer w-full text-ellipsis overflow-hidden"
+              >
+                <option value="todos">Todos</option>
+                <option value="Em processo de contratação">Em processo de contratação</option>
+                <option value="Em contratação Cadastro do contrato">Em contratação Cadastro do contrato</option>
+                <option value="Em execução">Em execução</option>
+                <option value="Paralisada">Paralisada</option>
+                <option value="Concluída">Concluída</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* List Table (Modo de Lista) */}
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-3xs">
+          <div className="p-3.5 bg-slate-50/50 border-b border-slate-200 flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-550 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-blue-600" />
+              Relação de Obras Cadastradas ({obrasFiltradas.length})
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50/20 border-b border-slate-200 text-slate-500 font-extrabold uppercase tracking-wider text-[9px] h-11">
+                  <th className="py-2.5 px-4 font-sans font-bold whitespace-nowrap">ID de Obra</th>
+                  <th className="py-2.5 px-4 font-sans font-bold whitespace-nowrap">CODESC</th>
+                  <th className="py-2.5 px-4 font-sans font-bold whitespace-nowrap">Município</th>
+                  <th className="py-2.5 px-4 font-sans font-bold whitespace-nowrap">Regional (SRE)</th>
+                  <th className="py-2.5 px-4 font-sans font-bold whitespace-nowrap">Escola</th>
+                  <th className="py-2.5 px-4 font-sans font-bold whitespace-nowrap">Responsável</th>
+                  <th className="py-2.5 px-4 font-sans font-bold text-center whitespace-nowrap">Status</th>
+                  <th className="py-2.5 px-4 font-sans font-bold text-right whitespace-nowrap">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {obrasFiltradas.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-8 text-slate-400 font-semibold text-xs">
+                      Não há nenhuma obra cadastrada que corresponda aos filtros de pesquisa.
+                    </td>
+                  </tr>
+                ) :
+                  obrasFiltradas.map(sol => {
+                    const computedStatus = getObraComputedStatus(sol);
+                    const isFocussed = currentSol?.id === sol.id;
+
+                    return (
+                      <tr 
+                        key={sol.id} 
+                        onClick={() => {
+                          setFocoObra(sol.id);
+                          if (setActiveSubTask) {
+                            setActiveSubTask('execucao_acompanhamento');
+                          }
+                        }}
+                        className={`hover:bg-slate-50/90 transition-all cursor-pointer group ${
+                          isFocussed ? 'bg-blue-50/30' : ''
+                        }`}
+                        title="Clique para ir para o Acompanhamento da Obra"
+                      >
+                        {/* 1. ID de Obra */}
+                        <td className="py-3 px-4 font-mono font-bold text-blue-700 text-[11px] whitespace-nowrap">
+                          {sol.id}
+                        </td>
+
+                        {/* 2. CODESC */}
+                        <td className="py-3 px-4 font-mono text-slate-700 font-semibold text-[11px] whitespace-nowrap">
+                          {sol.codesc || '---'}
+                        </td>
+
+                        {/* 3. Município */}
+                        <td className="py-3 px-4 text-slate-800 font-bold font-sans text-[11.5px] uppercase whitespace-nowrap">
+                          {sol.municipio || '---'}
+                        </td>
+
+                        {/* 4. Regional (SRE) */}
+                        <td className="py-3 px-4 text-slate-500 font-bold font-sans text-[10.5px] uppercase whitespace-nowrap">
+                          {sol.sre || '---'}
+                        </td>
+
+                        {/* 5. Escola */}
+                        <td className="py-3 px-4">
+                          <div className="font-extrabold text-slate-850 uppercase text-[11px] leading-tight line-clamp-1 max-w-[180px]">
+                            {sol.nomeEscola}
+                          </div>
+                        </td>
+
+                        {/* 6. Responsável (Fiscal de obra) */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          {sol.fiscalObraAtribuido ? (
+                            <span className="font-bold text-slate-700 text-xs">
+                              {sol.fiscalObraAtribuido}
+                            </span>
+                          ) : (
+                            <span className="text-amber-600 font-medium italic text-[11px]">
+                              Não Definido
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 7. Status */}
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <span className={`text-[9.5px] font-black px-2.5 py-1.5 rounded-full uppercase tracking-wider inline-block ${
+                            computedStatus === 'Em processo de contratação' ? 'bg-blue-50 text-blue-750 border border-blue-200' :
+                            computedStatus === 'Em contratação Cadastro do contrato' ? 'bg-purple-50 text-purple-755 border border-purple-200' :
+                            computedStatus === 'Em execução' ? 'bg-amber-50 text-amber-705 border border-amber-205' :
+                            computedStatus === 'Paralisada' ? 'bg-rose-50 text-rose-705 border border-rose-205' :
+                            computedStatus === 'Concluída' ? 'bg-emerald-50 text-emerald-755 border border-emerald-250' :
+                            'bg-slate-50 text-slate-500 border border-slate-205'
+                          }`}>
+                            {computedStatus}
+                          </span>
+                        </td>
+
+                        {/* 8. Ação */}
+                        <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setFocoObra(sol.id)}
+                              className="px-2 py-1 text-[9.5px] font-extrabold text-blue-650 bg-blue-50 hover:bg-blue-105 rounded-lg cursor-pointer transition"
+                            >
+                              Focalizar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFocoObra(sol.id);
+                                if (setActiveSubTask) {
+                                  let targetSubTask = 'execucao_acompanhamento';
+                                  if (computedStatus === 'Em processo de contratação') {
+                                    targetSubTask = 'execucao_cadastro';
+                                  } else if (computedStatus === 'Em contratação Cadastro do contrato') {
+                                    targetSubTask = 'execucao_contratos';
+                                  } else if (computedStatus === 'Em execução' || computedStatus === 'Paralisada' || computedStatus === 'Concluída') {
+                                    targetSubTask = 'execucao_acompanhamento';
+                                  }
+                                  setActiveSubTask(targetSubTask);
+                                }
+                              }}
+                              className="px-2.5 py-1 text-[9.5px] font-extrabold text-white bg-[#13264d] hover:bg-[#1f3c75] rounded-lg cursor-pointer flex items-center gap-1 transition-all"
+                            >
+                              Acompanhar →
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      
+      {/* Obra sob Foco Selector - Moved here */}
+      <div id="filtro-foco-card" className="bg-white rounded-2xl border border-slate-205 p-5 flex flex-col sm:flex-row items-center gap-3.5 mt-6 mb-4 shadow-3xs animate-fadeIn">
+        <span className="text-xs font-black uppercase text-slate-555 font-sans tracking-wider shrink-0 flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-blue-600" />
+          Foco da Ficha de Cadastro:
+        </span>
+        <select
+          id="foco-obra-select-ficha"
+          value={currentSol?.id || ''}
+          onChange={(e) => setFocoObra(e.target.value)}
+          className="flex-1 w-full text-xs font-bold p-2.5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-3xs transition-all text-ellipsis"
+        >
+          <option value="">-- Selecione uma Escola para abrir a Ficha Detalhada --</option>
+          {listProcessosObra.map(sol => (
+            <option key={sol.id} value={sol.id}>
+              {sol.id} - {sol.nomeEscola} ({sol.municipio} • R$ {(sol.valorPlanilha || sol.valorHomologadoContratacao || 0).toLocaleString('pt-BR')})
+            </option>
+          ))}
+        </select>
+        {currentSol && (
+          <button
+            id="foco-obra-clear-ficha-btn"
+            onClick={() => setFocoObra('')}
+            className="text-[10.5px] text-rose-650 hover:text-white hover:bg-rose-600 font-extrabold px-3.5 py-2 rounded-xl border border-rose-200 hover:border-transparent transition-all duration-150 cursor-pointer whitespace-nowrap self-stretch sm:self-auto text-center"
+          >
+            Limpar Foco ×
+          </button>
+        )}
       </div>
 
-      {/* Selected work detailed overview in CADASTRO subtask */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-3xs">
-        <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-3">
-          <Info className="w-4 h-4 text-blue-500" />
-          Ficha do Cadastro Consolidado
-        </h2>
-        
-        {currentSol ? (
-          <div className="space-y-4 font-sans">
-            <div>
-              <span className="text-[9.5px] text-slate-400 uppercase font-extrabold">Unidade Escolar</span>
-              <p className="text-xs font-bold text-slate-800 uppercase">{currentSol.nomeEscola}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Início Real</span>
-                <p className="font-bold text-slate-700 font-mono">{currentSol.dataOrdemInicio || 'Aguardando Ordem'}</p>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Previsão Término</span>
-                <p className="font-bold text-slate-700 font-mono">{currentSol.previsaoTerminoObra || '180 dias'}</p>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Classificação</span>
-                <p className="font-bold text-slate-700">{currentSol.classeObra || 'Pequeno Porte'}</p>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">Superintendência</span>
-                <p className="font-bold text-slate-700 uppercase">{currentSol.sre}</p>
-              </div>
-            </div>
-
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60 space-y-2">
-              <span className="text-[9.5px] text-slate-500 font-black uppercase tracking-wider block">Prazos & Responsabilidade</span>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Duração:</span>
-                <span className="font-semibold text-slate-900">{currentSol.duracaoObraMeses || 6} Meses</span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Complexidade:</span>
-                <span className="font-bold text-amber-600">Grau {currentSol.pontuacaoComplexidade || 2}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Fiscal Responsável:</span>
-                <span className="font-semibold text-slate-800">{currentSol.fiscalObraAtribuido || 'Não Definido'}</span>
-              </div>
-            </div>
-
-            <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-2">
-              <span className="text-[9.5px] text-emerald-800 font-black uppercase tracking-wider block">Dados Financeiros Vigentes</span>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Valor Homologado:</span>
-                <span className="font-bold text-emerald-800 font-mono">
-                  R$ {(currentSol.valorHomologadoContratacao || currentSol.valorPlanilha || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-500">Dotação de PAF:</span>
-                <span className="font-bold text-indigo-700 font-mono">{currentSol.numeroPAF || 'Não Consta'}</span>
-              </div>
-            </div>
-
+      {/* Selected work detailed overview in CADASTRO subtask - Horizontally rearranged */}
+      {currentSol ? (
+        <div id="ficha-consolidado-card" className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-3xs animate-fadeIn">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+              <Info className="w-4 h-4 text-blue-500" />
+              Ficha do Cadastro Consolidado: <span className="text-blue-700 font-mono text-[13px] font-black ml-1 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-100">{currentSol.id}</span>
+            </h2>
             <button
-              type="button"
-              onClick={() => onSelect(currentSol)}
-              className="w-full text-center px-4 py-2.5 text-xs text-white font-black uppercase bg-slate-800 hover:bg-slate-900 rounded-xl cursor-pointer transition-colors"
+              id="clear-foco-ficha-header-btn"
+              onClick={() => setFocoObra('')}
+              className="text-[10px] text-slate-500 hover:text-slate-700 font-bold bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-xl transition cursor-pointer"
             >
-              Exibir Fluxo Completo Detalhado
+              Limpar Foco ×
             </button>
           </div>
-        ) : (
-          <div className="text-center py-10 text-slate-400">
-            <Building2 className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-            <p className="text-xs font-semibold">Selecione uma escola ao lado para visualizar o cadastro consolidado.</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 font-sans">
+            {/* Col 1: Escola / Identificação */}
+            <div className="space-y-3 pb-3 md:pb-0 md:border-r border-slate-100 pr-2">
+              <div>
+                <span className="text-[9.5px] text-slate-450 uppercase font-extrabold block mb-0.5 font-sans">Unidade Escolar</span>
+                <p className="text-xs font-black text-slate-850 uppercase leading-snug">{currentSol.nomeEscola}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[8.5px] text-slate-404 uppercase font-bold block">CODESC</span>
+                  <p className="text-[11px] font-mono font-bold text-slate-700">{currentSol.codesc || '---'}</p>
+                </div>
+                <div>
+                  <span className="text-[8.5px] text-slate-404 uppercase font-bold block">Regional (SRE)</span>
+                  <p className="text-[10px] font-bold text-slate-600 uppercase truncate">{currentSol.sre}</p>
+                </div>
+              </div>
+              <div>
+                <span className="text-[8.5px] text-slate-404 uppercase font-bold block">Município</span>
+                <p className="text-xs font-bold text-slate-800 uppercase">{currentSol.municipio || '---'}</p>
+              </div>
+            </div>
+
+            {/* Col 2: Prazos e Cronograma */}
+            <div className="space-y-3 pb-3 md:pb-0 md:border-r border-slate-100 pr-2">
+              <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider block border-b border-slate-100 pb-1">Cronograma</span>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Início Real</span>
+                  <p className="font-bold text-slate-700 font-mono text-[11px]">{currentSol.dataOrdemInicio || 'Aguardando Ordem'}</p>
+                </div>
+                <div>
+                  <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Duração</span>
+                  <p className="font-bold text-slate-750 text-[11px]">{currentSol.duracaoObraMeses || 6} Meses</p>
+                </div>
+                <div>
+                  <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Previsão Término</span>
+                  <p className="font-bold text-slate-705 font-mono text-[11px]">{currentSol.previsaoTerminoObra || '180 dias'}</p>
+                </div>
+                <div>
+                  <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Classificação</span>
+                  <p className="font-bold text-slate-705 text-[11px]">{currentSol.classeObra || 'Pequeno Porte'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Col 3: Responsabilidades e Equipes */}
+            <div className="space-y-2.5 p-3.5 bg-slate-50/80 rounded-xl border border-slate-205/60 flex flex-col justify-between">
+              <span className="text-[9.5px] text-slate-550 font-black uppercase tracking-wider block border-b border-slate-200/50 pb-1">Responsabilidade Técnica</span>
+              <div className="space-y-1.5 text-[11px] flex-1 mt-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-505 animate-pulse">Fiscal Responsável:</span>
+                  <span className="font-bold text-slate-800">{currentSol.fiscalObraAtribuido || 'Não Definido'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-505 block">Complexidade:</span>
+                  <span className="font-black text-amber-600 font-sans">Grau {currentSol.pontuacaoComplexidade || 2}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-505 block truncate max-w-[100px]">Empresa:</span>
+                  <span className="font-bold text-slate-750 truncate max-w-[124px]" title={currentSol.empresaContratada || 'Construtora do Estado S.A.'}>{currentSol.empresaContratada || 'Construtora do Estado S.A.'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Col 4: Dados Financeiros / Ação Principal */}
+            <div className="space-y-2.5 p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-110/65 flex flex-col justify-between">
+              <div>
+                <span className="text-[9.5px] text-emerald-800 font-black uppercase tracking-wider block border-b border-emerald-200/40 pb-1">Dados Financeiros Vigentes</span>
+                <div className="space-y-1.5 text-[11px] mt-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-550">Valor Homologado:</span>
+                    <span className="font-bold text-emerald-800 font-mono">
+                      R$ {(currentSol.valorHomologadoContratacao || currentSol.valorPlanilha || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-555">Dotação de PAF:</span>
+                    <span className="font-bold text-indigo-700 font-mono">{currentSol.numeroPAF || 'Não Consta'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div id="ficha-placeholder-card" className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-6 text-center text-slate-400 transition animate-fadeIn">
+          <Building2 className="w-8 h-8 mx-auto text-slate-300 mb-1.5" />
+          <p className="text-xs font-bold text-slate-650 uppercase tracking-widest font-sans">Ficha do Cadastro Consolidado</p>
+          <p className="text-[10px] text-slate-450 mt-0.5">Selecione uma obra listada em nossa planilha acima clicando na linha correspondente para abrir o consolidado de prazos, finanças e responsabilidade técnica.</p>
+        </div>
+      )}
     </div>
   );
 }
 
 // --- 2. SUB ACOMPANHAMENTO DE EXECUÇÃO ---
 function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void }) {
-  const [activeTab, setActiveTab2] = useState<'dashboard' | 'diario' | 'vistorias' | 'restricoes'>('dashboard');
+  const [activeTab, setActiveTab2] = useState<'dashboard' | 'vistorias' | 'restricoes'>('dashboard');
 
   // Dashboard states
   const [novoStatus, setNovoStatus] = useState<'Não Iniciada' | 'Em Andamento' | 'Paralisada' | 'Concluída'>('Não Iniciada');
@@ -1078,6 +1480,8 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
   const [vistoVistoriador, setVistoVistoriador] = useState('');
   const [vistoResultado, setVistoResultado] = useState<'Aprovada' | 'Aprovada com Ressalvas' | 'Reprovada'>('Aprovada');
   const [vistoLaudoResumido, setVistoLaudoResumido] = useState('');
+  const [relatorioVisitaFile, setRelatorioVisitaFile] = useState<{ name: string; size: string } | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // Restrições states
   const [restricaoDesc, setRestricaoDesc] = useState('');
@@ -1109,8 +1513,8 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
   ];
 
   const listVistorias = currentSol.vistoriasObra || [
-    { id: 'v-1', dataVistoria: '2026-05-20', vistoriador: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', laudoResumido: 'Instalações hidráulicas testadas em pressão interna e aprovadas sem vazamentos ou infiltrações registradas de forma crônica.', resultado: 'Aprovada' as const },
-    { id: 'v-2', dataVistoria: '2026-05-10', vistoriador: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', laudoResumido: 'Alvenaria com pequenas irregularidades pontuais de esquadro no bloco B, construtora orientada a efetuar correções físicas imediatas.', resultado: 'Aprovada com Ressalvas' as const }
+    { id: 'v-1', dataVistoria: '2026-05-20', vistoriador: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', laudoResumido: 'Instalações hidráulicas testadas em pressão interna e aprovadas sem vazamentos ou infiltrações registradas de forma crônica.', resultado: 'Relatório Emitido' as any, nomeRelatorio: 'relatorio_visita_hidraulica_v1.pdf', tamanhoRelatorio: '1.4 MB' },
+    { id: 'v-2', dataVistoria: '2026-05-10', vistoriador: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', laudoResumido: 'Alvenaria com pequenas irregularidades pontuais de esquadro no bloco B, construtora orientada a efetuar correções físicas imediatas.', resultado: 'Relatório Emitido' as any, nomeRelatorio: 'laudo_vistoria_alvenaria_v2.pdf', tamanhoRelatorio: '2.1 MB' }
   ];
 
   const listRestricoes = currentSol.restricoesObra || [
@@ -1167,7 +1571,9 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
       dataVistoria: vistoriaData,
       vistoriador: vistoVistoriador || 'Engenheiro Responsável',
       laudoResumido: vistoLaudoResumido,
-      resultado: vistoResultado
+      resultado: 'Relatório Emitido' as any,
+      nomeRelatorio: relatorioVisitaFile ? relatorioVisitaFile.name : undefined,
+      tamanhoRelatorio: relatorioVisitaFile ? relatorioVisitaFile.size : undefined
     };
 
     const updated = {
@@ -1177,6 +1583,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
 
     onUpdate(updated);
     setVistoLaudoResumido('');
+    setRelatorioVisitaFile(null);
   };
 
   const deletarVistoria = (id: string) => {
@@ -1269,19 +1676,6 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
 
         <button
           type="button"
-          onClick={() => setActiveTab2('diario')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-            activeTab === 'diario'
-              ? 'bg-blue-600 text-white shadow-3xs'
-              : 'text-slate-600 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <ClipboardList className="w-4 h-4" />
-          Diário de Obra
-        </button>
-
-        <button
-          type="button"
           onClick={() => setActiveTab2('vistorias')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
             activeTab === 'vistorias'
@@ -1314,17 +1708,20 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
 
       {/* DASHBOARD TAB CONTENT */}
       {activeTab === 'dashboard' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-5">
+        <div className="space-y-6">
+          
+          {/* Top Status and Progress KPIs */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
             {/* Circular progress card */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4 text-left">
               <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
                 <HardHat className="w-4 h-4 text-amber-500 animate-pulse" />
                 Avanço Físico-Financeiro Consolidado
               </h3>
 
               <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-200/40 flex items-center gap-3">
-                <AlertCircle className="w-4.5 h-4.5 text-amber-600 shrink-0" />
+                <AlertCircle className="w-4.5 h-4.5 text-amber-600 shrink-0 animate-bounce" />
                 <p className="text-[11px] text-amber-900 leading-normal font-sans font-medium">
                   <strong>Controle Gerencial DORE:</strong> A porcentagem de avanço físico mostrada no painel é calculada em conformidade com o consolidado das medições físico-financeiras enviadas e homologadas.
                 </p>
@@ -1364,255 +1761,341 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
             </div>
 
             {/* Change progress status form */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-              <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5 border-b border-slate-50 pb-2">
-                <Scale className="w-4 h-4 text-blue-500" /> Atualizar Situação Operacional da Obra
-              </h3>
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4 text-left flex flex-col justify-between">
+              <div>
+                <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5 border-b border-slate-50 pb-2 mb-3">
+                  <Scale className="w-4 h-4 text-blue-500" /> Atualizar Situação Operacional da Obra
+                </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">Status da Obra</label>
-                  <select
-                    value={novoStatus}
-                    onChange={(e) => setNovoStatus(e.target.value as any)}
-                    className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="Não Iniciada">Não Iniciada</option>
-                    <option value="Em Andamento">Em Andamento</option>
-                    <option value="Paralisada">Paralisada</option>
-                    <option value="Concluída">Concluída</option>
-                  </select>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">Status da Obra</label>
+                    <select
+                      value={novoStatus}
+                      onChange={(e) => setNovoStatus(e.target.value as any)}
+                      className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="Não Iniciada">Não Iniciada</option>
+                      <option value="Em Andamento">Em Andamento</option>
+                      <option value="Paralisada">Paralisada</option>
+                      <option value="Concluída">Concluída</option>
+                    </select>
+                  </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">Nota Pública do Diário / Progresso</label>
-                  <input
-                    type="text"
-                    placeholder="Ex. Fundações finalizadas, iniciando alvenaria estrutural..."
-                    value={descricaoProgresso}
-                    onChange={(e) => setDescricaoProgresso(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
-                  />
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">Nota Pública / Justificativa</label>
+                    <input
+                      type="text"
+                      placeholder="Ex. Fundações finalizadas, iniciando alvenaria estrutural..."
+                      value={descricaoProgresso}
+                      onChange={(e) => setDescricaoProgresso(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-end pt-1">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-600 font-sans mt-3">
+                <span className="font-extrabold text-slate-700 block mb-0.5">ℹ️ Sincronização em tempo real SGO</span>
+                Qualquer modificação de status será propagada instantaneamente para a superintendência regional (SRE) e para o painel consolidado da secretaria de educação.
+              </div>
+
+              <div className="flex justify-end pt-3">
                 <button
                   type="button"
                   onClick={updateObraStatus}
-                  className="px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 rounded-xl cursor-pointer shadow-3xs"
+                  className="w-full md:w-auto px-6 py-3 text-xs font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 rounded-xl cursor-pointer shadow-3xs transition-all"
                 >
                   Registrar Alteração de Status
                 </button>
               </div>
             </div>
+
           </div>
 
-          {/* Sidebar milestones */}
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs space-y-4">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2.5">
-                <Clock className="w-4 h-4 text-indigo-500" /> Cronograma de Marcos Físicos
+          {/* MAIN DYNAMIC BENTO GRID - SUMMARY OF EVERYTHING */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* 1. ATENDIMENTO E DADOS DA OBRA */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs text-left space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                <FileText className="w-4 h-4 text-indigo-500" /> Dossiê Técnico do Atendimento
               </h3>
-
-              <div className="space-y-6 relative pl-3.5 border-l border-slate-200/80 ml-2 py-2">
-                {/* Milestone 1 */}
-                <div className="relative">
-                  <div className="absolute -left-[23px] top-0.5 bg-blue-600 rounded-full w-4 h-4 border-2 border-white shadow-xs animate-pulse" />
-                  <div className="font-sans text-left">
-                    <div className="text-[10px] text-blue-600 font-extrabold uppercase">Março 1 • Autorizado</div>
-                    <h4 className="text-xs font-bold text-slate-800">Assinatura de Ordem de Início</h4>
-                    <p className="text-[10.5px] text-slate-500 mt-0.5">Empresas e fiscais credenciados para vistorias prévias.</p>
-                  </div>
-                </div>
-
-                {/* Milestone 2 */}
-                <div className="relative">
-                  <div className={`absolute -left-[23px] top-0.5 rounded-full w-4 h-4 border-2 border-white shadow-xs ${
-                    safePercent > 0 ? 'bg-amber-500' : 'bg-slate-300'
-                  }`} />
-                  <div className="font-sans text-left">
-                    <div className="text-[10px] text-amber-600 font-extrabold uppercase">Março 2 • Em Execução</div>
-                    <h4 className="text-xs font-bold text-slate-800">Avanço Físico Intermediário</h4>
-                    <p className="text-[10.5px] text-slate-500 mt-0.5">Lançamento sistemático das medições estruturais de campo.</p>
-                  </div>
-                </div>
-
-                {/* Milestone 3 */}
-                <div className="relative">
-                  <div className={`absolute -left-[23px] top-0.5 rounded-full w-4 h-4 border-2 border-white shadow-xs ${
-                    safePercent >= 100 ? 'bg-emerald-500' : 'bg-slate-300'
-                  }`} />
-                  <div className="font-sans text-left">
-                    <div className="text-[10px] text-emerald-600 font-extrabold uppercase">Março 3 • Conclusão</div>
-                    <h4 className="text-xs font-bold text-slate-800">Laudo Técnico Conclusivo</h4>
-                    <p className="text-[10.5px] text-slate-500 mt-0.5">Vistoria geral e emissão do termo de recebimento definitivo.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick school/work card overview */}
-            <div className="bg-gradient-to-br from-indigo-50/80 to-blue-50/40 border border-slate-205 p-5 rounded-2xl text-left space-y-3">
-              <h4 className="text-[11px] font-black uppercase tracking-wider text-indigo-900 font-mono">Dossiê de Campo</h4>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between border-b border-indigo-100/45 py-1">
-                  <span className="text-slate-500">Município</span>
-                  <span className="font-extrabold text-slate-800">{currentSol.municipio}</span>
-                </div>
-                <div className="flex justify-between border-b border-indigo-100/45 py-1">
-                  <span className="text-slate-500">SRE Regional</span>
-                  <span className="font-extrabold text-slate-800">{currentSol.sre}</span>
-                </div>
-                <div className="flex justify-between border-b border-indigo-100/45 py-1">
-                  <span className="text-slate-500">Empresa Contratada</span>
-                  <span className="font-extrabold text-slate-800 truncate max-w-44" title={currentSol.empresaContratada}>
-                    {currentSol.empresaContratada || 'Não informada'}
+              
+              <div className="grid grid-cols-2 gap-4 text-xs font-medium">
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Nome da Escola</span>
+                  <span className="font-extrabold text-slate-800 block truncate" title={currentSol.nomeEscola}>
+                    {currentSol.nomeEscola}
                   </span>
                 </div>
-                <div className="flex justify-between py-1">
-                  <span className="text-slate-500">Fiscal de Obra</span>
-                  <span className="font-extrabold text-slate-800 text-blue-700">{currentSol.fiscalObraAtribuido || 'Não atribuído'}</span>
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Código INEP / Código</span>
+                  <span className="font-mono font-bold text-slate-700">{currentSol.codesc || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Município</span>
+                  <span className="font-bold text-slate-800">{currentSol.municipio}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">SRE Regional</span>
+                  <span className="font-bold text-indigo-700">{currentSol.sre}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Tipo de Atendimento</span>
+                  <span className="font-semibold text-slate-700">{currentSol.tipoAtendimento || currentSol.tipo || 'Obras Escolares'}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Notificação / PAF</span>
+                  <span className="font-semibold text-slate-700">{currentSol.numeroPAF || currentSol.numPaf || 'Não Informado'}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-[9px] font-bold text-slate-400 block uppercase">Fiscal Responsável Designado</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-[10.5px] font-black rounded-lg mt-1 font-sans">
+                    <User className="w-3.5 h-3.5" />
+                    {currentSol.fiscalObraAtribuido || 'Aguardando Atribuição DORE'}
+                  </span>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* DIÁRIO DE OBRA TAB CONTENT */}
-      {activeTab === 'diario' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* List of diaries */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs text-left">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-50 pb-3 mb-4">
-                <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                    Registros do Diário de Ocorrencia
-                  </h3>
-                  <p className="text-[10px] text-slate-400">Total de {filteredDiarios.length} lançamentos de controle</p>
+            {/* 2. VALORES E ORÇAMENTOS */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs text-left space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                <DollarSign className="w-4 h-4 text-emerald-500" /> Balanço Financeiro da Execução
+              </h3>
+
+              <div className="space-y-3.5 text-xs">
+                <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200/50">
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Planilha Base de Referência</span>
+                    <strong className="text-slate-800 font-mono block">
+                      R$ {(currentSol.valorPlanilha || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                  <div className="text-right space-y-0.5">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase">Homologado PAF</span>
+                    <strong className="text-indigo-650 font-mono block">
+                      R$ {(currentSol.valorHomologado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
                 </div>
 
-                <div className="relative w-full sm:w-60">
-                  <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Filtrar diário..."
-                    value={diarioBusca}
-                    onChange={(e) => setDiarioBusca(e.target.value)}
-                    className="w-full text-xs pl-8 pr-2.5 py-1.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50/50 p-2.5 rounded-xl border border-blue-200/40 text-left">
+                    <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Valor Contratado Inicial</span>
+                    <strong className="text-blue-800 font-mono text-[13px]">
+                      R$ {(currentSol.contratoValorInicial || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+
+                  <div className="bg-emerald-50/40 p-2.5 rounded-xl border border-emerald-200/40 text-left">
+                    <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Total Medições Homologadas</span>
+                    <strong className="text-emerald-700 font-mono text-[13px]">
+                      R$ {sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="bg-amber-50/30 p-2.5 rounded-xl border border-amber-200/40 text-left flex justify-between items-center">
+                  <div>
+                    <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Saldo de Contrato à Medir</span>
+                    <strong className="text-amber-800 font-mono">
+                      R$ {Math.max(0, (currentSol.contratoValorInicial || 0) - sumMedicoes).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                  </div>
+                  <span className="text-[9.5px] font-extrabold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-200/80">
+                    {Math.max(0, 100 - safePercent).toFixed(1)}% restando
+                  </span>
                 </div>
               </div>
+            </div>
 
-              {filteredDiarios.length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  <ClipboardList className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-500">Nenhum registro correspondente encontrado.</p>
+            {/* 3. CONTRATO PRINCIPAL E GARANTIA */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs text-left space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                <FileCheck className="w-4 h-4 text-blue-500" /> Contrato de Empreiteira Credenciada
+              </h3>
+
+              {!currentSol.empresaContratada ? (
+                <div className="py-6 text-center text-slate-400 text-xs italic">
+                  Nenhum contrato ativo cadastrado para este atendimento.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-                  {filteredDiarios.map((d) => {
-                    const tagStyles: { [key: string]: string } = {
-                      Ocorrência: 'bg-rose-50 border-rose-200 text-rose-700',
-                      Clima: 'bg-sky-50 border-sky-200 text-sky-700',
-                      Trabalho: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-                      Materiais: 'bg-amber-50 border-amber-200 text-amber-700',
-                      Equipe: 'bg-indigo-50 border-indigo-200 text-indigo-700',
-                      Segurança: 'bg-purple-50 border-purple-200 text-purple-700'
-                    };
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-start gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <Building2 className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Razão Social Contratada</span>
+                      <strong className="text-slate-800 block text-[11.5px]">{currentSol.empresaContratada}</strong>
+                      <span className="text-[10px] text-slate-450 block font-mono">CNPJ: {currentSol.cnpjEmpresa || 'Não informado'}</span>
+                    </div>
+                  </div>
 
-                    const cat = d.categoria || 'Ocorrência';
-                    const s = tagStyles[cat] || 'bg-slate-50 border-slate-250 text-slate-700';
+                  <div className="grid grid-cols-2 gap-3 text-sans">
+                    <div className="border-r border-slate-100 pr-1">
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase">Data Assinatura</span>
+                      <strong className="text-slate-850 text-[11px] block">{currentSol.contratoDataAssinatura || 'N/A'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 block uppercase">Período de Vigência</span>
+                      <strong className="text-slate-850 text-[10.5px] block font-mono">
+                        {currentSol.contratoInicioVigencia || 'N/A'} — {currentSol.contratoFimVigencia || 'N/A'}
+                      </strong>
+                    </div>
+                  </div>
 
-                    return (
-                      <div key={d.id} className="relative bg-slate-50 p-4 rounded-xl border border-slate-210 flex flex-col space-y-2">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[10.5px] font-black text-slate-400">{d.data}</span>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border font-sans ${s}`}>
-                              {cat}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-extrabold text-slate-500 flex items-center gap-1">
-                              <User className="w-3 h-3 text-slate-400" />
-                              {d.autor}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => deletarDiario(d.id)}
-                              className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 cursor-pointer"
-                              title="Excluir lançamento"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <p className="text-xs text-slate-750 font-sans leading-relaxed text-left w-full">
-                          {d.texto}
-                        </p>
+                  <div className="border-t border-slate-100 pt-3">
+                    <span className="text-[9px] font-black uppercase text-slate-400 block tracking-wider mb-1">Garantia Técnica SGO</span>
+                    <div className="bg-slate-55/70 p-2 rounded-lg border border-slate-100/50 flex justify-between items-center text-[11px]">
+                      <div>
+                        <span className="font-bold text-slate-600 block">{currentSol.garantiaExigida || 'Caução de Execução'}</span>
+                        {currentSol.garantiaValidade && (
+                          <span className="text-[9.5px] text-slate-400 font-mono block">Vencimento: {currentSol.garantiaValidade}</span>
+                        )}
                       </div>
-                    );
-                  })}
+                      <span className="font-mono font-black text-slate-800 bg-white shadow-3xs px-2 py-1 rounded">
+                        R$ {(currentSol.garantiaValor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Form to log new entries */}
-          <div className="space-y-4">
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs text-left">
-              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2.5 mb-3">
-                <Plus className="w-4 h-4 text-emerald-500" /> Logar no Diário de Obra
+            {/* 4. MEDIÇÕES FÍSICO-FINANCEIRAS */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs text-left space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                <ClipboardCheck className="w-4 h-4 text-emerald-500" /> Histórico Resumido de Medições
               </h3>
 
-              <form onSubmit={adicNovoDiario} className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
-                    Categoria da Ocorrência
-                  </label>
-                  <select
-                    value={diarioCategoria}
-                    onChange={(e) => setDiarioCategoria(e.target.value as any)}
-                    className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800"
-                  >
-                    <option value="Ocorrência">Ocorrência Geral</option>
-                    <option value="Clima">Fatores Climáticos / Chuva</option>
-                    <option value="Trabalho">Frentes de Trabalho / Concreto</option>
-                    <option value="Materiais">Recebimento / Falta de Materiais</option>
-                    <option value="Equipe">Alocação de Mão de Obra</option>
-                    <option value="Segurança">EPI / Segurança do Trabalho</option>
-                  </select>
+              {!currentSol.medicoes || currentSol.medicoes.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                  Nenhuma medição física ou boletim de medição lançado ainda nesta obra.
                 </div>
+              ) : (
+                <div className="space-y-3.5">
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                    <span>Lançamentos Recentes ({currentSol.medicoes.length})</span>
+                    <span>Total Homologado</span>
+                  </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
-                    Detalhamento do Registro *
-                  </label>
-                  <textarea
-                    required
-                    rows={4}
-                    placeholder="Descreva com detalhes o progresso técnico do dia, contingências de campo ou notas de fiscalização..."
-                    value={diarioTexto}
-                    onChange={(e) => setDiarioTexto(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
-                  />
+                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                    {currentSol.medicoes.map((med, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-2.5 bg-slate-50 hover:bg-slate-100/80 rounded-xl border border-slate-200 text-xs font-medium">
+                        <div className="space-y-0.5">
+                          <strong className="text-slate-800 font-sans block text-[11px]">
+                            Medição #{med.numeroMedicao || (idx + 1)}
+                          </strong>
+                          <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1 pt-0.5">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Período: {med.periodoMedicao || 'N/A'}
+                          </span>
+                        </div>
+
+                        <div className="text-right space-y-0.5">
+                          <strong className="text-slate-900 block font-mono text-[11px]">
+                            R$ {(med.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </strong>
+                          <span className="inline-flex items-center text-[8.5px] font-black uppercase text-emerald-700 bg-emerald-100/80 px-1.5 py-0.2 rounded mt-0.5">
+                            RECEBIDA & APROVADA
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 text-xs text-white font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 rounded-xl cursor-pointer shadow-3xs flex items-center justify-center gap-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  Salvar Ocorrência no Diário
-                </button>
-              </form>
+              )}
             </div>
+
+            {/* 5. TERMOS ADITIVOS */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs text-left space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                <Layers className="w-4 h-4 text-amber-500" /> Termos Aditivos de Escopo & Prazos
+              </h3>
+
+              {!currentSol.aditivos || currentSol.aditivos.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200/70">
+                  Nenhum aditivo de valor ou dilação de prazo assinado para este contrato.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center bg-amber-50/40 p-3 rounded-xl border border-amber-200/40 text-xs text-amber-900 font-bold mb-1">
+                    <span>Aditivos Cadastrados: {currentSol.aditivos.length}</span>
+                    <span className="font-mono text-amber-700">
+                      R$ {currentSol.aditivos.reduce((sum, a) => sum + (a.valorAditivo || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} aditados
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
+                    {currentSol.aditivos.map((ad, idx) => (
+                      <div key={idx} className="p-2.5 bg-slate-5/50 hover:bg-slate-50 rounded-lg border border-slate-200/80 text-xs space-y-1.5 text-sans">
+                        <div className="flex justify-between items-center bg-transparent">
+                          <strong className="text-slate-800 font-sans text-[11px]">
+                            Aditivo nº {ad.numeroAditivo || (idx + 1)}
+                          </strong>
+                          <span className="text-[9.5px] font-black uppercase text-amber-700 bg-amber-100 px-2 py-0.5 rounded-lg">
+                            {ad.tipo || 'Aditivo Misto'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[10px] text-slate-450 mt-1">
+                          <span>Assinado em: <strong className="text-slate-600 font-mono">{ad.data || 'N/A'}</strong></span>
+                          <span>Prazo: <strong className="text-slate-600 font-mono">+{Math.round((ad.prazoExtraDias || 0) / 30) || 0} meses</strong></span>
+                          <span>Valor: <strong className="text-slate-800 font-mono">R$ {(ad.valorAditivo || 0).toLocaleString('pt-BR')}</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 6. AJUSTES TÉCNICOS DE PLANILHA */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs text-left space-y-4">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-3">
+                <Wrench className="w-4 h-4 text-indigo-500" /> Ajustes Técnicos de Planilha (Meta/Escopo)
+              </h3>
+
+              {!currentSol.ajustes || currentSol.ajustes.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs italic bg-slate-50/50 rounded-xl border border-dashed border-slate-200/70">
+                  Nenhum remanejamento, compensação ou ajuste técnico de planilha homologado.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center bg-indigo-50/40 p-3 rounded-xl border border-indigo-200/40 text-xs text-indigo-900 font-bold mb-1">
+                    <span>Ajustes Homologados: {currentSol.ajustes.length}</span>
+                    <span className="font-mono text-indigo-700">
+                      R$ {currentSol.ajustes.reduce((sum, a) => sum + (a.valorAjuste || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} líquidos
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
+                    {currentSol.ajustes.map((aj, idx) => (
+                      <div key={idx} className="p-2.5 bg-slate-5/50 hover:bg-slate-50 rounded-lg border border-slate-200/80 text-xs space-y-1 text-sans">
+                        <div className="flex justify-between items-center">
+                          <strong className="text-slate-800 font-sans text-[11px]">
+                            Ajuste de Itens #{idx + 1}
+                          </strong>
+                          <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.2 rounded-md font-sans">
+                            {aj.tipoAjuste === 'sem_alteracao_meta' ? 'Sem Alteração de Meta' : 'Ajuste de Escala'}
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-500 italic leading-snug text-left truncate" title={aj.observacoes || 'Remanejamento de insumos e compensação de alvenaria.'}>
+                          💡 {aj.observacoes || 'Remanejamento de insumos e compensação de alvenaria.'}
+                        </p>
+                        <div className="flex justify-between items-center text-[10px] text-slate-450 mt-1 border-t border-slate-100 pt-1">
+                          <span>Referência: <strong className="text-slate-600 font-sans">{aj.ajusteReferente === 'atendimento_inicial' ? 'Planilha Inicial' : 'Saldo Cotação'}</strong></span>
+                          <span>Saldo do Ajuste: <strong className="text-slate-800 font-mono">R$ {(aj.valorAjuste || 0).toLocaleString('pt-BR')}</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
           </div>
+
         </div>
       )}
 
@@ -1635,9 +2118,10 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                 <div className="space-y-3">
                   {listVistorias.map((v) => {
                     const statusColors: { [key: string]: string } = {
-                      Aprovada: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-                      'Aprovada com Ressalvas': 'bg-amber-50 border-amber-200 text-amber-700',
-                      Reprovada: 'bg-rose-50 border-rose-200 text-rose-700'
+                      Aprovada: 'bg-emerald-50 border-emerald-250 text-emerald-700',
+                      'Aprovada com Ressalvas': 'bg-amber-50 border-amber-250 text-amber-700',
+                      Reprovada: 'bg-rose-50 border-rose-200 text-rose-700',
+                      'Relatório Emitido': 'bg-indigo-50 border-indigo-200 text-indigo-700'
                     };
                     const sc = statusColors[v.resultado] || 'bg-slate-50 border-slate-200 text-slate-700';
 
@@ -1647,7 +2131,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-[10px] font-black text-slate-400">{v.dataVistoria}</span>
                             <span className={`px-2.5 py-0.5 rounded text-[9px] font-black uppercase border font-sans ${sc}`}>
-                              {v.resultado}
+                              {v.resultado || 'Relatório de Visita'}
                             </span>
                           </div>
 
@@ -1666,9 +2150,28 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                           </div>
                         </div>
 
-                        <p className="text-xs text-slate-700 leading-relaxed font-sans text-left">
-                          {v.laudoResumido}
-                        </p>
+                        {v.laudoResumido && (
+                          <p className="text-xs text-slate-705 leading-relaxed font-sans text-left">
+                            {v.laudoResumido}
+                          </p>
+                        )}
+
+                        {v.nomeRelatorio && (
+                          <div className="flex items-center gap-2 mt-1 pt-1.5 border-t border-slate-200/50">
+                            <span className="text-[9px] uppercase font-extrabold text-slate-400">Relatório técnico:</span>
+                            <a
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                alert(`Visualizando documento técnico: ${v.nomeRelatorio}`);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2 py-1 bg-indigo-50 border border-indigo-250 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-805 transition-colors text-[10px] font-black rounded-lg decoration-none cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                              {v.nomeRelatorio} {v.tamanhoRelatorio && `(${v.tamanhoRelatorio})`}
+                            </a>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1692,48 +2195,111 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                   <input
                     type="text"
                     required
-                    placeholder="Nome completo do engenheiro fiscal"
+                    readOnly
+                    placeholder="Nome do engenheiro fiscal"
                     value={vistoVistoriador}
-                    onChange={(e) => setVistoVistoriador(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/60 text-slate-500 font-bold cursor-not-allowed"
                   />
+                  <span className="text-[9.5px] text-indigo-500 block font-medium mt-0.5">
+                    ℹ️ Preenchido automaticamente conforme designação vinculada ao cadastro da obra.
+                  </span>
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
-                    Resultado de Avaliação *
-                  </label>
-                  <select
-                    value={vistoResultado}
-                    onChange={(e) => setVistoResultado(e.target.value as any)}
-                    className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800"
-                  >
-                    <option value="Aprovada">Aprovada Integralmente</option>
-                    <option value="Aprovada com Ressalvas">Aprovada com Ressalvas / Ajustar</option>
-                    <option value="Reprovada">Não Conformidade / Reprovada</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
-                    Laudo Resumido da Intervenção *
+                    Detalhamento Técnico da Visita *
                   </label>
                   <textarea
                     required
                     rows={3}
-                    placeholder="Descreva as estruturas inspecionadas e se atendem ao projeto técnico básico aprovado..."
+                    placeholder="Descreva as estruturas inspecionadas, medições em campo e principais anotações da visita de fiscalização..."
                     value={vistoLaudoResumido}
                     onChange={(e) => setVistoLaudoResumido(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full py-2.5 text-xs text-white font-black uppercase tracking-wider bg-blue-600 hover:bg-blue-700 rounded-xl cursor-pointer shadow-3xs"
-                >
-                  Registrar Vistoria Técnica
-                </button>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                    Relatório de Visita Oficial (PDF / Imagem) *
+                  </label>
+                  
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(true);
+                    }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        const file = e.dataTransfer.files[0];
+                        setRelatorioVisitaFile({
+                          name: file.name,
+                          size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                        });
+                      }
+                    }}
+                    className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-200 ${
+                      isDragOver
+                        ? 'border-indigo-600 bg-indigo-50/50'
+                        : relatorioVisitaFile
+                          ? 'border-emerald-500 bg-emerald-50/10'
+                          : 'border-slate-300 hover:border-indigo-400 bg-slate-50/50'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      id="relatorio-visita-upload-input"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          const file = e.target.files[0];
+                          setRelatorioVisitaFile({
+                            name: file.name,
+                            size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                          });
+                        }
+                      }}
+                    />
+                    <label htmlFor="relatorio-visita-upload-input" className="cursor-pointer block w-full">
+                      {relatorioVisitaFile ? (
+                        <div className="flex flex-col items-center gap-1">
+                          <FileText className="w-8 h-8 text-emerald-600 animate-bounce" />
+                          <span className="text-xs font-black text-slate-800 break-all">{relatorioVisitaFile.name}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">({relatorioVisitaFile.size})</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setRelatorioVisitaFile(null);
+                            }}
+                            className="mt-1.5 px-2.5 py-1 bg-rose-50 hover:bg-rose-100/80 border border-rose-250 text-rose-700 hover:text-rose-800 transition-colors text-[9.5px] font-black rounded-lg uppercase cursor-pointer"
+                          >
+                            Remover arquivo
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1.5 py-1">
+                          <FileUp className="w-8 h-8 text-indigo-500" />
+                          <p className="text-xs font-bold text-slate-705">Arrastar o Relatório de Visita ou clique para selecionar</p>
+                          <span className="text-[9.5px] text-slate-400 block font-normal">Suporta arquivos PDF, DOCX, ou Imagens (Max. 10MB)</span>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 text-xs text-white font-black uppercase tracking-wider bg-blue-600 hover:bg-blue-700 rounded-xl cursor-pointer shadow-3xs hover:shadow-xs transition-all"
+                  >
+                    Registrar Visita com Relatório
+                  </button>
+                </div>
               </form>
             </div>
           </div>
@@ -2568,41 +3134,87 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
 function SubContratos({ 
   currentSol, 
   onUpdate,
-  empresasSeguranca = []
+  empresasSeguranca = [],
+  todasSolicitacoes = [],
+  selectedSolId = '',
+  setSelectedSolId
 }: { 
   currentSol: Solicitacao | null; 
   onUpdate: (sol: Solicitacao) => void;
   empresasSeguranca?: EmpresaSeguranca[];
+  todasSolicitacoes?: Solicitacao[];
+  selectedSolId?: string;
+  setSelectedSolId?: (id: string) => void;
 }) {
-  const [selectedEmpresaId, setSelectedEmpresaId] = useState(() => {
-    const matched = empresasSeguranca.find(e => e.nome === currentSol?.empresaContratada);
-    return matched ? matched.id : '';
-  });
-  
-  const [empresaInput, setEmpresaInput] = useState(() => currentSol?.empresaContratada || '');
-  const [cnpjInput, setCnpjInput] = useState(() => currentSol?.cnpjEmpresa || '');
-  const [statusContratoInput, setStatusContratoInput] = useState<'Ativa' | 'Distratada'>(() => currentSol?.statusContratoEmpresa || 'Ativa');
-  const [duracaoInput, setDuracaoInput] = useState(() => currentSol?.duracaoObraMeses?.toString() || '6');
+  // 1. FILTER CONTROLS FOR THE SEARCH FILTER CARD (Obras em processo de contratação Only)
+  const [filtroIdContrato, setFiltroIdContrato] = useState('todos');
+  const [filtroCodescContrato, setFiltroCodescContrato] = useState('todos');
+  const [filtroMunicipioContrato, setFiltroMunicipioContrato] = useState('todos');
+  const [filtroSreContrato, setFiltroSreContrato] = useState('todos');
+  const [filtroEscolaContrato, setFiltroEscolaContrato] = useState('todos');
+  const [filtroResponsavelContrato, setFiltroResponsavelContrato] = useState('todos');
+
+  // Filter list of works in process of contracting (Obras em processo de contratação)
+  const worksInContratacao = useMemo(() => {
+    return (todasSolicitacoes || []).filter(sol => {
+      const isConcluida = sol.statusObra === 'Concluída';
+      const isParalisada = sol.statusObra === 'Paralisada';
+      const isEmAndamento = sol.statusObra === 'Em Andamento';
+      const hasContractVal = !!sol.contratoValorInicial && !!sol.contratoDataAssinatura;
+      return !isConcluida && !isParalisada && !isEmAndamento && !hasContractVal;
+    });
+  }, [todasSolicitacoes]);
+
+  // Extract unique criteria options
+  const uniqueIds = useMemo(() => Array.from(new Set(worksInContratacao.map(s => s.id).filter(Boolean))).sort(), [worksInContratacao]);
+  const uniqueCodescs = useMemo(() => Array.from(new Set(worksInContratacao.map(s => s.codesc).filter(Boolean))).sort(), [worksInContratacao]);
+  const uniqueMunicipios = useMemo(() => Array.from(new Set(worksInContratacao.map(s => s.municipio).filter(Boolean))).sort(), [worksInContratacao]);
+  const uniqueSres = useMemo(() => Array.from(new Set(worksInContratacao.map(s => s.sre).filter(Boolean))).sort(), [worksInContratacao]);
+  const uniqueEscolas = useMemo(() => Array.from(new Set(worksInContratacao.map(s => s.nomeEscola).filter(Boolean))).sort(), [worksInContratacao]);
+  const uniqueResponsaveis = useMemo(() => Array.from(new Set(worksInContratacao.map(s => s.fiscalObraAtribuido || 'Não Definido').filter(Boolean))).sort(), [worksInContratacao]);
+
+  // Apply filters
+  const worksFiltradasContratacao = useMemo(() => {
+    return worksInContratacao.filter(sol => {
+      if (filtroIdContrato !== 'todos' && sol.id !== filtroIdContrato) return false;
+      if (filtroCodescContrato !== 'todos' && sol.codesc !== filtroCodescContrato) return false;
+      if (filtroMunicipioContrato !== 'todos' && sol.municipio !== filtroMunicipioContrato) return false;
+      if (filtroSreContrato !== 'todos' && sol.sre !== filtroSreContrato) return false;
+      if (filtroEscolaContrato !== 'todos' && sol.nomeEscola !== filtroEscolaContrato) return false;
+      
+      const resp = sol.fiscalObraAtribuido || 'Não Definido';
+      if (filtroResponsavelContrato !== 'todos' && resp !== filtroResponsavelContrato) return false;
+      
+      return true;
+    });
+  }, [worksInContratacao, filtroIdContrato, filtroCodescContrato, filtroMunicipioContrato, filtroSreContrato, filtroEscolaContrato, filtroResponsavelContrato]);
+
+  const [selectedEmpresaId, setSelectedEmpresaId] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [empresaInput, setEmpresaInput] = useState('');
+  const [cnpjInput, setCnpjInput] = useState('');
+  const [tipoAcaoInput, setTipoAcaoInput] = useState<'alteracao' | 'distrato'>('alteracao');
+  const [duracaoInput, setDuracaoInput] = useState('6');
 
   // New states for extended fields
-  const [valorInicialInput, setValorInicialInput] = useState(() => currentSol?.contratoValorInicial?.toString() || (currentSol?.valorPlanilha || 1350000).toString());
-  const [dataAssinaturaInput, setDataAssinaturaInput] = useState(() => currentSol?.contratoDataAssinatura || '2026-01-01');
-  const [inicioVigenciaInput, setInicioVigenciaInput] = useState(() => currentSol?.contratoInicioVigencia || currentSol?.dataOrdemInicio || '2026-01-15');
-  const [fimVigenciaInput, setFimVigenciaInput] = useState(() => currentSol?.contratoFimVigencia || currentSol?.previsaoTerminoObra || '2026-07-15');
+  const [valorInicialInput, setValorInicialInput] = useState('1350000');
+  const [dataAssinaturaInput, setDataAssinaturaInput] = useState('2026-01-01');
+  const [inicioVigenciaInput, setInicioVigenciaInput] = useState('2026-01-15');
+  const [fimVigenciaInput, setFimVigenciaInput] = useState('2026-07-15');
 
-  const [garantiaExigidaInput, setGarantiaExigidaInput] = useState(() => currentSol?.garantiaExigida || 'Sem Garantia');
-  const [garantiaValorInput, setGarantiaValorInput] = useState(() => currentSol?.garantiaValor?.toString() || '0');
-  const [garantiaTipoInput, setGarantiaTipoInput] = useState(() => currentSol?.garantiaTipo || '');
-  const [garantiaValidadeInput, setGarantiaValidadeInput] = useState(() => currentSol?.garantiaValidade || '');
+  const [garantiaExigidaInput, setGarantiaExigidaInput] = useState('Sem Garantia');
+  const [garantiaValorInput, setGarantiaValorInput] = useState('0');
+  const [garantiaTipoInput, setGarantiaTipoInput] = useState('');
+  const [garantiaValidadeInput, setGarantiaValidadeInput] = useState('');
 
-  // Keep state in sync with currentSol selections
+  // Sync logic when currentSol changes
   useEffect(() => {
     if (currentSol) {
       const matched = empresasSeguranca.find(e => e.nome === currentSol.empresaContratada);
       setSelectedEmpresaId(matched ? matched.id : '');
       setEmpresaInput(currentSol.empresaContratada || '');
       setCnpjInput(currentSol.cnpjEmpresa || '');
-      setStatusContratoInput(currentSol.statusContratoEmpresa || 'Ativa');
+      setTipoAcaoInput(currentSol.statusContratoEmpresa === 'Distratada' ? 'distrato' : 'alteracao');
       setDuracaoInput(currentSol.duracaoObraMeses?.toString() || '6');
       
       const valInitial = currentSol.contratoValorInicial !== undefined 
@@ -2617,6 +3229,20 @@ function SubContratos({
       setGarantiaValorInput((currentSol.garantiaValor || 0).toString());
       setGarantiaTipoInput(currentSol.garantiaTipo || '');
       setGarantiaValidadeInput(currentSol.garantiaValidade || '');
+    } else {
+      setSelectedEmpresaId('');
+      setEmpresaInput('');
+      setCnpjInput('');
+      setTipoAcaoInput('alteracao');
+      setDuracaoInput('6');
+      setValorInicialInput('1350000');
+      setDataAssinaturaInput('');
+      setInicioVigenciaInput('');
+      setFimVigenciaInput('');
+      setGarantiaExigidaInput('Sem Garantia');
+      setGarantiaValorInput('0');
+      setGarantiaTipoInput('');
+      setGarantiaValidadeInput('');
     }
   }, [currentSol, empresasSeguranca]);
 
@@ -2626,18 +3252,18 @@ function SubContratos({
   const valorInicial = parseFloat(valorInicialInput) || 0;
   
   // Sum approved aditivos
-  const sumAditivos = currentSol.aditivos
+  const sumAditivos = currentSol?.aditivos
     ?.filter(a => a.status === 'Aprovado')
     .reduce((sum, a) => sum + (a.valorExtra || 0), 0) || 0;
     
   const valorAtualizado = valorInicial + sumAditivos;
   
-  const sumMedicoes = currentSol.medicoes?.reduce((sum, m) => sum + m.valor, 0) || 0;
+  const sumMedicoes = currentSol?.medicoes?.reduce((sum, m) => sum + m.valor, 0) || 0;
   const saldoContratual = Math.max(0, valorAtualizado - sumMedicoes);
   const percentualExecutado = valorAtualizado > 0 ? (sumMedicoes / valorAtualizado) * 100 : 0;
 
   // Remaining days with countdown semaphore
-  const targetDateStr = fimVigenciaInput || currentSol.previsaoTerminoObra || '';
+  const targetDateStr = fimVigenciaInput || currentSol?.previsaoTerminoObra || '';
   let diasRestantes: number | null = null;
   let semaphoreColor = 'gray'; // 'green' | 'yellow' | 'red'
   let semaphoreLabel = 'Não Cadastrado';
@@ -2707,11 +3333,29 @@ function SubContratos({
 
   const handleUpdateContrato = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentSol) return;
+
+    let updatedEmpresasAnteriores = [...(currentSol.empresasAnteriores || [])];
+    const isDistrato = tipoAcaoInput === 'distrato';
+
+    if (isDistrato && empresaInput) {
+      const alreadyArchived = updatedEmpresasAnteriores.some(emp => emp.cnpj === cnpjInput);
+      if (!alreadyArchived) {
+        updatedEmpresasAnteriores.push({
+          id: `prev_${Date.now()}`,
+          nome: empresaInput,
+          cnpj: cnpjInput,
+          avancoFisicoOriginal: 0,
+          dataDistrato: new Date().toISOString().split('T')[0]
+        });
+      }
+    }
+
     const updated = {
       ...currentSol,
-      empresaContratada: empresaInput,
-      cnpjEmpresa: cnpjInput,
-      statusContratoEmpresa: statusContratoInput,
+      empresaContratada: isDistrato ? '' : empresaInput,
+      cnpjEmpresa: isDistrato ? '' : cnpjInput,
+      statusContratoEmpresa: (isDistrato ? 'Distratada' : 'Ativa') as 'Ativa' | 'Distratada',
       duracaoObraMeses: parseInt(duracaoInput) || 6,
       contratoValorInicial: valorInicial,
       contratoDataAssinatura: dataAssinaturaInput,
@@ -2720,9 +3364,23 @@ function SubContratos({
       garantiaExigida: garantiaExigidaInput,
       garantiaValor: parseFloat(garantiaValorInput) || 0,
       garantiaTipo: garantiaTipoInput,
-      garantiaValidade: garantiaValidadeInput
+      garantiaValidade: garantiaValidadeInput,
+      empresasAnteriores: updatedEmpresasAnteriores
     };
+
     onUpdate(updated);
+
+    setShowForm(false);
+
+    if (isDistrato) {
+      setSelectedEmpresaId('');
+      setEmpresaInput('');
+      setCnpjInput('');
+      setTipoAcaoInput('alteracao');
+      alert('Contrato distratado com sucesso! A empresa anterior foi arquivada no histórico da obra.');
+    } else {
+      alert('Alteração contratual salva com sucesso!');
+    }
   };
 
   const selectCompanyFromSeguranca = (empId: string) => {
@@ -2743,7 +3401,7 @@ function SubContratos({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn text-left">
       
       {/* Information card view of contract details */}
-      <div className="lg:col-span-2 space-y-6">
+      <div className={showForm ? "lg:col-span-2 space-y-6" : "lg:col-span-3 space-y-6"}>
         
         {/* Dynamic header summary */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
@@ -2903,11 +3561,53 @@ function SubContratos({
           </div>
 
           {/* Alerta de Vencimento da garantia */}
-          <div className={`p-4 rounded-xl border ${garantiaAlertClass} text-xs flex gap-3 items-start`}>
+          <div className={`p-4 rounded-xl border ${garantiaAlertClass} text-xs flex gap-3 items-start mb-4`}>
             <AlertCircle className={`w-5 h-5 ${garantiaIconColor} shrink-0 mt-0.5`} />
             <div>
               <h4 className="font-extrabold uppercase tracking-wide text-[10.5px]">Monitoramento de Garantia SGO</h4>
               <p className="mt-0.5 opacity-90 leading-relaxed font-medium">{garantiaStatusText}</p>
+            </div>
+          </div>
+
+          {/* NOVOS BOTÕES DE AÇÃO CONTRATUAL PEDIDOS PELO USUÁRIO */}
+          <div className="border-t border-slate-105 pt-4">
+            <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2.5">Ações Contratuais Disponíveis no SGO</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setTipoAcaoInput('alteracao');
+                  setShowForm(true);
+                  setTimeout(() => {
+                    document.getElementById('edit-contract-form')?.scrollIntoView({ behavior: 'smooth' });
+                  }, 120);
+                }}
+                className={`py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  showForm && tipoAcaoInput === 'alteracao'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm'
+                    : 'bg-blue-50/50 hover:bg-blue-100/60 text-blue-700 border-blue-200 hover:border-blue-300'
+                }`}
+              >
+                <Edit className="w-4 h-4" /> Alteração do Contrato
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTipoAcaoInput('distrato');
+                  setShowForm(true);
+                  setTimeout(() => {
+                    document.getElementById('edit-contract-form')?.scrollIntoView({ behavior: 'smooth' });
+                  }, 120);
+                }}
+                className={`py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  showForm && tipoAcaoInput === 'distrato'
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600 shadow-sm'
+                    : 'bg-rose-50/50 hover:bg-rose-100/60 text-rose-700 border-rose-200 hover:border-rose-300'
+                }`}
+              >
+                <Trash2 className="w-4 h-4" /> Distrato do Contrato
+              </button>
             </div>
           </div>
         </div>
@@ -2939,199 +3639,246 @@ function SubContratos({
       </div>
 
       {/* Editing / registering contract updates form */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs">
-        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2.5 mb-4">
-          <Edit className="w-4 h-4 text-blue-500" /> Cadastrar & Alterar Contrato
-        </h3>
-
-        <form onSubmit={handleUpdateContrato} className="space-y-4">
-          
-          {/* SELEÇÃO BASEADA EM LISTA DE EMPRESAS PRÉVIAS */}
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 block mb-1">
-              Selecionar Empresa SGO (do Módulo de Segurança)*
-            </label>
-            <select
-              required
-              value={selectedEmpresaId}
-              onChange={(e) => selectCompanyFromSeguranca(e.target.value)}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-850 font-bold focus:outline-hidden cursor-pointer"
+      {showForm && (
+        <div id="edit-contract-form" className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs animate-fadeIn scroll-mt-6">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-2.5 mb-4">
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+              <Edit className="w-4 h-4 text-blue-500" /> 
+              {tipoAcaoInput === 'distrato' ? 'Homologar Distrato' : 'Alterar Contrato'}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="px-2.5 py-1 text-[10px] font-bold text-slate-450 hover:text-slate-700 bg-slate-50 hover:bg-slate-100/60 rounded-lg transition-all border border-slate-200/60 cursor-pointer"
             >
-              <option value="">-- Escolher Empresa Cadastrada --</option>
-              {empresasSeguranca.map(emp => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.nome} ({emp.situacaoCadastral})
-                </option>
-              ))}
-            </select>
+              Cancelar
+            </button>
           </div>
 
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 block mb-1">Razão Social Contratada (Confirmada)</label>
-            <input
-              type="text"
-              required
-              readOnly
-              value={empresaInput}
-              placeholder="Selecione acima na listagem"
-              className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 focus:outline-hidden font-bold"
-            />
-          </div>
+          <form onSubmit={handleUpdateContrato} className="space-y-4">
+            
+            {/* SELEÇÃO BASEADA EM LISTA DE EMPRESAS PRÉVIAS */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                Selecionar Empresa SGO (do Módulo de Segurança)*
+              </label>
+              <select
+                required
+                value={selectedEmpresaId}
+                onChange={(e) => selectCompanyFromSeguranca(e.target.value)}
+                className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-850 font-bold focus:outline-hidden cursor-pointer"
+              >
+                <option value="">-- Escolher Empresa Cadastrada --</option>
+                {empresasSeguranca.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.nome} ({emp.situacaoCadastral})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 block mb-1">CNPJ do Responsável da Obra</label>
-            <input
-              type="text"
-              required
-              readOnly
-              value={cnpjInput}
-              placeholder="CNPJ vinculado à empresa escolhida"
-              className="w-full text-xs font-mono p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 focus:outline-hidden font-bold"
-            />
-          </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 block mb-1">Razão Social Contratada (Confirmada)</label>
+              <input
+                type="text"
+                required
+                readOnly
+                value={empresaInput}
+                placeholder="Selecione acima na listagem"
+                className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 focus:outline-hidden font-bold"
+              />
+            </div>
 
-          <div className="border-t border-slate-100 pt-3">
-            <label className="text-[10px] font-bold text-slate-500 block mb-1">Valor Inicial do Contrato (R$)*</label>
-            <input
-              type="number"
-              required
-              value={valorInicialInput}
-              onChange={(e) => setValorInicialInput(e.target.value)}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden"
-              placeholder="1350000"
-            />
-          </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-500 block mb-1">CNPJ do Responsável da Obra</label>
+              <input
+                type="text"
+                required
+                readOnly
+                value={cnpjInput}
+                placeholder="CNPJ vinculado à empresa escolhida"
+                className="w-full text-xs font-mono p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 focus:outline-hidden font-bold"
+              />
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
+            <div className="border-t border-slate-100 pt-3">
+              <label className="text-[10px] font-bold text-slate-500 block mb-1">Valor Inicial do Contrato (R$)*</label>
+              <input
+                type="number"
+                required
+                value={valorInicialInput}
+                onChange={(e) => setValorInicialInput(e.target.value)}
+                className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden"
+                placeholder="1350000"
+              />
+            </div>
+
             <div>
               <label className="text-[10px] font-bold text-slate-500 block mb-1">Duração (Meses)</label>
               <input
                 type="number"
                 value={duracaoInput}
                 onChange={(e) => setDuracaoInput(e.target.value)}
-                className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden"
+                className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-bold"
               />
             </div>
 
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 block mb-1">Status Contrato</label>
-              <select
-                value={statusContratoInput}
-                onChange={(e) => setStatusContratoInput(e.target.value as any)}
-                className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-hidden cursor-pointer"
-              >
-                <option value="Ativa">Ativa</option>
-                <option value="Distratada">Distratada</option>
-              </select>
-            </div>
-          </div>
+            <div className="border-t border-slate-100 pt-3">
+              <label className="text-[10px] font-bold text-slate-500 block mb-1.5">Escolha a Ação Contratual Destinada SGO</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTipoAcaoInput('alteracao')}
+                  className={`p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
+                    tipoAcaoInput === 'alteracao'
+                      ? 'border-blue-600 bg-blue-50/50 shadow-3xs'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-3 h-3 rounded-full border flex items-center justify-center ${tipoAcaoInput === 'alteracao' ? 'border-blue-600' : 'border-slate-300'}`}>
+                      {tipoAcaoInput === 'alteracao' && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                    </span>
+                    <span className="text-[11px] font-extrabold text-slate-800">Alteração de Contrato</span>
+                  </div>
+                  <p className="text-[9.5px] text-slate-400 mt-1 leading-snug">
+                    Atualizar valor, prazos ou garantias da contratada vigente.
+                  </p>
+                </button>
 
-          {/* datas do contrato */}
-          <div className="border-t border-slate-100 pt-3 space-y-3">
-            <h4 className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Vigência & Assinatura</h4>
-            
-            <div>
-              <label className="text-[9px] font-bold text-slate-400 block mb-1">Data Assinatura*</label>
-              <input
-                type="date"
-                required
-                value={dataAssinaturaInput}
-                onChange={(e) => setDataAssinaturaInput(e.target.value)}
-                className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
-              />
+                <button
+                  type="button"
+                  onClick={() => setTipoAcaoInput('distrato')}
+                  className={`p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
+                    tipoAcaoInput === 'distrato'
+                      ? 'border-rose-500 bg-rose-50/30 shadow-3xs'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-3 h-3 rounded-full border flex items-center justify-center ${tipoAcaoInput === 'distrato' ? 'border-rose-500' : 'border-slate-300'}`}>
+                      {tipoAcaoInput === 'distrato' && <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />}
+                    </span>
+                    <span className="text-[11px] font-extrabold text-slate-800">Distrato do Contrato</span>
+                  </div>
+                  <p className="text-[9.5px] text-slate-400 mt-1 leading-snug">
+                    Encerrar contrato ativo e registrar arquivamento histórico.
+                  </p>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            {/* datas do contrato */}
+            <div className="border-t border-slate-100 pt-3 space-y-3">
+              <h4 className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Vigência & Assinatura</h4>
+              
               <div>
-                <label className="text-[9px] font-bold text-slate-400 block mb-1">Início da Vigência*</label>
+                <label className="text-[9px] font-bold text-slate-400 block mb-1">Data Assinatura*</label>
                 <input
                   type="date"
                   required
-                  value={inicioVigenciaInput}
-                  onChange={(e) => setInicioVigenciaInput(e.target.value)}
+                  value={dataAssinaturaInput}
+                  onChange={(e) => setDataAssinaturaInput(e.target.value)}
                   className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
                 />
               </div>
 
-              <div>
-                <label className="text-[9px] font-bold text-slate-400 block mb-1">Fim da Vigência*</label>
-                <input
-                  type="date"
-                  required
-                  value={fimVigenciaInput}
-                  onChange={(e) => setFimVigenciaInput(e.target.value)}
-                  className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* garantia exigida */}
-          <div className="border-t border-slate-100 pt-3 space-y-3">
-            <h4 className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Cadastro de Garantias</h4>
-            
-            <div>
-              <label className="text-[9px] font-bold text-slate-400 block mb-1">Tipo de Garantia Exigida*</label>
-              <select
-                value={garantiaExigidaInput}
-                onChange={(e) => setGarantiaExigidaInput(e.target.value)}
-                className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden cursor-pointer"
-              >
-                <option value="Sem Garantia">Sem Garantia</option>
-                <option value="Fiança Bancária">Fiança Bancária</option>
-                <option value="Seguro Garantia">Seguro Garantia</option>
-                <option value="Caução em Dinheiro">Caução em Dinheiro</option>
-                <option value="Títulos da Dívida Pública">Títulos da Dívida Pública</option>
-              </select>
-            </div>
-
-            {garantiaExigidaInput !== 'Sem Garantia' && (
-              <div className="space-y-3 animate-fadeIn duration-200">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[9px] font-bold text-slate-400 block mb-1">Valor Garantido (R$)*</label>
-                  <input
-                    type="number"
-                    required
-                    value={garantiaValorInput}
-                    onChange={(e) => setGarantiaValorInput(e.target.value)}
-                    className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 block mb-1">Tipo de Apólice ou Recibo*</label>
-                  <input
-                    type="text"
-                    required
-                    value={garantiaTipoInput}
-                    placeholder="ex: Apólice nº 44-551-A"
-                    onChange={(e) => setGarantiaTipoInput(e.target.value)}
-                    className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[9px] font-bold text-slate-400 block mb-1">Validade da Garantia*</label>
+                  <label className="text-[9px] font-bold text-slate-400 block mb-1">Início da Vigência*</label>
                   <input
                     type="date"
                     required
-                    value={garantiaValidadeInput}
-                    onChange={(e) => setGarantiaValidadeInput(e.target.value)}
-                    className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
+                    value={inicioVigenciaInput}
+                    onChange={(e) => setInicioVigenciaInput(e.target.value)}
+                    className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-bold text-slate-400 block mb-1">Fim da Vigência*</label>
+                  <input
+                    type="date"
+                    required
+                    value={fimVigenciaInput}
+                    onChange={(e) => setFimVigenciaInput(e.target.value)}
+                    className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
                   />
                 </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          <button
-            type="submit"
-            className="w-full py-2.5 text-xs text-white font-black uppercase bg-[#1c3870] hover:bg-[#1a2f5c] rounded-xl cursor-pointer transition-colors shadow-xs"
-          >
-            Salvar Alteração Contratual completo
-          </button>
-        </form>
-      </div>
+            {/* garantia exigida */}
+            <div className="border-t border-slate-100 pt-3 space-y-3">
+              <h4 className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Cadastro de Garantias</h4>
+              
+              <div>
+                <label className="text-[9px] font-bold text-slate-400 block mb-1">Tipo de Garantia Exigida*</label>
+                <select
+                  value={garantiaExigidaInput}
+                  onChange={(e) => setGarantiaExigidaInput(e.target.value)}
+                  className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden cursor-pointer"
+                >
+                  <option value="Sem Garantia">Sem Garantia</option>
+                  <option value="Fiança Bancária">Fiança Bancária</option>
+                  <option value="Seguro Garantia">Seguro Garantia</option>
+                  <option value="Caução em Dinheiro">Caução em Dinheiro</option>
+                  <option value="Títulos da Dívida Pública">Títulos da Dívida Pública</option>
+                </select>
+              </div>
+
+              {garantiaExigidaInput !== 'Sem Garantia' && (
+                <div className="space-y-3 animate-fadeIn duration-200">
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block mb-1">Valor Garantido (R$)*</label>
+                    <input
+                      type="number"
+                      required
+                      value={garantiaValorInput}
+                      onChange={(e) => setGarantiaValorInput(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block mb-1">Tipo de Apólice ou Recibo*</label>
+                    <input
+                      type="text"
+                      required
+                      value={garantiaTipoInput}
+                      placeholder="ex: Apólice nº 44-551-A"
+                      onChange={(e) => setGarantiaTipoInput(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block mb-1">Validade da Garantia*</label>
+                    <input
+                      type="date"
+                      required
+                      value={garantiaValidadeInput}
+                      onChange={(e) => setGarantiaValidadeInput(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className={`w-full py-2.5 text-xs text-white font-black uppercase rounded-xl cursor-pointer transition-colors shadow-xs ${
+                tipoAcaoInput === 'distrato'
+                  ? 'bg-rose-600 hover:bg-rose-700'
+                  : 'bg-[#1c3870] hover:bg-[#1a2f5c]'
+              }`}
+            >
+              {tipoAcaoInput === 'distrato' ? '⚠️ Homologar Distrato Contratual' : 'Salvar Alteração Contratual'}
+            </button>
+          </form>
+        </div>
+      )}
 
     </div>
   );
@@ -3202,6 +3949,28 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
     }));
   };
 
+  const handleNextStep = () => {
+    if (!justificativa.trim()) {
+      alert('Por favor, preencha o campo obrigatório: Justificativa Técnica do Pleito!');
+      return;
+    }
+    if (tipo === 'Valor' || tipo === 'Valor e Prazo') {
+      const val = parseFloat(valorExtra) || 0;
+      if (val <= 0) {
+        alert('Por favor, preencha o campo obrigatório: Acréscimo de Valor (R$)!');
+        return;
+      }
+    }
+    if (tipo === 'Prazo' || tipo === 'Valor e Prazo') {
+      const pz = parseInt(prazoExtra) || 0;
+      if (pz <= 0) {
+        alert('Por favor, preencha o campo obrigatório: Prorrogação de Prazo (dias)!');
+        return;
+      }
+    }
+    setStep(2);
+  };
+
   const handleCreateAditivo = (e: React.FormEvent) => {
     e.preventDefault();
     if (!justificativa.trim()) {
@@ -3224,7 +3993,12 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
       status: 'Pendente',
       analistaAtribuido: undefined,
       checklistDocs: checklist.map(c => ({ item: c.item, checked: c.checked })),
-      parecerConsolidado: ''
+      parecerConsolidado: '',
+      documentos: [
+        { id: 'relatorio_tecnico', nome: 'Parecer Circunstanciado de Engenharia / Memorial Descritivo', desc: 'Justificativa técnica circunstanciada assinada por engenheiro.', status: 'pendente', obrigatorio: true },
+        { id: 'planilha_orcamentaria_ref', nome: 'Planilha de Custos Unitários Aditiva Refatorada e Cronograma', desc: 'Apresentação de custos aditivos detalhados com indicação do reajuste.', status: 'pendente', obrigatorio: true },
+        { id: 'anotacao_responsabilidade_tecnica', nome: 'ART do Responsável Técnico do Projeto Alterado', desc: 'Anotação de responsabilidade registrada no CREA.', status: 'pendente', obrigatorio: false }
+      ]
     };
 
     const updated = {
@@ -3319,24 +4093,6 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
           <p className="text-xs text-blue-100/90 mt-1 max-w-xl">
             Aditivos e ajustes agem como solicitações que demandam instrução processual detalhada, checklist documental de 2ª etapa e parecer consolidado técnico homologado pela DORE.
           </p>
-        </div>
-
-        {/* Persona Switch Box */}
-        <div className="bg-white/10 backdrop-blur-xs p-1.5 rounded-2xl border border-white/15 flex items-center gap-1 w-full md:w-auto">
-          <button
-            type="button"
-            onClick={() => setRole('proponente')}
-            className={`flex-1 md:flex-initial text-[11px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${role === 'proponente' ? 'bg-white text-blue-900 shadow-sm' : 'text-white hover:bg-white/5'}`}
-          >
-            <User className="w-3.5 h-3.5" /> Escola/SRE
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole('dore')}
-            className={`flex-1 md:flex-initial text-[11px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${role === 'dore' ? 'bg-white text-indigo-900 shadow-sm' : 'text-white hover:bg-white/5'}`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" /> Analista DORE
-          </button>
         </div>
       </div>
 
@@ -3752,7 +4508,7 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                   <div className="pt-2 text-right">
                     <button
                       type="button"
-                      onClick={() => setStep(2)}
+                      onClick={handleNextStep}
                       className="px-6 py-2.5 text-xs font-black uppercase text-white bg-blue-600 hover:bg-blue-700 rounded-xl cursor-pointer shadow-xs inline-flex items-center gap-1"
                     >
                       Avançar para Checklist <ArrowRight className="w-4 h-4" />
@@ -3896,6 +4652,28 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
     }));
   };
 
+  const handleNextStep = () => {
+    if (!responsavelP.trim()) {
+      alert('Por favor, preencha o campo obrigatório: Responsável Técnico (Eng)!');
+      return;
+    }
+    if (!registroProfissional.trim()) {
+      alert('Por favor, preencha o campo obrigatório: Nº Registro Mtb (CREA/CAU)!');
+      return;
+    }
+    if (!observacoesAjuste.trim()) {
+      alert('Por favor, preencha o campo obrigatório: Justificativa e Anotações Técnicas de Ajuste!');
+      return;
+    }
+    const acre = parseFloat(valorAjusteInp) || 0;
+    const sup = parseFloat(supressao) || 0;
+    if (acre <= 0 && sup <= 0) {
+      alert('Por favor, preencha um valor maior que zero em pelo menos um campo: Acréscimo ou Supressão!');
+      return;
+    }
+    setStep(2);
+  };
+
   const handleCreateAjuste = (e: React.FormEvent) => {
     e.preventDefault();
     if (!observacoesAjuste.trim()) {
@@ -4020,24 +4798,6 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
           <p className="text-xs text-indigo-100/90 mt-1 max-w-xl">
             Ajustes e mudanças orçamentárias que demandem aprovação interna da equipe DORE para validade jurídica e financeira.
           </p>
-        </div>
-
-        {/* Persona Switch Box */}
-        <div className="bg-white/10 backdrop-blur-xs p-1.5 rounded-2xl border border-white/15 flex items-center gap-1 w-full md:w-auto">
-          <button
-            type="button"
-            onClick={() => setRole('proponente')}
-            className={`flex-1 md:flex-initial text-[11px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${role === 'proponente' ? 'bg-white text-indigo-900 shadow-sm' : 'text-white hover:bg-white/5'}`}
-          >
-            <User className="w-3.5 h-3.5" /> Engenheiro / Escola
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole('dore')}
-            className={`flex-1 md:flex-initial text-[11px] font-black uppercase tracking-wider px-3.5 py-2 rounded-xl transition-all flex items-center justify-center gap-1 ${role === 'dore' ? 'bg-white text-purple-900 shadow-sm' : 'text-white hover:bg-white/5'}`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5" /> Analista DORE
-          </button>
         </div>
       </div>
 
@@ -4428,7 +5188,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                   <div className="pt-2 text-right">
                     <button
                       type="button"
-                      onClick={() => setStep(2)}
+                      onClick={handleNextStep}
                       className="px-6 py-2.5 text-xs font-black uppercase text-white bg-indigo-650 hover:bg-indigo-700 rounded-xl cursor-pointer shadow-xs inline-flex items-center gap-1"
                     >
                       Checklist de Evidências <ArrowRight className="w-4 h-4" />
@@ -4506,7 +5266,15 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
 }
 
 // --- 7. SUB FISCALIZAÇÃO ---
-function SubFiscalizacao({ currentSol, onUpdate }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void }) {
+function SubFiscalizacao({ 
+  currentSol, 
+  onUpdate,
+  solicitacoes = []
+}: { 
+  currentSol: Solicitacao | null; 
+  onUpdate: (sol: Solicitacao) => void;
+  solicitacoes?: Solicitacao[];
+}) {
   const [fiscalInput, setFiscalInput] = useState(() => currentSol?.fiscalObraAtribuido || '');
   const [diarioTexto, setDiarioTexto] = useState('');
   const [historicoDiarios, setHistoricoDiarios] = useState<string[]>([
@@ -4563,14 +5331,64 @@ function SubFiscalizacao({ currentSol, onUpdate }: { currentSol: Solicitacao | n
             <User className="w-4 h-4 text-blue-500" /> Fiscal de Obra Credenciado
           </h3>
           <form onSubmit={salvarFiscal} className="space-y-3">
-            <input
+            <select
               id="fiscal-obra-input"
-              type="text"
-              placeholder="Ex: Engª. Helena Rocha"
               value={fiscalInput}
               onChange={(e) => setFiscalInput(e.target.value)}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden"
-            />
+              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-850 font-bold focus:outline-hidden cursor-pointer"
+            >
+              <option value="">-- Atribuir Fiscal de Engenharia --</option>
+              <option value="Eng. Roberto Mendes">Eng. Roberto Mendes (CREA 142.532/D)</option>
+              <option value="Arq. Patrícia Silveira">Arq. Patrícia Silveira (CAU A44.120-3)</option>
+              <option value="Eng. Marcos Pontes">Eng. Marcos Pontes (CREA 95.841/D)</option>
+              <option value="Enga. Luciana Duarte">Enga. Luciana Duarte (CREA 168.990/D)</option>
+            </select>
+
+            {fiscalInput && (() => {
+              const currentPoints = getFiscalPoints(fiscalInput, solicitacoes);
+              const isAlreadyAssigned = currentSol?.fiscalObraAtribuido === fiscalInput;
+              const cl = (currentSol?.classeObra || '').toUpperCase().trim();
+              const thisWorkPoints = cl === 'IV' || cl.includes('SPECIAL') || cl.includes('MUITO ALTA') || cl === 'CLASSE IV' ? 4
+                : cl === 'III' || cl.includes('GRANDE') || cl === 'CLASSE III' ? 3
+                : cl === 'II' || cl.includes('MÉDIO') || cl.includes('MEDIO') || cl === 'CLASSE II' ? 2
+                : 1;
+
+              const simulatedPoints = isAlreadyAssigned 
+                ? currentPoints 
+                : currentPoints + thisWorkPoints;
+
+              let isSuperAllocated = simulatedPoints > 35;
+              let badgeBg = isSuperAllocated 
+                ? 'bg-rose-50 border-rose-250 text-rose-800' 
+                : simulatedPoints >= 25 
+                  ? 'bg-amber-50 border-amber-250 text-amber-850' 
+                  : 'bg-emerald-50 border-emerald-250 text-emerald-800';
+                  
+              let dotColor = isSuperAllocated 
+                ? 'bg-rose-600 animate-ping' 
+                : simulatedPoints >= 25 
+                  ? 'bg-amber-500' 
+                  : 'bg-emerald-500';
+
+              return (
+                <div id="fiscal-control-allocation-semaphore-detail" className={`p-2.5 rounded-xl border ${badgeBg} text-[10px] transition-all flex flex-col gap-1`}>
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                    <span className="uppercase tracking-wider">
+                      {isSuperAllocated ? '🚨 SUPER-ALOCADO (CRÍTICO)' : simulatedPoints >= 25 ? '⚠️ ALOCAÇÃO ALTA (ATENÇÃO)' : '✅ ALOCAÇÃO REGULAR (OK)'}
+                    </span>
+                  </div>
+                  <p className="opacity-90">
+                    Pontuação atual de fiscalização: <strong>{simulatedPoints} / 35 pontos</strong> recomendados.
+                    {isAlreadyAssigned 
+                      ? ` (Obra corrente inclusa na contagem: ${thisWorkPoints} pts)` 
+                      : ` (Passará a incluir esta obra no histórico: +${thisWorkPoints} pts)`
+                    }
+                  </p>
+                </div>
+              );
+            })()}
+
             <button
               id="save-fiscal-btn"
               type="submit"

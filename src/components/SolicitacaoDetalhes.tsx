@@ -417,6 +417,7 @@ ${totalPendencias > 0
     onUpdate({
       ...solicitacao,
       etapaAtual: 'analise',
+      analistaAtribuido: undefined,
       contadorAnalises: nextCount,
       historicoEtapas: [
         ...solicitacao.historicoEtapas,
@@ -841,15 +842,30 @@ ${totalPendencias > 0
     const ajustesAtuais = solicitacao.ajustes || [];
     const novosAjustes = idAdjustmentStatusHelper(ajustesAtuais, ajusteId, novoStatus);
 
+    const isSendingToDore = novoStatus === 'analise_dore';
+
     onUpdate({
       ...solicitacao,
-      ajustes: novosAjustes
+      etapaAtual: isSendingToDore ? 'analise' as const : solicitacao.etapaAtual,
+      analistaAtribuido: isSendingToDore ? undefined : solicitacao.analistaAtribuido,
+      ajustes: novosAjustes,
+      historicoEtapas: isSendingToDore ? [
+        ...(solicitacao.historicoEtapas || []),
+        {
+          etapa: 'analise' as const,
+          data: new Date().toISOString().split('T')[0],
+          responsavel: 'Téc. Infraestrutura (Envio de Ajuste)'
+        }
+      ] : solicitacao.historicoEtapas
     });
-    alert('Status da solicitação de ajuste atualizado!');
+    alert(isSendingToDore 
+      ? 'Ajuste encaminhado com sucesso para a tela de atribuição em análise técnica!'
+      : 'Status da solicitação de ajuste atualizado!'
+    );
   };
 
   const idAdjustmentStatusHelper = (ajustes: AjustePlanilha[], id: string, status: 'em_elaboracao' | 'analise_dore' | 'validado'): AjustePlanilha[] => {
-    return ajustes.map(a => a.id === id ? { ...a, status } : a);
+    return ajustes.map(a => a.id === id ? { ...a, status, analistaAtribuido: status === 'analise_dore' ? undefined : a.analistaAtribuido } : a);
   };
 
   const atribuirAnalistaAjuste = (ajusteId: string, analista: string) => {
@@ -4937,7 +4953,7 @@ ${totalPendencias > 0
                               </div>
                             </div>
 
-                            {perfilUsuario === 'gestor_paf' && adt.status === 'Pendente' && (
+                            {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf') && adt.status === 'Pendente' && (
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <select
                                   onChange={(e) => atribuirAnalistaAditivo(adt.id, e.target.value)}

@@ -1721,6 +1721,7 @@ export function NovoAtendimentoPanel({
                     const updated = {
                       ...selectedAtendimentoForEdit,
                       etapaAtual: 'analise' as const,
+                      analistaAtribuido: undefined,
                       historicoEtapas: [
                         ...selectedAtendimentoForEdit.historicoEtapas,
                         { 
@@ -2101,6 +2102,9 @@ export function AtribuicaoPanel({
   };
 
   const solicitacoesFiltradas = solicitacoes.filter(sol => {
+    // Only show processes in 'analise' (technical analysis/attribution) stage
+    if (sol.etapaAtual !== 'analise') return false;
+
     // 1. ID de Obra
     if (filtroId && sol.id !== filtroId) return false;
 
@@ -2204,7 +2208,7 @@ export function AtribuicaoPanel({
       <div className="border-b border-slate-100 pb-4 mb-5">
         <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2 font-sans">
           <Users className="w-5 h-5 text-blue-600" />
-          Atribuição Técnica de Engenharia e Pareceristas
+          Atribuição Técnica
         </h2>
         <p className="text-xs text-slate-500 mt-1 font-sans">
           Distribua as demandas por analistas técnicos, fiscais de campo ou engenheiros DORE credenciados para vistorias físicas e pareceres normativos de engenharia.
@@ -2445,6 +2449,7 @@ export function AtribuicaoPanel({
               <th className="py-2.5 px-4 font-sans text-left">ESCOLA / LOCALIZAÇÃO</th>
               <th className="py-2.5 px-4 font-sans text-left">TIPO / DEMANDA</th>
               <th className="py-2.5 px-4 font-sans text-left text-center">TIPO ATENDIMENTO</th>
+              <th className="py-2.5 px-4 font-sans text-left text-center">CLASSIFICAÇÃO</th>
               <th className="py-2.5 px-4 font-sans text-left">DESCRIÇÃO</th>
               <th className="py-2.5 px-4 font-sans text-left">VALOR PLANILHA</th>
               <th className="py-2.5 px-4 font-sans text-left">DATA CRIAÇÃO</th>
@@ -2546,6 +2551,33 @@ export function AtribuicaoPanel({
                     <span className="border border-emerald-400 text-emerald-800 bg-emerald-50/20 px-3 py-1 rounded text-[9.5px] font-bold uppercase tracking-[0.05em]">
                       {(sol.tipoAtendimento || 'NORMAL').toUpperCase()}
                     </span>
+                  </td>
+
+                  {/* CLASSIFICAÇÃO */}
+                  <td className="py-4 px-3 whitespace-nowrap text-center">
+                    {(() => {
+                      const hasAditivo = sol.aditivos && sol.aditivos.some(a => a.status === 'Pendente');
+                      const hasAjuste = sol.ajustes && sol.ajustes.some(a => a.status === 'analise_dore');
+                      if (hasAditivo) {
+                        return (
+                          <span className="border border-rose-300 text-rose-700 bg-rose-50/30 px-3 py-1.5 rounded text-[9.5px] font-bold uppercase tracking-[0.05em]">
+                            Termo Aditivo
+                          </span>
+                        );
+                      }
+                      if (hasAjuste) {
+                        return (
+                          <span className="border border-violet-300 text-violet-700 bg-violet-50/30 px-3 py-1.5 rounded text-[9.5px] font-bold uppercase tracking-[0.05em]">
+                            Ajuste
+                          </span>
+                        );
+                      }
+                      return (
+                        <span className="border border-blue-300 text-blue-700 bg-blue-50/30 px-3 py-1.5 rounded text-[9.5px] font-bold uppercase tracking-[0.05em]">
+                          Atendimento Inicial
+                        </span>
+                      );
+                    })()}
                   </td>
 
                   {/* 5. DESCRIÇÃO */}

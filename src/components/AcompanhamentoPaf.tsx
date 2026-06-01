@@ -6,12 +6,14 @@ interface AcompanhamentoPafProps {
   solicitacoes: Solicitacao[];
   onSelectSolicitacao: (id: string) => void;
   perfilUsuario: string;
+  onNavigateToTab?: (tab: string, schoolId?: string) => void;
 }
 
 export default function AcompanhamentoPaf({
   solicitacoes,
   onSelectSolicitacao,
-  perfilUsuario
+  perfilUsuario,
+  onNavigateToTab
 }: AcompanhamentoPafProps) {
   // Filter States
   const [filtroId, setFiltroId] = useState('');
@@ -340,9 +342,10 @@ export default function AcompanhamentoPaf({
                   <th className="py-3 px-4 w-32">CODESC</th>
                   <th className="py-3 px-4 w-52">Município / SRE</th>
                   <th className="py-3 px-4">Escola</th>
-                  <th className="py-3 px-4 w-44">Responsável</th>
+                  <th className="py-3 px-4 w-44">Tipo de Atendimento</th>
                   <th className="py-3 px-4 w-36">Data Criação</th>
-                  <th className="py-3 px-5 text-right w-72">Status</th>
+                  <th className="py-3 px-4 text-right w-40">Valor Homologado</th>
+                  <th className="py-3 px-5 text-center w-64">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -351,17 +354,41 @@ export default function AcompanhamentoPaf({
                   const formattedDate = formatBrDate(sol.dataCriacao);
                   const valorObra = sol.valorHomologado || sol.valorPlanilha || 0;
 
+                  const handleRowClick = () => {
+                    if (sol.etapaAtual === 'paf') {
+                      if (onNavigateToTab) {
+                        onNavigateToTab('paf', sol.id);
+                      }
+                    } else if (sol.etapaAtual === 'paf_autorizacao') {
+                      if (onNavigateToTab) {
+                        onNavigateToTab('paf_autorizacao', sol.id);
+                      }
+                    } else if (
+                      sol.numeroPAF ||
+                      sol.etapaAtual === 'ordem_inicio' ||
+                      sol.etapaAtual === 'execucao' ||
+                      (sol.statusPAF && sol.statusPAF.toLowerCase().includes('gerado')) ||
+                      (sol.statusObra && sol.statusObra.toLowerCase().includes('gerado'))
+                    ) {
+                      if (onNavigateToTab) {
+                        onNavigateToTab('execucao_cadastro', sol.id);
+                      }
+                    } else {
+                      onSelectSolicitacao(sol.id);
+                    }
+                  };
+
                   return (
-                    <tr key={sol.id} className="hover:bg-slate-50/50 transition-colors group align-middle h-16">
+                    <tr
+                      key={sol.id}
+                      onClick={handleRowClick}
+                      className="hover:bg-blue-50/20 active:bg-blue-100/30 transition-colors group align-middle h-16 cursor-pointer"
+                    >
                       {/* OBRA ID */}
                       <td className="py-3 px-5 font-mono font-black text-blue-700">
-                        <button
-                          type="button"
-                          onClick={() => onSelectSolicitacao(sol.id)}
-                          className="hover:underline hover:text-blue-800 transition-colors cursor-pointer text-left font-bold"
-                        >
+                        <span className="hover:underline transition-colors font-bold">
                           {sol.id}
-                        </button>
+                        </span>
                       </td>
 
                       {/* CODESC */}
@@ -384,17 +411,11 @@ export default function AcompanhamentoPaf({
                         {sol.nomeEscola}
                       </td>
 
-                      {/* RESPONSÁVEL */}
+                      {/* TIPO DE ATENDIMENTO */}
                       <td className="py-3 px-4">
-                        {sol.analistaAtribuido ? (
-                          <span className="font-semibold text-slate-700">
-                            {sol.analistaAtribuido}
-                          </span>
-                        ) : (
-                          <span className="text-amber-600 font-medium italic text-[11px]">
-                            Não atribuído
-                          </span>
-                        )}
+                        <span className="inline-flex items-center px-2 py-1 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black uppercase tracking-wide font-sans">
+                          {sol.tipoAtendimento || sol.tipo || 'NORMAL'}
+                        </span>
                       </td>
 
                       {/* DATA CRIAÇÃO */}
@@ -402,18 +423,20 @@ export default function AcompanhamentoPaf({
                         {formattedDate}
                       </td>
 
-                      {/* STATUS (With badge and aligned price) */}
-                      <td className="py-3 px-5">
-                        <div className="flex items-center justify-end gap-3.5">
-                          <span className={`px-3 py-1.5 border font-semibold rounded-full text-[11px] text-center shrink-0 tracking-wide select-none ${statusInfo.classes}`}>
-                            {statusInfo.label}
-                          </span>
-                          {valorObra > 0 && (
-                            <span className="font-mono font-extrabold text-[12.5px] text-slate-800 shrink-0 select-all whitespace-nowrap">
-                              R$ {valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                          )}
-                        </div>
+                      {/* VALOR */}
+                      <td className="py-3 px-4 text-right font-mono font-extrabold text-[12.5px] text-slate-805">
+                        {valorObra > 0 ? (
+                          <span>R$ {valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        ) : (
+                          <span className="text-slate-400 font-sans font-normal text-[11px]">---</span>
+                        )}
+                      </td>
+
+                      {/* STATUS Badge */}
+                      <td className="py-3 px-5 text-center">
+                        <span className={`inline-block px-3 py-1.5 border font-semibold rounded-full text-[11px] shrink-0 tracking-wide select-none ${statusInfo.classes}`}>
+                          {statusInfo.label}
+                        </span>
                       </td>
                     </tr>
                   );

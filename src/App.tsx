@@ -118,6 +118,7 @@ export default function App() {
   // REJECTION STATE FOR "3. AUTORIZAÇÃO DO PAF"
   const [rejectingSchoolId, setRejectingSchoolId] = useState<string | null>(null);
   const [rejectionJustification, setRejectionJustification] = useState('');
+  const [confirmingSolId, setConfirmingSolId] = useState<string | null>(null);
 
   // REGISTROS DE SEGURANÇA (INTERACTIVE STATE MODEL)
   const [usuariosSeguranca, setUsuariosSeguranca] = useState([
@@ -1272,12 +1273,12 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
                       {[
                         { id: 'execucao_cadastro', label: 'Cadastro de Obras', func: 'cadastro', icon: Building2 },
+                        { id: 'execucao_contratos', label: 'Contratos', func: 'jurídico/financeiro', icon: ClipboardList },
                         { id: 'execucao_acompanhamento', label: 'Acompanhamento da Obra', func: 'Dashboard, Diário, Vistorias', icon: HardHat },
                         { id: 'execucao_medicoes', label: 'Medições', func: 'financeiro técnico', icon: Layers },
-                        { id: 'execucao_contratos', label: 'Contratos', func: 'jurídico/financeiro', icon: ClipboardList },
+                        { id: 'execucao_ajustes', label: 'Ajustes', func: 'alteração contratual', icon: Calculator },
                         { id: 'execucao_aditivos', label: 'Aditivos', func: 'alterações contratuais', icon: Plus },
-                        { id: 'execucao_ajustes', label: 'Ajuste', func: 'alterações contratuais', icon: Calculator },
-                        { id: 'execucao_documentos', label: 'Documentos', func: 'GED', icon: UploadCloud }
+                        { id: 'execucao_documentos', label: 'Documentações', func: 'GED', icon: UploadCloud }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
@@ -1620,6 +1621,15 @@ export default function App() {
             <AcompanhamentoPaf
               solicitacoes={solicitacoes}
               onSelectSolicitacao={(id) => setIdSolicitacaoSelecionada(id)}
+              onNavigateToTab={(tab, schoolId) => {
+                setActiveSubTask(tab);
+                if (schoolId) {
+                  setSelectedSchoolsPorSubtask(prev => ({
+                    ...prev,
+                    [tab]: schoolId
+                  }));
+                }
+              }}
               perfilUsuario={perfilUsuario}
             />
           ) : activeModule === 'gestao_obras' && activeSubTask === 'paf_autorizacao' && !idSolicitacaoSelecionada ? (
@@ -1879,12 +1889,7 @@ export default function App() {
                                     {perfilUsuario === 'gestor_paf' ? (
                                       <div className="flex items-center justify-center gap-1.5">
                                         <button
-                                          onClick={() => {
-                                            const confirm = window.confirm(`Deseja aprovar e autorizar o PAF da escola ${sol.nomeEscola} no valor de R$ ${valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`);
-                                            if (confirm) {
-                                              handleAutorizarPAF(sol);
-                                            }
-                                          }}
+                                          onClick={() => setConfirmingSolId(sol.id)}
                                           className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors shadow-3xs cursor-pointer"
                                         >
                                           Autorizar PAF
@@ -1970,6 +1975,57 @@ export default function App() {
                       </div>
                     );
                   })()}
+
+                  {/* MODAL DE CONFIRMAÇÃO DE AUTORIZAÇÃO PAF */}
+                  {confirmingSolId && (() => {
+                    const activeConfirming = solicitacoes.find(s => s.id === confirmingSolId);
+                    if (!activeConfirming) return null;
+                    const valorObra = activeConfirming.valorPlanilha || activeConfirming.valorHomologado || 0;
+                    return (
+                      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center z-50 p-4 font-sans">
+                        <div className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-150">
+                          <div className="bg-emerald-50 border-b border-emerald-100 p-4">
+                            <h3 className="text-sm font-extrabold text-emerald-800 uppercase tracking-wider flex items-center gap-2">
+                              ✓ Confirmar Autorização do PAF
+                            </h3>
+                            <p className="text-xs text-neutral-500 mt-0.5">Demanda: {activeConfirming.nomeEscola} ({activeConfirming.id})</p>
+                          </div>
+                          
+                          <div className="p-4 space-y-4">
+                            <p className="text-xs text-slate-650 leading-relaxed">
+                              Deseja aprovar e autorizar oficialmente o PAF desta demanda no valor de:
+                            </p>
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+                              <span className="text-base font-black text-emerald-700 font-mono">
+                                R$ {valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 italic leading-normal">
+                              Esta ação registrará o trâmite na planilha oficial de dotações orçamentárias e arquivará o parecer do Gestor Geral.
+                            </p>
+                          </div>
+
+                          <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2 text-xs">
+                            <button
+                              onClick={() => setConfirmingSolId(null)}
+                              className="px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-lg cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleAutorizarPAF(activeConfirming);
+                                setConfirmingSolId(null);
+                              }}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg cursor-pointer"
+                            >
+                              Autorizar PAF
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()
@@ -2031,9 +2087,9 @@ export default function App() {
                 execucao_medicoes: 'Medições',
                 execucao_contratos: 'Contratos',
                 execucao_aditivos: 'Aditivos',
-                execucao_ajustes: 'Ajuste',
+                execucao_ajustes: 'Ajustes',
                 execucao_fiscalizacao: 'Fiscalização',
-                execucao_documentos: 'Documentos'
+                execucao_documentos: 'Documentações'
               };
 
               const stepConfig = [
@@ -2047,50 +2103,6 @@ export default function App() {
 
               return (
                 <div className="w-full flex-grow flex flex-col space-y-6">
-                  {/* STEPPER SUPERIOR - INDICANDO ETAPA DO PROCESSO (DENTRO DO CONTEXTO DE SUBTASK) */}
-                  {activeSchool && (
-                    <div id="step-guide-container" className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-xs">
-                      <div className="flex flex-col md:flex-row items-center justify-between w-full max-w-5xl mx-auto gap-4 md:gap-0">
-                        {stepConfig.map((step, idx) => {
-                          const stepOrder = ['cadastro', 'analise', 'paf_autorizacao', 'paf', 'ordem_inicio', 'execucao'];
-                          const currentStepKey = activeSchool.etapaAtual === 'correcao' ? 'cadastro' : activeSchool.etapaAtual;
-                          const curIdx = stepOrder.indexOf(currentStepKey);
-                          const stepIdx = stepOrder.indexOf(step.key);
-                          const isCompleted = stepIdx < curIdx;
-                          const isActive = stepIdx === curIdx;
-
-                          return (
-                            <React.Fragment key={step.key}>
-                              <div className="flex items-center text-left">
-                                <div className={`w-9 h-9 rounded-full flex items-center justify-center font-extrabold text-xs shrink-0 border-2 transition-all duration-300 ${
-                                  isCompleted 
-                                    ? 'bg-blue-105 border-blue-650 text-blue-650' 
-                                    : isActive 
-                                      ? 'bg-blue-600 border-blue-600 text-white shadow-sm ring-4 ring-blue-500/10' 
-                                      : 'bg-white border-slate-200 text-slate-400'
-                                }`}>
-                                  {isCompleted ? '✓' : idx + 1}
-                                </div>
-                                <div className="ml-3">
-                                  <span className={`block text-xs font-bold uppercase tracking-wider ${
-                                    isActive || isCompleted ? 'text-blue-700' : 'text-slate-450'
-                                  }`}>
-                                    {step.label}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 block font-medium leading-none mt-1">{step.desc}</span>
-                                </div>
-                              </div>
-                              {idx < stepConfig.length - 1 && (
-                                <div className={`hidden md:block flex-1 h-[2px] mx-4 transition-all duration-300 ${
-                                  stepIdx < curIdx ? 'bg-blue-600' : 'bg-slate-200'
-                                }`} />
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
 
                   {/* CABEÇALHO DA FILA E SELETOR DE ATENDIMENTO - LIGHTENED THE COLOR */}
                   {activeSubTask === 'analise' ? (
@@ -2520,6 +2532,7 @@ export default function App() {
                       perfilUsuario={perfilUsuario}
                       onSelect={(sol) => handleSelectSolicitacao(sol)}
                       empresasSeguranca={empresasSeguranca}
+                      setActiveSubTask={setActiveSubTask}
                     />
                   ) : activeSubTask.startsWith('relat_') ? (
                     <RelatoriosPanel
