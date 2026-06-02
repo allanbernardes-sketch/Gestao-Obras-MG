@@ -4,7 +4,7 @@ import {
   UploadCloud, LayoutGrid, DollarSign, Calendar, MapPin, Search, CheckCircle, 
   Trash2, AlertCircle, Sparkles, User, FileText, ChevronRight, Scale, Clock,
   FileCheck, FileUp, Zap, HelpCircle, History, Info, Trash, RefreshCw, Eye,
-  TrendingUp, Edit, ClipboardCheck, Wrench, ArrowRight, Lock, Filter
+  TrendingUp, Edit, ClipboardCheck, Wrench, ArrowRight, Lock, Filter, X
 } from 'lucide-react';
 import { Solicitacao, Medicao, Aditivo, AjustePlanilha, PerfilUsuario, EmpresaSeguranca, computeStatusObra } from '../types';
 
@@ -44,6 +44,17 @@ export default function ExecucaoSubmodulos({
   // Form states
   const [filtroTexto, setFiltroTexto] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Modal de seleção de obra
+  const [modalObraAberto, setModalObraAberto] = useState(false);
+  const [modalBusca, setModalBusca] = useState('');
+  const [modalFiltroId, setModalFiltroId] = useState('');
+  const [modalFiltroCodesc, setModalFiltroCodesc] = useState('Todos');
+  const [modalFiltroMunicipio, setModalFiltroMunicipio] = useState('Todos');
+  const [modalFiltroSre, setModalFiltroSre] = useState('Todos');
+  const [modalFiltroEscola, setModalFiltroEscola] = useState('Todos');
+  const [modalFiltroFiscal, setModalFiltroFiscal] = useState('Não Definido');
+  const [modalFiltroStatus, setModalFiltroStatus] = useState('Todos');
 
   // SRE helper list
   const sresUnicas = useMemo(() => {
@@ -173,40 +184,221 @@ export default function ExecucaoSubmodulos({
           </div>
         </div>
 
-        {/* Workspace select selector */}
-        {activeSubTask !== 'execucao_cadastro' && activeSubTask !== 'execucao_contratos' && (
-          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col md:flex-row gap-3 items-center">
-            <span className="text-xs font-black uppercase text-slate-500 font-sans tracking-wider shrink-0 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-blue-500" />
-              Obra sob Foco:
-            </span>
-            <select
-              id="foco-obra-select"
-              value={selectedSolId}
-              onChange={(e) => setSelectedSolId(e.target.value)}
-              className="flex-1 w-full text-xs font-bold p-2 border border-slate-300 rounded-xl bg-slate-50 hover:bg-white text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-3xs"
-            >
-              <option value="">-- Selecione uma Escola em Execução --</option>
-              {execSols.map(sol => (
-                <option key={sol.id} value={sol.id}>
-                  {sol.nomeEscola} ({sol.municipio} • R$ {(sol.valorPlanilha || sol.valorHomologadoContratacao || 0).toLocaleString('pt-BR')})
-                </option>
-              ))}
-            </select>
-
-            <div className="relative w-full md:w-64">
-              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
-              <input
-                id="search-obras-sub"
-                type="text"
-                placeholder="Filtrar escolas..."
-                value={filtroTexto}
-                onChange={(e) => setFiltroTexto(e.target.value)}
-                className="w-full text-xs pl-8 pr-3 py-2 border border-slate-200 rounded-xl bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
+        {/* Obra sob Foco — trigger button */}
+        <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-sans">
+            {selectedSol ? (
+              <>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Obra sob Foco:</span>
+                <span className="font-black text-slate-800">{selectedSol.nomeEscola}</span>
+                <span className="text-slate-400">•</span>
+                <span className="font-mono text-blue-700 font-bold">{selectedSol.id}</span>
+                <span className="text-slate-400 hidden sm:inline">•</span>
+                <span className="text-slate-500 hidden sm:inline">{selectedSol.municipio} • {selectedSol.sre}</span>
+              </>
+            ) : (
+              <span className="text-slate-400 italic">Nenhuma obra selecionada</span>
+            )}
           </div>
-        )}
+          <button
+            type="button"
+            onClick={() => setModalObraAberto(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-[#13264d] hover:bg-[#1a3a6e] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shrink-0"
+          >
+            <Search className="w-3.5 h-3.5" />
+            Alterar Obra Focada
+            <span className="bg-blue-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{execSols.length}</span>
+          </button>
+        </div>
+
+        {/* MODAL SELEÇÃO DE OBRA */}
+        {modalObraAberto && (() => {
+          const municipios = ['Todos', ...Array.from(new Set(execSols.map(s => s.municipio)))];
+          const sres = ['Todos', ...Array.from(new Set(execSols.map(s => s.sre)))];
+          const escolas = ['Todos', ...execSols.map(s => s.nomeEscola)];
+          const fiscais = ['Não Definido', ...Array.from(new Set(execSols.map(s => s.fiscalObraAtribuido).filter(Boolean) as string[]))];
+          const statusOpts = ['Todos', 'Em cadastramento da obra', 'Em processo de contratação', 'Não iniciada', 'Em execução', 'Paralisada', 'Concluída'];
+
+          const obrasFiltradas = execSols.filter(s => {
+            const q = modalBusca.toLowerCase();
+            const matchBusca = !modalBusca || s.nomeEscola.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.municipio.toLowerCase().includes(q) || s.codesc.includes(q);
+            const matchId = !modalFiltroId || s.id === modalFiltroId;
+            const matchCodesc = modalFiltroCodesc === 'Todos' || s.codesc === modalFiltroCodesc;
+            const matchMun = modalFiltroMunicipio === 'Todos' || s.municipio === modalFiltroMunicipio;
+            const matchSre = modalFiltroSre === 'Todos' || s.sre === modalFiltroSre;
+            const matchEscola = modalFiltroEscola === 'Todos' || s.nomeEscola === modalFiltroEscola;
+            const matchFiscal = modalFiltroFiscal === 'Não Definido' || s.fiscalObraAtribuido === modalFiltroFiscal;
+            const matchStatus = modalFiltroStatus === 'Todos' || computeStatusObra(s).label === modalFiltroStatus;
+            return matchBusca && matchId && matchCodesc && matchMun && matchSre && matchEscola && matchFiscal && matchStatus;
+          });
+
+          const limparFiltros = () => {
+            setModalFiltroId('');
+            setModalFiltroCodesc('Todos');
+            setModalFiltroMunicipio('Todos');
+            setModalFiltroSre('Todos');
+            setModalFiltroEscola('Todos');
+            setModalFiltroFiscal('Não Definido');
+            setModalFiltroStatus('Todos');
+            setModalBusca('');
+          };
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setModalObraAberto(false)} />
+              <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden">
+
+                {/* Modal header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-white" />
+                    </div>
+                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide">Mudar Escola em Foco</h2>
+                  </div>
+                  <button onClick={() => setModalObraAberto(false)} className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="px-5 py-3 overflow-y-auto flex-1 space-y-4">
+                  <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+                    Selecione outra escola aplicando filtros de pesquisa abaixo. As alterações feitas serão preservadas em seu ambiente de trabalho.
+                  </p>
+
+                  {/* Filters */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Filter className="w-3 h-3 text-blue-500" />
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">Filtros de Pesquisa</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">ID de Obra</label>
+                        <select value={modalFiltroId} onChange={e => setModalFiltroId(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                          <option value="">Todos</option>
+                          {execSols.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">CODESC</label>
+                        <select value={modalFiltroCodesc} onChange={e => setModalFiltroCodesc(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                          {['Todos', ...Array.from(new Set(execSols.map(s => s.codesc)))].map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Município</label>
+                        <select value={modalFiltroMunicipio} onChange={e => setModalFiltroMunicipio(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                          {municipios.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Regional (SRE)</label>
+                        <select value={modalFiltroSre} onChange={e => setModalFiltroSre(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                          {sres.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Escola</label>
+                        <select value={modalFiltroEscola} onChange={e => setModalFiltroEscola(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                          {escolas.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Responsável (Fiscal)</label>
+                        <select value={modalFiltroFiscal} onChange={e => setModalFiltroFiscal(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                          {fiscais.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Status</label>
+                        <select value={modalFiltroStatus} onChange={e => setModalFiltroStatus(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                          {statusOpts.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <button onClick={limparFiltros} className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 font-bold ml-auto cursor-pointer transition">
+                      <RefreshCw className="w-3 h-3" /> Limpar Filtros
+                    </button>
+                  </div>
+
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Busca rápida por palavra-chave..."
+                      value={modalBusca}
+                      onChange={e => setModalBusca(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 font-sans"
+                    />
+                  </div>
+
+                  {/* Results */}
+                  <div className="space-y-2">
+                    {obrasFiltradas.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-slate-400 font-sans">
+                        Nenhuma obra encontrada com os filtros aplicados.
+                      </div>
+                    ) : obrasFiltradas.map(sol => {
+                      const isSelecionada = sol.id === selectedSolId;
+                      const statusInfo = computeStatusObra(sol);
+                      return (
+                        <button
+                          key={sol.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSolId(sol.id);
+                            setModalObraAberto(false);
+                          }}
+                          className={`w-full text-left px-4 py-3 rounded-xl border transition-all cursor-pointer ${
+                            isSelecionada
+                              ? 'border-blue-400 bg-blue-50 shadow-sm'
+                              : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50/70'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className={`text-xs font-black leading-tight ${isSelecionada ? 'text-blue-800' : 'text-slate-800'}`}>{sol.nomeEscola}</p>
+                              <p className="text-[10px] text-slate-500 font-sans mt-0.5">
+                                {sol.municipio} • {sol.sre} • CODESC {sol.codesc}
+                              </p>
+                            </div>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border shrink-0 ${statusInfo.badgeClass}`}>
+                              {statusInfo.label}
+                            </span>
+                          </div>
+                          {isSelecionada && (
+                            <div className="mt-1.5 flex items-center gap-1 text-[10px] text-blue-600 font-bold">
+                              <CheckCircle className="w-3 h-3" /> Em foco
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Modal footer */}
+                <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <span className="text-[10px] text-slate-400 font-sans">
+                    Exibindo {obrasFiltradas.length} {obrasFiltradas.length === 1 ? 'escola' : 'escolas'} pós-PAF
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setModalObraAberto(false)}
+                    className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-slate-800 transition cursor-pointer"
+                  >
+                    <LayoutGrid className="w-3 h-3" />
+                    Voltar para Painel Mestre
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* SUBMODULE RENDERING ROUTER */}
@@ -1319,51 +1511,15 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           </div>
         </div>
       
-      {/* Obra sob Foco Selector - Moved here */}
-      <div id="filtro-foco-card" className="bg-white rounded-2xl border border-slate-205 p-5 flex flex-col sm:flex-row items-center gap-3.5 mt-6 mb-4 shadow-3xs animate-fadeIn">
-        <span className="text-xs font-black uppercase text-slate-555 font-sans tracking-wider shrink-0 flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-blue-600" />
-          Foco da Ficha de Cadastro:
-        </span>
-        <select
-          id="foco-obra-select-ficha"
-          value={currentSol?.id || ''}
-          onChange={(e) => setFocoObra(e.target.value)}
-          className="flex-1 w-full text-xs font-bold p-2.5 border border-slate-200 rounded-xl bg-slate-50 hover:bg-white text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-3xs transition-all text-ellipsis"
-        >
-          <option value="">-- Selecione uma Escola para abrir a Ficha Detalhada --</option>
-          {listProcessosObra.map(sol => (
-            <option key={sol.id} value={sol.id}>
-              {sol.id} - {sol.nomeEscola} ({sol.municipio} • R$ {(sol.valorPlanilha || sol.valorHomologadoContratacao || 0).toLocaleString('pt-BR')})
-            </option>
-          ))}
-        </select>
-        {currentSol && (
-          <button
-            id="foco-obra-clear-ficha-btn"
-            onClick={() => setFocoObra('')}
-            className="text-[10.5px] text-rose-650 hover:text-white hover:bg-rose-600 font-extrabold px-3.5 py-2 rounded-xl border border-rose-200 hover:border-transparent transition-all duration-150 cursor-pointer whitespace-nowrap self-stretch sm:self-auto text-center"
-          >
-            Limpar Foco ×
-          </button>
-        )}
-      </div>
 
       {/* Selected work detailed overview in CADASTRO subtask - Horizontally rearranged */}
       {currentSol ? (
         <div id="ficha-consolidado-card" className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-3xs animate-fadeIn">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center border-b border-slate-100 pb-3">
             <h2 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 font-sans">
               <Info className="w-4 h-4 text-blue-500" />
               Ficha do Cadastro Consolidado: <span className="text-blue-700 font-mono text-[13px] font-black ml-1 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-100">{currentSol.id}</span>
             </h2>
-            <button
-              id="clear-foco-ficha-header-btn"
-              onClick={() => setFocoObra('')}
-              className="text-[10px] text-slate-500 hover:text-slate-700 font-bold bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-xl transition cursor-pointer"
-            >
-              Limpar Foco ×
-            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 font-sans">
@@ -3611,6 +3767,11 @@ function SubContratos({
 
   const [selectedEmpresaId, setSelectedEmpresaId] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [modalAlteracaoAberto, setModalAlteracaoAberto] = useState(false);
+  const [modalDistratoAberto, setModalDistratoAberto] = useState(false);
+  const [distratoJustificativa, setDistratoJustificativa] = useState('');
+  const [distratoData, setDistratoData] = useState('');
+  const [distratoFile, setDistratoFile] = useState<{ name: string; size: string } | null>(null);
   const [empresaInput, setEmpresaInput] = useState('');
   const [cnpjInput, setCnpjInput] = useState('');
   const [tipoAcaoInput, setTipoAcaoInput] = useState<'alteracao' | 'distrato'>('alteracao');
@@ -4014,42 +4175,21 @@ function SubContratos({
             </div>
           </div>
 
-          {/* NOVOS BOTÕES DE AÇÃO CONTRATUAL PEDIDOS PELO USUÁRIO */}
+          {/* AÇÕES CONTRATUAIS — abrem modais dedicados */}
           <div className="border-t border-slate-105 pt-4">
             <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2.5">Ações Contratuais Disponíveis no SGO</h4>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  setTipoAcaoInput('alteracao');
-                  setShowForm(true);
-                  setTimeout(() => {
-                    document.getElementById('edit-contract-form')?.scrollIntoView({ behavior: 'smooth' });
-                  }, 120);
-                }}
-                className={`py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  showForm && tipoAcaoInput === 'alteracao'
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm'
-                    : 'bg-blue-50/50 hover:bg-blue-100/60 text-blue-700 border-blue-200 hover:border-blue-300'
-                }`}
+                onClick={() => { setTipoAcaoInput('alteracao'); setModalAlteracaoAberto(true); }}
+                className="py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-blue-50/50 hover:bg-blue-100/60 text-blue-700 border-blue-200 hover:border-blue-300"
               >
                 <Edit className="w-4 h-4" /> Alteração do Contrato
               </button>
-
               <button
                 type="button"
-                onClick={() => {
-                  setTipoAcaoInput('distrato');
-                  setShowForm(true);
-                  setTimeout(() => {
-                    document.getElementById('edit-contract-form')?.scrollIntoView({ behavior: 'smooth' });
-                  }, 120);
-                }}
-                className={`py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  showForm && tipoAcaoInput === 'distrato'
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600 shadow-sm'
-                    : 'bg-rose-50/50 hover:bg-rose-100/60 text-rose-700 border-rose-200 hover:border-rose-300'
-                }`}
+                onClick={() => { setTipoAcaoInput('distrato'); setModalDistratoAberto(true); }}
+                className="py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-rose-50/50 hover:bg-rose-100/60 text-rose-700 border-rose-200 hover:border-rose-300"
               >
                 <Trash2 className="w-4 h-4" /> Distrato do Contrato
               </button>
@@ -4083,21 +4223,30 @@ function SubContratos({
 
       </div>
 
-      {/* Editing / registering contract updates form */}
-      {showForm && (
-        <div id="edit-contract-form" className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs animate-fadeIn scroll-mt-6">
+      {/* ===== MODAL ALTERAÇÃO DO CONTRATO ===== */}
+      {modalAlteracaoAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setModalAlteracaoAberto(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[92vh] overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <Edit className="w-4 h-4 text-white" />
+                </div>
+                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide">Alteração do Contrato</h2>
+              </div>
+              <button onClick={() => setModalAlteracaoAberto(false)} className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-400 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+          <div id="edit-contract-form" className="space-y-4">
           <div className="flex justify-between items-center border-b border-slate-100 pb-2.5 mb-4">
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <Edit className="w-4 h-4 text-blue-500" /> 
-              {tipoAcaoInput === 'distrato' ? 'Homologar Distrato' : 'Alterar Contrato'}
+              <Edit className="w-4 h-4 text-blue-500" />
+              Alterar Contrato
             </h3>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="px-2.5 py-1 text-[10px] font-bold text-slate-450 hover:text-slate-700 bg-slate-50 hover:bg-slate-100/60 rounded-lg transition-all border border-slate-200/60 cursor-pointer"
-            >
-              Cancelar
-            </button>
           </div>
 
           <form onSubmit={handleUpdateContrato} className="space-y-4">
@@ -4166,51 +4315,6 @@ function SubContratos({
                 onChange={(e) => setDuracaoInput(e.target.value)}
                 className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-bold"
               />
-            </div>
-
-            <div className="border-t border-slate-100 pt-3">
-              <label className="text-[10px] font-bold text-slate-500 block mb-1.5">Escolha a Ação Contratual Destinada SGO</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTipoAcaoInput('alteracao')}
-                  className={`p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
-                    tipoAcaoInput === 'alteracao'
-                      ? 'border-blue-600 bg-blue-50/50 shadow-3xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-3 h-3 rounded-full border flex items-center justify-center ${tipoAcaoInput === 'alteracao' ? 'border-blue-600' : 'border-slate-300'}`}>
-                      {tipoAcaoInput === 'alteracao' && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />}
-                    </span>
-                    <span className="text-[11px] font-extrabold text-slate-800">Alteração de Contrato</span>
-                  </div>
-                  <p className="text-[9.5px] text-slate-400 mt-1 leading-snug">
-                    Atualizar valor, prazos ou garantias da contratada vigente.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTipoAcaoInput('distrato')}
-                  className={`p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer ${
-                    tipoAcaoInput === 'distrato'
-                      ? 'border-rose-500 bg-rose-50/30 shadow-3xs'
-                      : 'border-slate-200 hover:border-slate-300 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className={`w-3 h-3 rounded-full border flex items-center justify-center ${tipoAcaoInput === 'distrato' ? 'border-rose-500' : 'border-slate-300'}`}>
-                      {tipoAcaoInput === 'distrato' && <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />}
-                    </span>
-                    <span className="text-[11px] font-extrabold text-slate-800">Distrato do Contrato</span>
-                  </div>
-                  <p className="text-[9.5px] text-slate-400 mt-1 leading-snug">
-                    Encerrar contrato ativo e registrar arquivamento histórico.
-                  </p>
-                </button>
-              </div>
             </div>
 
             {/* datas do contrato */}
@@ -4319,9 +4423,178 @@ function SubContratos({
                   : 'bg-[#1c3870] hover:bg-[#1a2f5c]'
               }`}
             >
-              {tipoAcaoInput === 'distrato' ? '⚠️ Homologar Distrato Contratual' : 'Salvar Alteração Contratual'}
+              Salvar Alteração Contratual
             </button>
           </form>
+        </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
+              <button type="button" onClick={() => setModalAlteracaoAberto(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition cursor-pointer">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== MODAL DISTRATO DO CONTRATO ===== */}
+      {modalDistratoAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setModalDistratoAberto(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[92vh] overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-rose-100 bg-rose-50/40 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-rose-600 rounded-lg flex items-center justify-center">
+                  <Trash2 className="w-4 h-4 text-white" />
+                </div>
+                <h2 className="text-sm font-black text-rose-800 uppercase tracking-wide">Distrato do Contrato</h2>
+              </div>
+              <button onClick={() => setModalDistratoAberto(false)} className="p-1.5 hover:bg-rose-100 rounded-lg transition text-rose-400 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+
+              {/* Aviso */}
+              <div className="flex items-start gap-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-black text-rose-800">Ação irreversível — Distrato Contratual</p>
+                  <p className="text-[11px] text-rose-700 font-sans mt-0.5 leading-relaxed">
+                    Ao homologar o distrato, o contrato ativo será encerrado, a empresa será arquivada no histórico e a obra retornará ao status de contratação.
+                  </p>
+                </div>
+              </div>
+
+              {/* Empresa atual */}
+              <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500">Empresa a ser distratada</h4>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[9px] font-extrabold text-slate-400 block uppercase tracking-wider mb-1">Razão Social</label>
+                    <input readOnly value={currentSol?.empresaContratada || '—'} className="w-full text-xs font-bold p-2.5 border border-slate-200 rounded-xl bg-white text-slate-700 cursor-not-allowed" />
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-extrabold text-slate-400 block uppercase tracking-wider mb-1">CNPJ</label>
+                    <input readOnly value={currentSol?.cnpjEmpresa || '—'} className="w-full text-xs font-mono font-bold p-2.5 border border-slate-200 rounded-xl bg-white text-slate-700 cursor-not-allowed" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Campos do distrato */}
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-600 block uppercase tracking-wider">Data do Distrato *</label>
+                  <input
+                    type="date"
+                    value={distratoData}
+                    onChange={e => setDistratoData(e.target.value)}
+                    className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:ring-1 focus:ring-rose-400 cursor-pointer"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-600 block uppercase tracking-wider">Justificativa do Distrato *</label>
+                  <select
+                    value={distratoJustificativa}
+                    onChange={e => setDistratoJustificativa(e.target.value)}
+                    className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:ring-1 focus:ring-rose-400 cursor-pointer"
+                  >
+                    <option value="">Selecione o motivo...</option>
+                    <option value="Inadimplência contratual da empresa">Inadimplência contratual da empresa</option>
+                    <option value="Abandono de obra">Abandono de obra</option>
+                    <option value="Descumprimento de cláusulas contratuais">Descumprimento de cláusulas contratuais</option>
+                    <option value="Acordo mútuo entre as partes">Acordo mútuo entre as partes</option>
+                    <option value="Falência ou recuperação judicial da empresa">Falência ou recuperação judicial da empresa</option>
+                    <option value="Determinação judicial">Determinação judicial</option>
+                    <option value="Irregularidade fiscal ou cadastral da contratada">Irregularidade fiscal ou cadastral da contratada</option>
+                    <option value="Outro motivo">Outro motivo</option>
+                  </select>
+                </div>
+
+                {/* Upload documento de distrato */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold text-slate-600 block uppercase tracking-wider">Documento de Distrato</label>
+                  <div className={`border-2 border-dashed rounded-xl p-5 text-center transition-all ${distratoFile ? 'border-emerald-400 bg-emerald-50/10' : 'border-rose-200 hover:border-rose-400 hover:bg-rose-50/30'}`}>
+                    {distratoFile ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-emerald-500" />
+                          <div className="text-left">
+                            <p className="text-xs font-bold text-slate-800">{distratoFile.name}</p>
+                            <p className="text-[10px] text-slate-400">{distratoFile.size}</p>
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => setDistratoFile(null)} className="text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded transition">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer flex flex-col items-center gap-1.5">
+                        <FileUp className="w-7 h-7 text-rose-300" />
+                        <p className="text-xs font-bold text-slate-500">Termo / Ata de Distrato</p>
+                        <span className="text-[10px] text-slate-400 font-sans">Clique ou arraste o arquivo aqui (PDF)</span>
+                        <input type="file" className="hidden" accept=".pdf,.doc,.docx"
+                          onChange={e => {
+                            if (e.target.files?.[0]) {
+                              const f = e.target.files[0];
+                              setDistratoFile({ name: f.name, size: `${(f.size / 1024).toFixed(0)} KB` });
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-rose-100 bg-rose-50/30 flex items-center justify-between gap-3 shrink-0">
+              <button type="button" onClick={() => setModalDistratoAberto(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition cursor-pointer">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!distratoJustificativa || !distratoData}
+                onClick={() => {
+                  if (!currentSol) return;
+                  const updatedAnteriores = [...(currentSol.empresasAnteriores || [])];
+                  const jaArquivada = updatedAnteriores.some(e => e.cnpj === currentSol.cnpjEmpresa);
+                  if (!jaArquivada && currentSol.empresaContratada) {
+                    updatedAnteriores.push({
+                      id: `prev_${Date.now()}`,
+                      nome: currentSol.empresaContratada,
+                      cnpj: currentSol.cnpjEmpresa || '',
+                      avancoFisicoOriginal: 0,
+                      dataDistrato: distratoData,
+                      justificativaDistrato: distratoJustificativa,
+                      documentoDistratoFileName: distratoFile?.name,
+                    });
+                  }
+                  onUpdate({
+                    ...currentSol,
+                    empresaContratada: '',
+                    cnpjEmpresa: '',
+                    statusContratoEmpresa: 'Distratada',
+                    justificativaDistrato: distratoJustificativa,
+                    dataDistrato: distratoData,
+                    documentoDistratoFileName: distratoFile?.name,
+                    empresasAnteriores: updatedAnteriores,
+                  });
+                  setModalDistratoAberto(false);
+                  setDistratoJustificativa('');
+                  setDistratoData('');
+                  setDistratoFile(null);
+                }}
+                className="px-5 py-2.5 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                Homologar Distrato Contratual
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

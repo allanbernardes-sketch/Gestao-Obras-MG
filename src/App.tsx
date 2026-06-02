@@ -11,13 +11,14 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database } from 'lucide-react';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
 import AcompanhamentoPaf from './components/AcompanhamentoPaf';
 import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
 import CentralNavegacaoObras from './components/CentralNavegacaoObras';
+import OrcamentoModule from './components/orcamento/OrcamentoModule';
 
 
 export default function App() {
@@ -153,6 +154,9 @@ export default function App() {
     execucao: false,
     encerramento: false,
     relatorios: false,
+    orca_orcamentos: false,
+    orca_banco: false,
+    orca_analises: false,
   });
 
   const toggleCategory = (cat: string) => {
@@ -1280,7 +1284,8 @@ export default function App() {
                         { id: 'execucao_medicoes', label: 'Medições', func: 'financeiro técnico', icon: Layers },
                         { id: 'execucao_ajustes', label: 'Ajustes', func: 'alteração contratual', icon: Calculator },
                         { id: 'execucao_aditivos', label: 'Aditivos', func: 'alterações contratuais', icon: Plus },
-                        { id: 'execucao_documentos', label: 'Documentações', func: 'GED', icon: UploadCloud }
+                        { id: 'execucao_documentos', label: 'Documentações', func: 'GED', icon: UploadCloud },
+                        { id: 'conclusao', label: 'Termo de Encerramento', func: 'encerramento da obra', icon: CheckCircle }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
@@ -1305,49 +1310,6 @@ export default function App() {
                             <span className="text-[9px] font-mono font-medium text-slate-450 uppercase tracking-wider pl-4.5 block">
                               {item.func}
                             </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* 6. ENCERRAMENTO */}
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => toggleCategory('encerramento')}
-                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-md text-left text-[10px] font-black text-slate-500 uppercase tracking-wider font-sans cursor-pointer group"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      Encerramento
-                    </span>
-                    <ChevronDown className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-transform ${collapsedCategories.encerramento ? '-rotate-90' : ''}`} />
-                  </button>
-
-                  {!collapsedCategories.encerramento && (
-                    <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
-                      {[
-                        { id: 'conclusao', label: 'Termo de Conclusão', icon: CheckCircle }
-                      ].map(item => {
-                        const Icon = item.icon;
-                        const isActive = activeSubTask === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => {
-                              setActiveSubTask(item.id);
-                              setIdSolicitacaoSelecionada(null);
-                            }}
-                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left transition-all duration-150 cursor-pointer ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 pl-1.5 rounded-r-md'
-                                : 'hover:bg-slate-50/70 text-slate-600 pl-1.5'
-                            }`}
-                          >
-                            <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                            <span className="text-xs font-sans">{item.label}</span>
                           </button>
                         );
                       })}
@@ -1419,8 +1381,6 @@ export default function App() {
               <div className="space-y-1.5">
                 {[
                   { id: 'cadastro_usuario', label: 'Controle de Usuários', desc: 'Cadastro de analistas e fiscais', icon: UserPlus },
-                  { id: 'cadastro_enderecos', label: 'Cadastro de Endereços', desc: 'Dossiê geográfico de escolas', icon: MapPin },
-                  { id: 'cadastro_escolas', label: 'Cadastro de Escolas SGO', desc: 'Instanciar escolas no fluxo', icon: Building2 },
                   { id: 'cadastro_empresas', label: 'Cadastro de Empresas', desc: 'Empresas contratadas homologadas', icon: Building },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -1455,22 +1415,111 @@ export default function App() {
           {activeModule === 'orcamento' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
-                <span className="text-[9px] font-extrabold text-amber-600 uppercase tracking-widest block font-sans">
-                  Módulo Ativo
-                </span>
+                <span className="text-[9px] font-extrabold text-amber-600 uppercase tracking-widest block font-sans">Módulo Ativo</span>
                 <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 mt-0.5 font-sans">
-                  <Coins className="w-4 h-4 text-slate-700 shrink-0" />
-                  Orçamentos (PAF)
+                  <Coins className="w-4 h-4 text-amber-600 shrink-0" />
+                  Orçamento
                 </h3>
               </div>
-              <div className="text-center p-4 bg-amber-50/50 border border-amber-100 rounded-lg">
-                <Coins className="w-8 h-8 text-amber-500 mx-auto mb-2 animate-bounce" />
-                <p className="text-[11px] font-semibold text-amber-800 font-sans leading-relaxed text-center w-full">
-                  Finanças & Desembolso
-                </p>
-                <p className="text-[10px] text-slate-500 mt-1 font-sans text-center w-full">
-                  Controle orçamentário integral das demandas de obras em breve.
-                </p>
+
+              <div className="space-y-3">
+
+                {/* 1. ORÇAMENTOS */}
+                <div className="space-y-1">
+                  <button type="button" onClick={() => toggleCategory('orca_orcamentos')}
+                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-md text-left text-[10px] font-black text-slate-500 uppercase tracking-wider font-sans cursor-pointer group">
+                    <span className="flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      Orçamentos
+                    </span>
+                    <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsedCategories.orca_orcamentos ? '-rotate-90' : ''}`} />
+                  </button>
+                  {!collapsedCategories.orca_orcamentos && (
+                    <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
+                      {[{ id: 'orca_budgets', label: 'Meus Orçamentos', func: 'gestão de orçamentos', icon: FileText }].map(item => {
+                        const Icon = item.icon;
+                        const isActive = activeSubTask === item.id;
+                        return (
+                          <button key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                            className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
+                            <div className="flex items-center gap-1.5 w-full">
+                              <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                              <span className="text-xs font-sans font-bold leading-tight">{item.label}</span>
+                            </div>
+                            <span className="text-[9px] font-mono font-medium text-slate-400 uppercase tracking-wider pl-4.5 block">{item.func}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. BANCO DE DADOS */}
+                <div className="space-y-1">
+                  <button type="button" onClick={() => toggleCategory('orca_banco')}
+                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-md text-left text-[10px] font-black text-slate-500 uppercase tracking-wider font-sans cursor-pointer group">
+                    <span className="flex items-center gap-1.5">
+                      <Database className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      Banco de Dados
+                    </span>
+                    <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsedCategories.orca_banco ? '-rotate-90' : ''}`} />
+                  </button>
+                  {!collapsedCategories.orca_banco && (
+                    <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
+                      {[
+                        { id: 'orca_compositions', label: 'Composições', func: 'banco de composições', icon: Layers },
+                        { id: 'orca_supplies', label: 'Insumos', func: 'banco de insumos', icon: Package },
+                      ].map(item => {
+                        const Icon = item.icon;
+                        const isActive = activeSubTask === item.id;
+                        return (
+                          <button key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                            className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
+                            <div className="flex items-center gap-1.5 w-full">
+                              <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                              <span className="text-xs font-sans font-bold leading-tight">{item.label}</span>
+                            </div>
+                            <span className="text-[9px] font-mono font-medium text-slate-400 uppercase tracking-wider pl-4.5 block">{item.func}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. ANÁLISES */}
+                <div className="space-y-1">
+                  <button type="button" onClick={() => toggleCategory('orca_analises')}
+                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-md text-left text-[10px] font-black text-slate-500 uppercase tracking-wider font-sans cursor-pointer group">
+                    <span className="flex items-center gap-1.5">
+                      <BarChart2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      Análises
+                    </span>
+                    <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsedCategories.orca_analises ? '-rotate-90' : ''}`} />
+                  </button>
+                  {!collapsedCategories.orca_analises && (
+                    <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
+                      {[
+                        { id: 'orca_reports', label: 'Relatórios', func: 'curva ABC e Pareto', icon: BarChart2 },
+                        { id: 'orca_sync', label: 'Análises Síncronas', func: 'inteligência orçamentária', icon: Zap },
+                      ].map(item => {
+                        const Icon = item.icon;
+                        const isActive = activeSubTask === item.id;
+                        return (
+                          <button key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                            className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
+                            <div className="flex items-center gap-1.5 w-full">
+                              <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                              <span className="text-xs font-sans font-bold leading-tight">{item.label}</span>
+                            </div>
+                            <span className="text-[9px] font-mono font-medium text-slate-400 uppercase tracking-wider pl-4.5 block">{item.func}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
           )}
@@ -2776,311 +2825,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* SUBTASK CADASTRO DE ENDEREÇOS */}
-                  {activeSubTask === 'cadastro_enderecos' && (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-3xs text-left">
-                        <h2 className="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
-                          <MapPin className="w-5 h-5 text-rose-650 text-rose-600 shrink-0" />
-                          Cadastro de Endereços de Escolas (Dossiê de Infraestrutura)
-                        </h2>
-                        <p className="text-xs text-slate-500 mb-6">
-                          Mapeie os endereços oficiais das escolas estaduais para subsidiar estudos de microplanejamento, regularização de imóvel no checklist e segurança preventiva na contratação física.
-                        </p>
-
-                        <form onSubmit={handleCadastrarEndereco} className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                          <div className="md:col-span-1">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              CEP *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={endCep}
-                              onChange={(e) => setEndCep(e.target.value)}
-                              placeholder="ex: 38700-000"
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                            />
-                          </div>
-
-                          <div className="md:col-span-2">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              Rua/Avenida *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={endRua}
-                              onChange={(e) => setEndRua(e.target.value)}
-                              placeholder="ex: Avenida Afonso Pena"
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                            />
-                          </div>
-
-                          <div className="md:col-span-1">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              Número
-                            </label>
-                            <input
-                              type="text"
-                              value={endNum}
-                              onChange={(e) => setEndNum(e.target.value)}
-                              placeholder="ex: 1200 ou S/N"
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                            />
-                          </div>
-
-                          <div className="md:col-span-1">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              Bairro
-                            </label>
-                            <input
-                              type="text"
-                              value={endBairro}
-                              onChange={(e) => setEndBairro(e.target.value)}
-                              placeholder="ex: Centro"
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                            />
-                          </div>
-
-                          <div className="md:col-span-1">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              Cidade *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={endCidade}
-                              onChange={(e) => setEndCidade(e.target.value)}
-                              placeholder="ex: Patos de Minas"
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                            />
-                          </div>
-
-                          <div className="md:col-span-4">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              Vincular com Escola cadastrada no GESTO SGO
-                            </label>
-                            <select
-                              value={endEscola}
-                              onChange={(e) => setEndEscola(e.target.value)}
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden cursor-pointer"
-                            >
-                              <option value="">Geral / Sem vínculo específico</option>
-                              {solicitacoes.map(sol => (
-                                <option key={sol.id} value={sol.nomeEscola}>{sol.nomeEscola} (CODESC: {sol.codesc})</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="md:col-span-2 flex items-end">
-                            <button
-                              type="submit"
-                              className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
-                            >
-                              Salvar Endereço
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-
-                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-3xs">
-                        <div className="p-4 border-b border-slate-100 bg-slate-50/50 text-left">
-                          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                            Endereços de Unidades Escolares ({enderecosSeguranca.length})
-                          </h3>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase bg-slate-50 text-left">
-                                <th className="py-2.5 px-4 w-20">ID</th>
-                                <th className="py-2.5 px-4">Escola Vinculada SGO</th>
-                                <th className="py-2.5 px-4 font-sans">Endereço Completo</th>
-                                <th className="py-2.5 px-4 font-sans">Cidade</th>
-                                <th className="py-2.5 px-4 font-sans">CEP</th>
-                                <th className="py-2.5 px-4 text-center font-sans">Ações</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {enderecosSeguranca.map(e => (
-                                <tr key={e.id} className="border-b border-slate-100 hover:bg-slate-50/20 text-xs text-left">
-                                  <td className="py-3 px-4 font-bold text-slate-600 font-mono text-[10px]">{e.id}</td>
-                                  <td className="py-3 px-4 font-bold text-rose-800">🏫 {e.escola}</td>
-                                  <td className="py-3 px-4 text-slate-700 font-medium">
-                                    {e.rua}, Nº {e.numero}, {e.bairro}
-                                  </td>
-                                  <td className="py-3 px-4 text-slate-500 font-semibold">{e.cidade} (MG)</td>
-                                  <td className="py-3 px-4 text-slate-550 font-mono text-[11px]">{e.cep}</td>
-                                  <td className="py-3 px-4 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEnderecosSeguranca(enderecosSeguranca.filter(end => end.id !== e.id));
-                                      }}
-                                      className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer p-1"
-                                      title="Remover endereço"
-                                    >
-                                      🗑️
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SUBTASK CADASTRO DE ESCOLAS COMPLETO */}
-                  {activeSubTask === 'cadastro_escolas' && (
-                    <div className="space-y-6 animate-in fade-in duration-200">
-                      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-3xs text-left">
-                        <h2 className="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
-                          <Building2 className="w-5 h-5 text-rose-650 text-rose-600 shrink-0" />
-                          Cadastro Oficial de Nova Escola no Sistema SGO
-                        </h2>
-                        <p className="text-xs text-slate-500 mb-6">
-                          Insira as informações técnicas e tributárias de uma nova unidade escolar. Ao cadastrar, uma nova demanda é gerada automaticamente no módulo de <strong className="font-semibold text-blue-600">Gestão de Obras</strong> para dar início imediato ao instrução de documentos obrigatórios.
-                        </p>
-
-                        <form onSubmit={handleCadastrarEscolaCompleto} className="space-y-6">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Nome da Escola *
-                              </label>
-                              <input
-                                type="text"
-                                required
-                                value={escNome}
-                                onChange={(e) => setEscNome(e.target.value)}
-                                placeholder="ex: E.E. Padre Almir Neves"
-                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Código CODESC (8 dígitos) *
-                              </label>
-                              <input
-                                type="text"
-                                required
-                                maxLength={8}
-                                value={escCodesc}
-                                onChange={(e) => setEscCodesc(e.target.value.replace(/\D/g, ''))}
-                                placeholder="ex: 12345678"
-                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden font-mono"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Município *
-                              </label>
-                              <input
-                                type="text"
-                                required
-                                value={escMunicipio}
-                                onChange={(e) => setEscMunicipio(e.target.value)}
-                                placeholder="ex: Patos de Minas"
-                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                              />
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                                SRE Vinculada *
-                              </label>
-                              <select
-                                value={escSre}
-                                onChange={(e) => setEscSre(e.target.value)}
-                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden cursor-pointer"
-                              >
-                                <option value="SRE Patos de Minas">SRE Patos de Minas</option>
-                                <option value="SRE Metropolitana A">SRE Metropolitana A</option>
-                                <option value="SRE Metropolitana B">SRE Metropolitana B</option>
-                                <option value="SRE Montes Claros">SRE Montes Claros</option>
-                                <option value="SRE Juiz de Fora">SRE Juiz de Fora</option>
-                                <option value="SRE Governador Valadares">SRE Governador Valadares</option>
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Tipo de Prédio *
-                              </label>
-                              <select
-                                value={escPredio}
-                                onChange={(e) => setEscPredio(e.target.value)}
-                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden cursor-pointer"
-                              >
-                                <option value="Próprio Estadual">Próprio Estadual</option>
-                                <option value="Cedido pelo Município">Cedido pelo Município</option>
-                                <option value="Alugado">Alugado</option>
-                                <option value="Parceria / Mutirão">Parceria / Mutirão</option>
-                              </select>
-                            </div>
-
-                            <div>
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Tipo de Atendimento *
-                              </label>
-                              <select
-                                value={escAtendimento}
-                                onChange={(e) => setEscAtendimento(e.target.value)}
-                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden cursor-pointer"
-                              >
-                                <option value="Atendimento Direto">Atendimento Direto</option>
-                                <option value="Ensino Integral">Ensino Integral</option>
-                                <option value="Ensino Profissionalizante">Ensino Profissionalizante</option>
-                                <option value="Educação Especial">Educação Especial</option>
-                              </select>
-                            </div>
-
-                            <div className="md:col-span-3">
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                                Compartilhamento com Outro Órgão (🎒 Sobre Atendimento) *
-                              </label>
-                              <input
-                                type="text"
-                                required
-                                value={escOrgao}
-                                onChange={(e) => setEscOrgao(e.target.value)}
-                                placeholder="ex: Exclusivo Estadual, Compartilhado com Município, etc."
-                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end pt-2">
-                            <button
-                              type="submit"
-                              className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
-                            >
-                              <Building2 className="w-4 h-4" />
-                              <span>Instanciar nova Escola no SGO</span>
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-
-                      <div className="bg-rose-50 border border-rose-100 rounded-xl p-5 flex items-start gap-3">
-                        <span className="text-xl">💡</span>
-                        <div className="text-left">
-                          <h4 className="text-xs font-bold text-rose-800 mb-1">
-                            Sincronização Ativa de Fluxo Escolar
-                          </h4>
-                          <p className="text-[11px] text-slate-600 leading-relaxed font-semibold">
-                            Ao instanciar a escola através deste painel de Segurança, ela é imediatamente injetada na <strong className="font-semibold text-blue-600">Gestão de Obras (Visão Geral)</strong>. Isso possibilita que a equipe de engenharia e vistoria administrativa comece o checklist documental instantaneamente.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {/* SUBTASK CADASTRO DE EMPRESAS */}
                   {activeSubTask === 'cadastro_empresas' && (
@@ -3252,26 +2996,7 @@ export default function App() {
               )}
 
               {activeModule === 'orcamento' && (
-                <div className="flex-1 flex flex-col items-center justify-center py-16 text-center select-none animate-in fade-in duration-205">
-                  <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center border border-amber-100 mb-4 animate-bounce">
-                    <Coins className="w-8 h-8 text-amber-600" />
-                  </div>
-                  <h2 className="text-base font-bold text-slate-800 font-sans">
-                    Módulo de Planejamento de Orçamentos (Em Construção)
-                  </h2>
-                  <p className="text-xs text-slate-500 max-w-sm mt-1.5 font-sans leading-relaxed text-center">
-                    Este espaço integrará os convênios governamentais e dotações orçamentárias associadas ao Plano de Atendimento Financeiro (PAF). 
-                    Nele, analistas de finanças governamentais poderão acompanhar a alocação de créditos de empenho e cronogramas de desembolso financeiro regional.
-                  </p>
-                  <div className="mt-6 flex gap-2">
-                    <span className="px-2.5 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500 font-mono">
-                      v1.2.0-planned
-                    </span>
-                    <span className="px-2.5 py-1 bg-amber-100 rounded-full text-[10px] font-bold text-amber-700 font-sans">
-                      DORE Financeiro
-                    </span>
-                  </div>
-                </div>
+                <OrcamentoModule activeSubTask={activeSubTask} setActiveSubTask={setActiveSubTask} />
               )}
 
               {activeModule === 'imoveis' && (

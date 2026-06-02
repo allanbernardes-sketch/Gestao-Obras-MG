@@ -1,0 +1,70 @@
+import { useState, useEffect } from 'react';
+import { Budget } from './types';
+import BudgetList from './BudgetList';
+import BudgetDetail from './BudgetDetail';
+import CompositionsManager from './CompositionsManager';
+import SuppliesManager from './SuppliesManager';
+import Reports from './Reports';
+import SyncAnalysis from './SyncAnalysis';
+
+const STORAGE_KEY = 'orca_budgets_mg';
+
+interface Props {
+  activeSubTask: string;
+  setActiveSubTask: (s: string) => void;
+}
+
+function loadBudgets(): Budget[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Budget[]) : [];
+  } catch { return []; }
+}
+
+export default function OrcamentoModule({ activeSubTask, setActiveSubTask }: Props) {
+  const [budgets, setBudgets] = useState<Budget[]>(loadBudgets);
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(budgets));
+  }, [budgets]);
+
+  // When navigating away from budgets tab, clear selection
+  useEffect(() => {
+    if (activeSubTask !== 'orca_budgets') setSelectedBudgetId(null);
+  }, [activeSubTask]);
+
+  const handleCreate = (budget: Budget) => setBudgets(prev => [budget, ...prev]);
+  const handleUpdate = (id: string, data: Partial<Budget>) => setBudgets(prev => prev.map(b => b.id === id ? { ...b, ...data } : b));
+  const handleUpdateFull = (updated: Budget) => setBudgets(prev => prev.map(b => b.id === updated.id ? updated : b));
+  const handleDelete = (id: string) => { setBudgets(prev => prev.filter(b => b.id !== id)); if (selectedBudgetId === id) setSelectedBudgetId(null); };
+
+  const selectedBudget = budgets.find(b => b.id === selectedBudgetId) || null;
+
+  // BudgetDetail takes over when a budget is selected in the budgets tab
+  if (activeSubTask === 'orca_budgets' && selectedBudget) {
+    return (
+      <BudgetDetail
+        budget={selectedBudget}
+        onBack={() => setSelectedBudgetId(null)}
+        onUpdate={handleUpdateFull}
+      />
+    );
+  }
+
+  switch (activeSubTask) {
+    case 'orca_budgets':
+      return <BudgetList budgets={budgets} onSelect={setSelectedBudgetId} onCreate={handleCreate} onUpdate={handleUpdate} onDelete={handleDelete} />;
+    case 'orca_compositions':
+      return <CompositionsManager budgets={budgets} />;
+    case 'orca_supplies':
+      return <SuppliesManager />;
+    case 'orca_reports':
+      return <Reports budgets={budgets} />;
+    case 'orca_sync':
+      return <SyncAnalysis budgets={budgets} />;
+    default:
+      // Default to budget list
+      return <BudgetList budgets={budgets} onSelect={setSelectedBudgetId} onCreate={handleCreate} onUpdate={handleUpdate} onDelete={handleDelete} />;
+  }
+}
