@@ -179,6 +179,10 @@ export interface Solicitacao {
   cronogramaFisicoFinanceiroFileName?: string;
   cronogramaFisicoFinanceiroFileSize?: string;
   cronogramaFisicoFinanceiroUploadedAt?: string;
+  ataOrdemInicioFileName?: string;
+  ataOrdemInicioFileSize?: string;
+  ataOrdemInicioUploadedAt?: string;
+  outrosAnexosOrdemInicio?: { id: string; nome: string; fileName?: string; fileSize?: string; uploadedAt?: string }[];
   duracaoObraMeses?: number;
   classeObra?: string;
   pontuacaoComplexidade?: number;
@@ -255,6 +259,83 @@ export interface Solicitacao {
 }
 
 export type PerfilUsuario = 'tecnico_infra' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore';
+
+export type StatusObraComputado =
+  | 'Em cadastramento da obra'
+  | 'Em processo de contratação'
+  | 'Não iniciada'
+  | 'Em execução'
+  | 'Paralisada'
+  | 'Concluída';
+
+export interface StatusObraInfo {
+  label: StatusObraComputado;
+  color: 'purple' | 'yellow' | 'slate' | 'blue' | 'orange' | 'green';
+  badgeClass: string;
+  descricao: string;
+}
+
+export function computeStatusObra(sol: Solicitacao): StatusObraInfo {
+  // 1. Paralisada — override manual via botão
+  if (sol.statusObra === 'Paralisada' && sol.justificativaParalizacao) {
+    return {
+      label: 'Paralisada',
+      color: 'orange',
+      badgeClass: 'bg-orange-100 text-orange-700 border-orange-200',
+      descricao: `Obra paralisada em ${sol.dataParalizacao ? new Date(sol.dataParalizacao).toLocaleDateString('pt-BR') : '---'}. Motivo: ${sol.justificativaParalizacao}.`,
+    };
+  }
+
+  // 2. Concluída — medições atingem 100% do orçamento
+  const totalMed = sol.medicoes?.reduce((s, m) => s + m.valor, 0) || 0;
+  const orcamento = sol.valorPlanilha || sol.valorHomologadoContratacao || 0;
+  if (orcamento > 0 && totalMed >= orcamento) {
+    return {
+      label: 'Concluída',
+      color: 'green',
+      badgeClass: 'bg-green-100 text-green-700 border-green-200',
+      descricao: 'Medições atingiram 100% do orçamento. Obra pronta para recebimento e Termo de Conclusão.',
+    };
+  }
+
+  // 3. Em execução — Ordem de Início preenchida e medições em andamento
+  if (sol.dataOrdemInicio) {
+    return {
+      label: 'Em execução',
+      color: 'blue',
+      badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
+      descricao: `Ordem de Início emitida em ${new Date(sol.dataOrdemInicio).toLocaleDateString('pt-BR')}. Acompanhe o avanço pelas medições.`,
+    };
+  }
+
+  // 4. Não iniciada — contrato assinado mas sem Ordem de Início
+  if (sol.empresaContratada && sol.contratoDataAssinatura) {
+    return {
+      label: 'Não iniciada',
+      color: 'slate',
+      badgeClass: 'bg-slate-100 text-slate-600 border-slate-200',
+      descricao: 'Contrato registrado. Aguardando emissão da Ordem de Início na aba Acompanhamento.',
+    };
+  }
+
+  // 5. Em processo de contratação — cadastro feito (valorPlanilha) mas sem contrato
+  if (sol.valorPlanilha) {
+    return {
+      label: 'Em processo de contratação',
+      color: 'yellow',
+      badgeClass: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+      descricao: 'Cadastro da obra concluído. Aguardando registro do contrato na aba Contratos.',
+    };
+  }
+
+  // 6. Em cadastramento — PAF gerado mas dados da obra ainda não preenchidos
+  return {
+    label: 'Em cadastramento da obra',
+    color: 'purple',
+    badgeClass: 'bg-purple-100 text-purple-700 border-purple-200',
+    descricao: 'PAF autorizado. Aguardando preenchimento do cadastro da obra pelo engenheiro responsável.',
+  };
+}
 
 export function syncChecklistDocs(
   documentos: DocumentoChecklist[] = [],

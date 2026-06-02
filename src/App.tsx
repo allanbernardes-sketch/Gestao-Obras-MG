@@ -11,12 +11,13 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation } from 'lucide-react';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
 import AcompanhamentoPaf from './components/AcompanhamentoPaf';
 import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
+import CentralNavegacaoObras from './components/CentralNavegacaoObras';
 
 
 export default function App() {
@@ -1272,6 +1273,7 @@ export default function App() {
                   {!collapsedCategories.execucao && (
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
                       {[
+                        { id: 'execucao_central', label: 'Central de Navegação', func: 'painel geral do fiscal', icon: Navigation },
                         { id: 'execucao_cadastro', label: 'Cadastro de Obras', func: 'cadastro', icon: Building2 },
                         { id: 'execucao_contratos', label: 'Contratos', func: 'jurídico/financeiro', icon: ClipboardList },
                         { id: 'execucao_acompanhamento', label: 'Acompanhamento da Obra', func: 'Dashboard, Diário, Vistorias', icon: HardHat },
@@ -2524,6 +2526,12 @@ export default function App() {
                         activeSubTask={activeSubTask}
                       />
                     )
+                  ) : activeSubTask === 'execucao_central' ? (
+                    <CentralNavegacaoObras
+                      solicitacoes={solicitacoes}
+                      perfilUsuario={perfilUsuario}
+                      setActiveSubTask={setActiveSubTask}
+                    />
                   ) : activeSubTask.startsWith('execucao_') ? (
                     <ExecucaoSubmodulos
                       activeSubTask={activeSubTask}

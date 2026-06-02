@@ -6,7 +6,7 @@ import {
   FileCheck, FileUp, Zap, HelpCircle, History, Info, Trash, RefreshCw, Eye,
   TrendingUp, Edit, ClipboardCheck, Wrench, ArrowRight, Lock, Filter
 } from 'lucide-react';
-import { Solicitacao, Medicao, Aditivo, AjustePlanilha, PerfilUsuario, EmpresaSeguranca } from '../types';
+import { Solicitacao, Medicao, Aditivo, AjustePlanilha, PerfilUsuario, EmpresaSeguranca, computeStatusObra } from '../types';
 
 interface ExecucaoSubmodulosProps {
   activeSubTask: string;
@@ -1464,11 +1464,23 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
 
 // --- 2. SUB ACOMPANHAMENTO DE EXECUÇÃO ---
 function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void }) {
-  const [activeTab, setActiveTab2] = useState<'dashboard' | 'vistorias' | 'restricoes'>('dashboard');
+  const [activeTab, setActiveTab2] = useState<'dashboard' | 'ordem_inicio' | 'vistorias' | 'restricoes'>('dashboard');
+
+  // Ordem de Início states
+  const [ordemDataInicio, setOrdemDataInicio] = useState('');
+  const [ataFile, setAtaFile] = useState<{ name: string; size: string } | null>(null);
+  const [ataDragOver, setAtaDragOver] = useState(false);
+  const [cronogFile, setCronogFile] = useState<{ name: string; size: string } | null>(null);
+  const [cronogDragOver, setCronogDragOver] = useState(false);
+  const [novoAnexoNome, setNovoAnexoNome] = useState('');
+  const [ordemSalva, setOrdemSalva] = useState(false);
 
   // Dashboard states
   const [novoStatus, setNovoStatus] = useState<'Não Iniciada' | 'Em Andamento' | 'Paralisada' | 'Concluída'>('Não Iniciada');
   const [descricaoProgresso, setDescricaoProgresso] = useState('');
+  const [mostrarParalisacao, setMostrarParalisacao] = useState(false);
+  const [justificativaParalisacao, setJustificativaParalisacao] = useState('');
+  const [dataParalisacao, setDataParalisacao] = useState('');
 
   // Diário de Obra states
   const [diarioTexto, setDiarioTexto] = useState('');
@@ -1498,6 +1510,12 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
     if (currentSol) {
       setNovoStatus(currentSol.statusObra || 'Não Iniciada');
       setVistoVistoriador(currentSol.fiscalObraAtribuido || '');
+      setOrdemDataInicio(currentSol.dataOrdemInicio || '');
+      setAtaFile(currentSol.ataOrdemInicioFileName ? { name: currentSol.ataOrdemInicioFileName, size: currentSol.ataOrdemInicioFileSize || '' } : null);
+      setCronogFile(currentSol.cronogramaFisicoFinanceiroFileName ? { name: currentSol.cronogramaFisicoFinanceiroFileName, size: currentSol.cronogramaFisicoFinanceiroFileSize || '' } : null);
+      setJustificativaParalisacao(currentSol.justificativaParalizacao || '');
+      setDataParalisacao(currentSol.dataParalizacao || '');
+      setMostrarParalisacao(currentSol.statusObra === 'Paralisada');
     }
   }, [currentSol.id, currentSol.fiscalObraAtribuido]);
 
@@ -1524,13 +1542,21 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
 
   // Action handlers
   const updateObraStatus = () => {
-    const updated = {
+    const isParalisando = mostrarParalisacao && justificativaParalisacao;
+    const updated: typeof currentSol = {
       ...currentSol,
-      statusObra: novoStatus,
-      observacoesFicha: descricaoProgresso ? `${descricaoProgresso}. (Alteraço de Status: ${novoStatus})` : currentSol.observacoesFicha
+      observacoesFicha: descricaoProgresso
+        ? `${descricaoProgresso}${currentSol.observacoesFicha ? ' | ' + currentSol.observacoesFicha : ''}`
+        : currentSol.observacoesFicha,
+      ...(isParalisando && {
+        statusObra: 'Paralisada',
+        justificativaParalizacao: justificativaParalisacao,
+        dataParalizacao: dataParalisacao || new Date().toISOString().split('T')[0],
+      }),
     };
     onUpdate(updated);
     setDescricaoProgresso('');
+    if (isParalisando) setMostrarParalisacao(false);
   };
 
   const adicNovoDiario = (e: React.FormEvent) => {
@@ -1676,6 +1702,19 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
 
         <button
           type="button"
+          onClick={() => setActiveTab2('ordem_inicio')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+            activeTab === 'ordem_inicio'
+              ? 'bg-blue-600 text-white shadow-3xs'
+              : 'text-slate-600 hover:text-slate-800 hover:bg-slate-100'
+          }`}
+        >
+          <FileCheck className="w-4 h-4" />
+          Ordem de Início
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab2('vistorias')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
             activeTab === 'vistorias'
@@ -1760,44 +1799,128 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
               </div>
             </div>
 
-            {/* Change progress status form */}
+            {/* Situação Operacional Computada */}
             <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4 text-left flex flex-col justify-between">
               <div>
                 <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5 border-b border-slate-50 pb-2 mb-3">
-                  <Scale className="w-4 h-4 text-blue-500" /> Atualizar Situação Operacional da Obra
+                  <Scale className="w-4 h-4 text-blue-500" /> Situação Operacional da Obra
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">Status da Obra</label>
-                    <select
-                      value={novoStatus}
-                      onChange={(e) => setNovoStatus(e.target.value as any)}
-                      className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <option value="Não Iniciada">Não Iniciada</option>
-                      <option value="Em Andamento">Em Andamento</option>
-                      <option value="Paralisada">Paralisada</option>
-                      <option value="Concluída">Concluída</option>
-                    </select>
-                  </div>
+                {(() => {
+                  const statusInfo = computeStatusObra(currentSol);
+                  const isParalisada = statusInfo.label === 'Paralisada';
+                  const podeParalisar = ['Não iniciada', 'Em execução'].includes(statusInfo.label);
+                  return (
+                    <div className="space-y-4">
+                      {/* Status computado */}
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1">
+                          <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider mb-1.5">Status da Obra</label>
+                          <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-black ${statusInfo.badgeClass}`}>
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                              statusInfo.color === 'green' ? 'bg-green-500' :
+                              statusInfo.color === 'blue' ? 'bg-blue-500' :
+                              statusInfo.color === 'yellow' ? 'bg-yellow-500' :
+                              statusInfo.color === 'orange' ? 'bg-orange-500' :
+                              statusInfo.color === 'purple' ? 'bg-purple-500' : 'bg-slate-400'
+                            }`} />
+                            {statusInfo.label}
+                          </div>
+                          <p className="text-[10px] text-slate-500 font-sans mt-1.5 leading-relaxed">{statusInfo.descricao}</p>
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">Nota Pública / Justificativa</label>
+                          <input
+                            type="text"
+                            placeholder="Ex. Fundações finalizadas, iniciando alvenaria estrutural..."
+                            value={descricaoProgresso}
+                            onChange={(e) => setDescricaoProgresso(e.target.value)}
+                            className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
+                          />
+                        </div>
+                      </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">Nota Pública / Justificativa</label>
-                    <input
-                      type="text"
-                      placeholder="Ex. Fundações finalizadas, iniciando alvenaria estrutural..."
-                      value={descricaoProgresso}
-                      onChange={(e) => setDescricaoProgresso(e.target.value)}
-                      className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
-                    />
-                  </div>
-                </div>
+                      {/* Botão Paralisar / Desparalisar */}
+                      {podeParalisar && !isParalisada && (
+                        <button
+                          type="button"
+                          onClick={() => setMostrarParalisacao(prev => !prev)}
+                          className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black border-2 transition-all cursor-pointer ${
+                            mostrarParalisacao
+                              ? 'bg-rose-50 border-rose-400 text-rose-700'
+                              : 'bg-white border-rose-300 text-rose-600 hover:bg-rose-50 hover:border-rose-400'
+                          }`}
+                        >
+                          <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+                          Paralisar esta obra
+                        </button>
+                      )}
+
+                      {isParalisada && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUpdate({ ...currentSol, statusObra: 'Em Andamento', justificativaParalizacao: undefined, dataParalizacao: undefined });
+                            setMostrarParalisacao(false);
+                            setJustificativaParalisacao('');
+                            setDataParalisacao('');
+                          }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black border-2 border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition-all cursor-pointer"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Retomar execução da obra
+                        </button>
+                      )}
+
+                      {/* Seção Paralisação Temporária */}
+                      {mostrarParalisacao && !isParalisada && (
+                        <div className="p-4 rounded-xl border-2 border-rose-200 bg-rose-50/60 space-y-3">
+                          <h4 className="text-[10px] font-black uppercase tracking-widest text-rose-700 font-sans">
+                            Informações de Paralisação Temporária
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-extrabold text-slate-600 block uppercase tracking-wider">
+                                Justificativa da Paralisação *
+                              </label>
+                              <select
+                                value={justificativaParalisacao}
+                                onChange={e => setJustificativaParalisacao(e.target.value)}
+                                className="w-full text-xs font-bold p-2.5 border border-rose-200 rounded-xl bg-white text-slate-800 focus:ring-1 focus:ring-rose-400 cursor-pointer"
+                              >
+                                <option value="">Selecione uma justificativa...</option>
+                                <option value="Aguardando diretor da cx escolar realizar notificação à empresa">Aguardando diretor da cx escolar realizar notificação à empresa</option>
+                                <option value="Condições climáticas">Condições climáticas</option>
+                                <option value="Falta de material ou insumos">Falta de material ou insumos</option>
+                                <option value="Inadimplência ou problemas financeiros da contratada">Inadimplência ou problemas financeiros da contratada</option>
+                                <option value="Restrição técnica ou de engenharia">Restrição técnica ou de engenharia</option>
+                                <option value="Interferência de concessionária (CEMIG, COPASA, etc.)">Interferência de concessionária (CEMIG, COPASA, etc.)</option>
+                                <option value="Determinação judicial ou administrativa">Determinação judicial ou administrativa</option>
+                                <option value="Outro motivo">Outro motivo</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-extrabold text-slate-600 block uppercase tracking-wider">
+                                Data da Paralisação *
+                              </label>
+                              <input
+                                type="date"
+                                value={dataParalisacao}
+                                onChange={e => setDataParalisacao(e.target.value)}
+                                className="w-full text-xs font-bold p-2.5 border border-rose-200 rounded-xl bg-white text-slate-800 focus:ring-1 focus:ring-rose-400 cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-600 font-sans mt-3">
                 <span className="font-extrabold text-slate-700 block mb-0.5">ℹ️ Sincronização em tempo real SGO</span>
-                Qualquer modificação de status será propagada instantaneamente para a superintendência regional (SRE) e para o painel consolidado da secretaria de educação.
+                O status é determinado automaticamente pelo fluxo da obra. A paralisação manual é a única exceção permitida por este módulo.
               </div>
 
               <div className="flex justify-end pt-3">
@@ -2096,6 +2219,303 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
 
           </div>
 
+        </div>
+      )}
+
+      {/* ORDEM DE INÍCIO TAB CONTENT */}
+      {activeTab === 'ordem_inicio' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-start gap-3 p-4 bg-blue-50/60 border border-blue-200/60 rounded-xl">
+            <FileCheck className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-xs font-black uppercase text-slate-800 tracking-wider">
+                Gestão de Ordem de Início e Cronograma
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5 font-sans leading-relaxed">
+                Registre a data oficial de expedição da ordem de início da obra escolar e faça o upload da ata da reunião de partida e do cronograma físico-financeiro homologado. Heurística gerencial de controle DORE.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
+
+            {/* Data da Ordem de Início */}
+            <div className="space-y-1.5 max-w-sm">
+              <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                Data da Ordem de Início *
+              </label>
+              <input
+                type="date"
+                value={ordemDataInicio}
+                onChange={e => setOrdemDataInicio(e.target.value)}
+                className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:ring-1 focus:ring-blue-500 cursor-pointer"
+              />
+              <p className="text-[10px] text-slate-400 font-sans">
+                Utilizado para o cálculo de vigência contratual e termo final estimado da obra.
+              </p>
+            </div>
+
+            {/* Upload areas */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+              {/* Ata da Reunião */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                  Ata da Reunião de Ordem de Início
+                </label>
+                <div
+                  onDragOver={e => { e.preventDefault(); setAtaDragOver(true); }}
+                  onDragLeave={() => setAtaDragOver(false)}
+                  onDrop={e => {
+                    e.preventDefault();
+                    setAtaDragOver(false);
+                    if (e.dataTransfer.files?.[0]) {
+                      const f = e.dataTransfer.files[0];
+                      setAtaFile({ name: f.name, size: `${(f.size / 1024).toFixed(0)} KB` });
+                    }
+                  }}
+                  className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 ${
+                    ataDragOver
+                      ? 'border-blue-500 bg-blue-50/50'
+                      : ataFile
+                        ? 'border-emerald-500 bg-emerald-50/10'
+                        : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50/50'
+                  }`}
+                >
+                  {ataFile ? (
+                    <div className="flex items-center justify-between gap-3 bg-white border border-emerald-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-5 h-5 text-emerald-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{ataFile.name}</p>
+                          <p className="text-[10px] text-slate-400 font-sans">{ataFile.size}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAtaFile(null)}
+                        className="text-red-400 hover:text-red-600 shrink-0 p-1 hover:bg-red-50 rounded transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center gap-2">
+                      <FileUp className="w-8 h-8 text-blue-400" />
+                      <p className="text-xs font-bold text-slate-600">Ata da Reunião de Ordem de Início</p>
+                      <span className="text-[10px] text-slate-400 font-sans">Escolher arquivo ou arraste e solte</span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.doc,.docx,.jpg,.png"
+                        onChange={e => {
+                          if (e.target.files?.[0]) {
+                            const f = e.target.files[0];
+                            setAtaFile({ name: f.name, size: `${(f.size / 1024).toFixed(0)} KB` });
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              {/* Cronograma Físico-Financeiro */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                  Cronograma Físico-Financeiro Homologado
+                </label>
+                <div
+                  onDragOver={e => { e.preventDefault(); setCronogDragOver(true); }}
+                  onDragLeave={() => setCronogDragOver(false)}
+                  onDrop={e => {
+                    e.preventDefault();
+                    setCronogDragOver(false);
+                    if (e.dataTransfer.files?.[0]) {
+                      const f = e.dataTransfer.files[0];
+                      setCronogFile({ name: f.name, size: `${(f.size / 1024).toFixed(0)} KB` });
+                    }
+                  }}
+                  className={`border-2 border-dashed rounded-xl p-6 text-center transition-all duration-200 ${
+                    cronogDragOver
+                      ? 'border-blue-500 bg-blue-50/50'
+                      : cronogFile
+                        ? 'border-emerald-500 bg-emerald-50/10'
+                        : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50/50'
+                  }`}
+                >
+                  {cronogFile ? (
+                    <div className="flex items-center justify-between gap-3 bg-white border border-emerald-200 rounded-lg p-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-5 h-5 text-emerald-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate">{cronogFile.name}</p>
+                          <p className="text-[10px] text-slate-400 font-sans">{cronogFile.size}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCronogFile(null)}
+                        className="text-red-400 hover:text-red-600 shrink-0 p-1 hover:bg-red-50 rounded transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center gap-2">
+                      <FileUp className="w-8 h-8 text-blue-400" />
+                      <p className="text-xs font-bold text-slate-600">Cronograma Físico-Financeiro</p>
+                      <span className="text-[10px] text-slate-400 font-sans">Escolher arquivo ou arraste e solte</span>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.xlsx,.xls,.doc,.docx"
+                        onChange={e => {
+                          if (e.target.files?.[0]) {
+                            const f = e.target.files[0];
+                            setCronogFile({ name: f.name, size: `${(f.size / 1024).toFixed(0)} KB` });
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Outros Anexos */}
+            <div className="space-y-3 pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-2">
+                <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-widest font-mono flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                  Outros Anexos ({(currentSol.outrosAnexosOrdemInicio || []).length})
+                </h3>
+                <div className="flex items-center gap-2 max-w-sm w-full">
+                  <input
+                    type="text"
+                    placeholder="Nome do documento extra..."
+                    value={novoAnexoNome}
+                    onChange={e => setNovoAnexoNome(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && novoAnexoNome.trim()) {
+                        const novo = { id: `anexo-${Date.now()}`, nome: novoAnexoNome.trim() };
+                        onUpdate({ ...currentSol, outrosAnexosOrdemInicio: [...(currentSol.outrosAnexosOrdemInicio || []), novo] });
+                        setNovoAnexoNome('');
+                      }
+                    }}
+                    className="px-2.5 py-1.5 border border-slate-250 rounded-lg text-xs flex-1 focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!novoAnexoNome.trim()) return;
+                      const novo = { id: `anexo-${Date.now()}`, nome: novoAnexoNome.trim() };
+                      onUpdate({ ...currentSol, outrosAnexosOrdemInicio: [...(currentSol.outrosAnexosOrdemInicio || []), novo] });
+                      setNovoAnexoNome('');
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-extrabold rounded-lg inline-flex items-center gap-1 transition cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-3 h-3 text-white" />
+                    + Adicionar Campo
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {(currentSol.outrosAnexosOrdemInicio || []).length === 0 ? (
+                  <div className="p-6 border border-dashed border-slate-200 rounded-xl bg-slate-50/50 text-center text-xs text-slate-400 font-sans">
+                    Nenhum anexo complementar adicionado. Use o campo acima para criar entradas sob demanda.
+                  </div>
+                ) : (
+                  (currentSol.outrosAnexosOrdemInicio || []).map(anexo => (
+                    <div key={anexo.id} className={`p-4 rounded-xl border transition-all ${anexo.fileName ? 'border-emerald-200 bg-emerald-50/5' : 'border-slate-200 bg-white shadow-xs'}`}>
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-sans font-extrabold text-slate-800 text-sm">{anexo.nome}</h4>
+                            <span className="text-[10px] bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 uppercase text-indigo-700 font-bold tracking-wider font-mono">Personalizado</span>
+                          </div>
+                          {anexo.fileName && (
+                            <div className="mt-2 flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono">
+                              <FileText className="w-4 h-4 text-blue-500 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <span className="font-bold text-slate-800 block truncate">{anexo.fileName}</span>
+                                <span className="text-[10px] text-slate-400">{anexo.fileSize} | {anexo.uploadedAt}</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-300 text-xs font-bold transition">
+                            <FileUp className="w-3.5 h-3.5" />
+                            {anexo.fileName ? 'Substituir' : 'Anexar Arquivo'}
+                            <input
+                              type="file"
+                              className="hidden"
+                              onChange={e => {
+                                if (e.target.files?.[0]) {
+                                  const f = e.target.files[0];
+                                  const updated = (currentSol.outrosAnexosOrdemInicio || []).map(a =>
+                                    a.id === anexo.id
+                                      ? { ...a, fileName: f.name, fileSize: `${(f.size / 1024).toFixed(0)} KB`, uploadedAt: new Date().toLocaleDateString('pt-BR') }
+                                      : a
+                                  );
+                                  onUpdate({ ...currentSol, outrosAnexosOrdemInicio: updated });
+                                }
+                              }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = (currentSol.outrosAnexosOrdemInicio || []).filter(a => a.id !== anexo.id);
+                              onUpdate({ ...currentSol, outrosAnexosOrdemInicio: updated });
+                            }}
+                            className="p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition"
+                            title="Remover campo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Save button */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+              {ordemSalva && (
+                <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 font-sans">
+                  <CheckCircle className="w-4 h-4" />
+                  Ordem de Início salva com sucesso!
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdate({
+                    ...currentSol,
+                    dataOrdemInicio: ordemDataInicio || undefined,
+                    ataOrdemInicioFileName: ataFile?.name,
+                    ataOrdemInicioFileSize: ataFile?.size,
+                    ataOrdemInicioUploadedAt: ataFile ? new Date().toLocaleDateString('pt-BR') : undefined,
+                    cronogramaFisicoFinanceiroFileName: cronogFile?.name,
+                    cronogramaFisicoFinanceiroFileSize: cronogFile?.size,
+                    cronogramaFisicoFinanceiroUploadedAt: cronogFile ? new Date().toLocaleDateString('pt-BR') : undefined,
+                  });
+                  setOrdemSalva(true);
+                  setTimeout(() => setOrdemSalva(false), 3500);
+                }}
+                className="px-6 py-2.5 bg-[#13264d] hover:bg-[#1a3a6e] text-white text-xs font-black rounded-xl transition font-sans shadow-sm tracking-wide uppercase"
+              >
+                Salvar Ordem de Início
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 
@@ -3262,31 +3682,27 @@ function SubContratos({
   const saldoContratual = Math.max(0, valorAtualizado - sumMedicoes);
   const percentualExecutado = valorAtualizado > 0 ? (sumMedicoes / valorAtualizado) * 100 : 0;
 
-  // Remaining days with countdown semaphore
-  const targetDateStr = fimVigenciaInput || currentSol?.previsaoTerminoObra || '';
-  let diasRestantes: number | null = null;
-  let semaphoreColor = 'gray'; // 'green' | 'yellow' | 'red'
-  let semaphoreLabel = 'Não Cadastrado';
-  
-  if (targetDateStr) {
-    const today = new Date('2026-05-30T00:00:00');
-    const target = new Date(targetDateStr);
-    const diffTime = target.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (!isNaN(diffDays)) {
-      diasRestantes = diffDays;
-      if (diasRestantes > 90) {
-        semaphoreColor = 'green';
-        semaphoreLabel = 'Prazo Confortável (> 90 dias)';
-      } else if (diasRestantes >= 30) {
-        semaphoreColor = 'yellow';
-        semaphoreLabel = 'Prazo em Atenção (30 a 90 dias)';
-      } else {
-        semaphoreColor = 'red';
-        semaphoreLabel = 'Prazo Crítico (< 30 dias)';
-      }
-    }
-  }
+  // Helper: calculate semaphore from a date string
+  const calcSemaphore = (dateStr: string) => {
+    if (!dateStr) return { dias: null as number | null, color: 'gray', label: 'Não Cadastrado' };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr);
+    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (isNaN(diffDays)) return { dias: null as number | null, color: 'gray', label: 'Não Cadastrado' };
+    if (diffDays > 90) return { dias: diffDays, color: 'green', label: 'Prazo Confortável (> 90 dias)' };
+    if (diffDays >= 30) return { dias: diffDays, color: 'yellow', label: 'Prazo em Atenção (30 a 90 dias)' };
+    return { dias: diffDays, color: 'red', label: 'Prazo Crítico (< 30 dias)' };
+  };
+
+  // Semáforo de Execução da Obra (fim da vigência do contrato)
+  const obraSem = calcSemaphore(fimVigenciaInput || currentSol?.previsaoTerminoObra || '');
+  const diasRestantes = obraSem.dias;
+  const semaphoreColor = obraSem.color;
+  const semaphoreLabel = obraSem.label;
+
+  // Semáforo de Vigência do PAF
+  const pafSem = calcSemaphore(currentSol?.dataVigenciaPAF || '');
 
   // Guarantee alerts
   const garantiaValidadeStr = garantiaValidadeInput || '';
@@ -3483,42 +3899,71 @@ function SubContratos({
             Controle de Datas, Vigências & Prazos
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Dates column */}
             <div className="space-y-3">
               <div className="flex justify-between items-center text-xs py-1.5 border-b border-slate-100">
                 <span className="text-slate-500 font-bold">Data Assinatura:</span>
                 <span className="font-bold text-slate-750">{dataAssinaturaInput ? new Date(dataAssinaturaInput).toLocaleDateString('pt-BR') : '---'}</span>
               </div>
               <div className="flex justify-between items-center text-xs py-1.5 border-b border-slate-100">
-                <span className="text-slate-500 font-bold">Início da Vigência:</span>
+                <span className="text-slate-500 font-bold">Início da Vigência (Obra):</span>
                 <span className="font-bold text-slate-750">{inicioVigenciaInput ? new Date(inicioVigenciaInput).toLocaleDateString('pt-BR') : '---'}</span>
               </div>
               <div className="flex justify-between items-center text-xs py-1.5 border-b border-slate-100">
-                <span className="text-slate-500 font-bold">Fim da Vigência:</span>
+                <span className="text-slate-500 font-bold">Fim da Vigência (Obra):</span>
                 <span className="font-bold text-slate-750">{fimVigenciaInput ? new Date(fimVigenciaInput).toLocaleDateString('pt-BR') : '---'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs py-1.5">
+                <span className="text-slate-500 font-bold">Vigência do PAF:</span>
+                <span className="font-bold text-blue-600">
+                  {currentSol?.dataVigenciaPAF ? new Date(currentSol.dataVigenciaPAF).toLocaleDateString('pt-BR') : '---'}
+                </span>
               </div>
             </div>
 
-            {/* Semaphore widget */}
+            {/* Semáforo de Execução da Obra */}
             <div className="flex flex-col justify-center items-center bg-slate-50 p-5 rounded-2xl border border-slate-150 relative overflow-hidden">
-              <span className="text-[9px] uppercase font-bold text-slate-450 block absolute top-2.5 left-3">Semáforo de Vigência SGO</span>
-              
-              <div className="flex items-center gap-2 mt-2">
-                <span className={`w-3.5 h-3.5 rounded-full ${semaphoreColor === 'green' ? 'bg-emerald-500 shadow-emerald-400' : 'bg-slate-200'} shadow-xs`} />
-                <span className={`w-3.5 h-3.5 rounded-full ${semaphoreColor === 'yellow' ? 'bg-amber-400 shadow-amber-300' : 'bg-slate-200'} shadow-xs`} />
-                <span className={`w-3.5 h-3.5 rounded-full ${semaphoreColor === 'red' ? 'bg-rose-500 shadow-rose-400' : 'bg-slate-200'} shadow-xs`} />
+              <span className="text-[9px] uppercase font-black text-slate-500 tracking-wider block mb-3 text-center">Semáforo de Execução da Obra</span>
+              <div className="flex items-center gap-2">
+                <span className={`w-3.5 h-3.5 rounded-full shadow-xs ${semaphoreColor === 'green' ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+                <span className={`w-3.5 h-3.5 rounded-full shadow-xs ${semaphoreColor === 'yellow' ? 'bg-amber-400' : 'bg-slate-200'}`} />
+                <span className={`w-3.5 h-3.5 rounded-full shadow-xs ${semaphoreColor === 'red' ? 'bg-rose-500' : 'bg-slate-200'}`} />
               </div>
-
               <div className="text-center mt-3">
                 <div className="text-xs font-bold text-slate-500">Dias Restantes:</div>
-                <div className={`text-xl font-black ${
+                <div className={`text-2xl font-black ${
                   semaphoreColor === 'green' ? 'text-emerald-600' :
-                  semaphoreColor === 'yellow' ? 'text-amber-600' : 'text-rose-600'
+                  semaphoreColor === 'yellow' ? 'text-amber-500' :
+                  semaphoreColor === 'red' ? 'text-rose-600' : 'text-slate-400'
                 }`}>
                   {diasRestantes !== null ? `${diasRestantes} dias` : 'Não Calculável'}
                 </div>
-                <div className="text-[10px] font-bold text-slate-450 mt-1 uppercase">
+                <div className="text-[10px] font-bold text-slate-450 mt-1 uppercase tracking-wide">
                   {semaphoreLabel}
+                </div>
+              </div>
+            </div>
+
+            {/* Semáforo de Vigência do PAF */}
+            <div className="flex flex-col justify-center items-center bg-slate-50 p-5 rounded-2xl border border-slate-150 relative overflow-hidden">
+              <span className="text-[9px] uppercase font-black text-slate-500 tracking-wider block mb-3 text-center">Semáforo de Vigência do PAF</span>
+              <div className="flex items-center gap-2">
+                <span className={`w-3.5 h-3.5 rounded-full shadow-xs ${pafSem.color === 'green' ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+                <span className={`w-3.5 h-3.5 rounded-full shadow-xs ${pafSem.color === 'yellow' ? 'bg-amber-400' : 'bg-slate-200'}`} />
+                <span className={`w-3.5 h-3.5 rounded-full shadow-xs ${pafSem.color === 'red' ? 'bg-rose-500' : 'bg-slate-200'}`} />
+              </div>
+              <div className="text-center mt-3">
+                <div className="text-xs font-bold text-slate-500">Dias Restantes:</div>
+                <div className={`text-2xl font-black ${
+                  pafSem.color === 'green' ? 'text-emerald-600' :
+                  pafSem.color === 'yellow' ? 'text-amber-500' :
+                  pafSem.color === 'red' ? 'text-rose-600' : 'text-slate-400'
+                }`}>
+                  {pafSem.dias !== null ? `${pafSem.dias} dias` : 'Não Calculável'}
+                </div>
+                <div className="text-[10px] font-bold text-slate-450 mt-1 uppercase tracking-wide">
+                  {pafSem.label}
                 </div>
               </div>
             </div>
