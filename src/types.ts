@@ -266,6 +266,16 @@ export interface UsuarioSistema {
   email: string;
   perfil: PerfilUsuario | string;
   departamento: string;
+  // Dados profissionais estendidos
+  cargo?: string;
+  formacao?: string;
+  creaNum?: string;
+  creaSituacao?: 'Ativo' | 'Inativo';
+  dataIngresso?: string;
+  situacaoFuncional?: 'Ativo' | 'Férias' | 'Licença' | 'Afastado' | 'Desligado';
+  dataUltimaAtualizacao?: string;
+  tipoVinculo?: 'regional' | 'orgao_central';
+  equipeCentral?: string;
 }
 
 export type StatusObraComputado =

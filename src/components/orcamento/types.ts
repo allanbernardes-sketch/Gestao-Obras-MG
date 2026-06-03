@@ -55,7 +55,7 @@ export interface Budget {
   sre: string;
   municipality: string;
   school: string;
-  schoolAddress?: string;
+  codesc?: string;
   date: string;
   status: 'Draft' | 'Approved' | 'Closed';
   eap: EAPItem[];

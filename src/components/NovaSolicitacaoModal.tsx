@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Solicitacao, DocumentoChecklist, syncChecklistDocs } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { X, AlertCircle, Database, FileText, CheckCircle2 } from 'lucide-react';
@@ -8,21 +8,61 @@ interface NovaSolicitacaoModalProps {
   onSave: (nova: Solicitacao) => void;
   perfilUsuario?: string;
   usuariosSeguranca?: { id: string; nome: string; perfil: string; depto?: string }[];
+  sreDoTecnico?: string;
 }
 
 const baseDados = [
-  { codesc: '1902', sre: 'SRE METROPOLITANA B', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSORA MARIA BELMIRA TRINDADE' },
-  { codesc: '106470', sre: 'SRE OURO PRETO', municipio: 'OURO PRETO', escola: 'EE DOM VELLOSO' },
-  { codesc: '205', sre: 'SRE METROPOLITANA C', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSORA FRANCISCA MALHEIROS' },
-  { codesc: '1821', sre: 'SRE METROPOLITANA A', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSORA MARIA AMÉLIA GUIMARÃES' },
-  { codesc: '1104', sre: 'SRE METROPOLITANA B', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSOR FRANCISCO BRANT' }
+  // SRE Patos de Minas
+  { codesc: '145236', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Padre Almir Neves' },
+  { codesc: '145298', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Santos Dumont' },
+  { codesc: '145312', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Coronel Linhares' },
+  { codesc: '145401', sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'EE Governador Milton Campos' },
+  { codesc: '145489', sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'EE Professor Arlindo Luz' },
+  { codesc: '145524', sre: 'SRE Patos de Minas', municipio: 'Lagoa Formosa', escola: 'EE Padre Eustáquio' },
+  { codesc: '145603', sre: 'SRE Patos de Minas', municipio: 'Varjão de Minas', escola: 'EE Deputado Geraldo Pereira' },
+  { codesc: '145678', sre: 'SRE Patos de Minas', municipio: 'Rio Paranaíba', escola: 'EE Tiradentes' },
+  // SRE Metropolitana A
+  { codesc: '1821', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Professora Maria Amélia Guimarães' },
+  { codesc: '102547', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Milton Campos' },
+  { codesc: '103210', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Henrique Diniz' },
+  { codesc: '103456', sre: 'SRE Metropolitana A', municipio: 'Contagem', escola: 'EE João Monlevade' },
+  // SRE Metropolitana B
+  { codesc: '1902', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Professora Maria Belmira Trindade' },
+  { codesc: '1104', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Professor Francisco Brant' },
+  { codesc: '104112', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Dom Pedro II' },
+  // SRE Metropolitana C
+  { codesc: '205', sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'EE Professora Francisca Malheiros' },
+  { codesc: '201334', sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'EE Estadual Centro' },
+  // SRE Ouro Preto
+  { codesc: '106470', sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'EE Dom Velloso' },
+  { codesc: '106537', sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'EE Tiradentes' },
+  // SRE Diamantina
+  { codesc: '304958', sre: 'SRE Diamantina', municipio: 'Diamantina', escola: 'EE Juscelino Kubitschek' },
+  { codesc: '305012', sre: 'SRE Diamantina', municipio: 'Serro', escola: 'EE Cônego Guimarães' },
+  // SRE Itajubá
+  { codesc: '205847', sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'EE Wenceslau Braz' },
+  { codesc: '205901', sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'EE Professor Oswaldo Cruz' },
+  // SRE Pouso Alegre
+  { codesc: '405912', sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'EE Delfim Moreira' },
+  { codesc: '405988', sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'EE Coronel José Caetano' },
+  // SRE Juiz de Fora
+  { codesc: '501234', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Carlos Drummond de Andrade' },
+  { codesc: '501301', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Duque de Caxias' },
 ];
 
-export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, usuariosSeguranca }: NovaSolicitacaoModalProps) {
+export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, usuariosSeguranca, sreDoTecnico }: NovaSolicitacaoModalProps) {
+  const baseDadosFiltrados = sreDoTecnico
+    ? baseDados.filter(item => item.sre.toLowerCase() === sreDoTecnico.toLowerCase())
+    : baseDados;
   const [codesc, setCodesc] = useState('');
   const [nomeEscola, setNomeEscola] = useState('');
   const [municipio, setMunicipio] = useState('');
   const [sre, setSre] = useState('');
+
+  // Pré-preenche a SRE do técnico ao abrir
+  useEffect(() => {
+    if (sreDoTecnico) setSre(sreDoTecnico);
+  }, [sreDoTecnico]);
   
   // Custom states
   const [formaOcupacao, setFormaOcupacao] = useState('PRÓPRIO');
@@ -50,7 +90,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
   // Handle CODESC change and auto-fill
   const handleCodescChange = (val: string) => {
     setCodesc(val);
-    const match = baseDados.find(item => item.codesc === val.trim());
+    const match = baseDadosFiltrados.find(item => item.codesc === val.trim());
     if (match) {
       setNomeEscola(match.escola);
       setMunicipio(match.municipio);
@@ -256,14 +296,21 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Superintendência SRE *
                 </label>
+                {perfilUsuario === 'tecnico_infra' ? (
+                  <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold flex items-center gap-2 cursor-default">
+                    <span className="text-[10px] text-slate-400 uppercase font-sans shrink-0">Sua regional:</span>
+                    {sre}
+                  </div>
+                ) : (
                 <input
                   type="text"
-                  placeholder="Ex: SRE METROPOLITANA A"
+                  placeholder="Ex: SRE Metropolitana A"
                   value={sre}
                   onChange={(e) => setSre(e.target.value)}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans"
                   required
                 />
+                )}
               </div>
             </div>
           </div>

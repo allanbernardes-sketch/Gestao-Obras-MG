@@ -59,14 +59,12 @@ export default function App() {
                perfilUsuario === 'gestor_dore' ? 'Aline Davino' :
                perfilUsuario === 'analista_dore' ? 'Flavia Borges' :
                perfilUsuario === 'gestor_paf' ? 'Silas Fagundes' :
-               perfilUsuario === 'administrativo_dore' ? 'Rui Lages' :
-               perfilUsuario === 'fiscal_obra' ? 'Insp. Mariana Souza' : 'Usuário SGO',
+               perfilUsuario === 'administrativo_dore' ? 'Rui Lages' : 'Usuário SGO',
       perfil: perfilUsuario === 'tecnico_infra' ? 'Técnico de Infraestrutura SRE' :
               perfilUsuario === 'gestor_dore' ? 'Gestor Atendimento DORE' :
               perfilUsuario === 'analista_dore' ? 'Analista de Engenharia DORE' :
               perfilUsuario === 'gestor_paf' ? 'Gestor Geral (PAF)' :
-              perfilUsuario === 'administrativo_dore' ? 'Administrativo DORE' :
-              perfilUsuario === 'fiscal_obra' ? 'Fiscalização de Campo' : 'Operador',
+              perfilUsuario === 'administrativo_dore' ? 'Administrativo DORE' : 'Operador',
       acao,
       detalhe,
       tipo,
@@ -128,8 +126,7 @@ export default function App() {
     { id: 'USR-02', nome: 'Aline Davino', email: 'aline.davino@educacao.mg.gov.br', perfil: 'gestor_dore', departamento: 'DORE Atendimento' },
     { id: 'USR-03', nome: 'Flavia Borges', email: 'flavia.borges@educacao.mg.gov.br', perfil: 'analista_dore', departamento: 'DORE Engenharia' },
     { id: 'USR-04', nome: 'Silas Fagundes', email: 'silas.fagundes@paf.mg.gov.br', perfil: 'gestor_paf', departamento: 'SAF/PAF Secretarias' },
-    { id: 'USR-05', nome: 'Rui Lages', email: 'rui.lages@educacao.mg.gov.br', perfil: 'administrativo_dore', departamento: 'Administrativo DORE' },
-    { id: 'USR-06', nome: 'Insp. Mariana Souza', email: 'mariana.souza@obras.mg.gov.br', perfil: 'fiscal_obra', departamento: 'Fiscalização de Campo' }
+    { id: 'USR-05', nome: 'Rui Lages', email: 'rui.lages@educacao.mg.gov.br', perfil: 'administrativo_dore', departamento: 'Administrativo DORE' }
   ]);
 
   const [enderecosSeguranca, setEnderecosSeguranca] = useState([
@@ -174,10 +171,28 @@ export default function App() {
   });
 
   // SEGURANÇA FORM STATES - USER
+  const [showCadastroUsuarioModal, setShowCadastroUsuarioModal] = useState(false);
+  const [usrIdEmEdicao, setUsrIdEmEdicao] = useState<string | null>(null);
   const [usrNome, setUsrNome] = useState('');
   const [usrEmail, setUsrEmail] = useState('');
   const [usrPerfil, setUsrPerfil] = useState<PerfilUsuario>('tecnico_infra');
   const [usrDepto, setUsrDepto] = useState('SRE Geral');
+  const [usrCargo, setUsrCargo] = useState('Engenheiro Civil');
+  const [usrFormacao, setUsrFormacao] = useState('Engenharia Civil');
+  const [usrCreaNum, setUsrCreaNum] = useState('');
+  const [usrCreaSituacao, setUsrCreaSituacao] = useState<'Ativo' | 'Inativo'>('Ativo');
+  const [usrDataIngresso, setUsrDataIngresso] = useState('');
+  const [usrSituacaoFuncional, setUsrSituacaoFuncional] = useState<'Ativo' | 'Férias' | 'Licença' | 'Afastado' | 'Desligado'>('Ativo');
+  const [usrTipoVinculo, setUsrTipoVinculo] = useState<'regional' | 'orgao_central'>('regional');
+  const [usrEquipeCentral, setUsrEquipeCentral] = useState('Planejamento');
+  const [usrRegional, setUsrRegional] = useState('SRE Metropolitana A');
+
+  // FILTROS DA TABELA DE USUÁRIOS
+  const [filtroUsrBusca, setFiltroUsrBusca] = useState('');
+  const [filtroUsrCargo, setFiltroUsrCargo] = useState('todos');
+  const [filtroUsrSituacao, setFiltroUsrSituacao] = useState('todos');
+  const [filtroUsrPerfil, setFiltroUsrPerfil] = useState('todos');
+  const [filtroUsrVinculo, setFiltroUsrVinculo] = useState('todos');
 
   // SEGURANÇA FORM STATES - ADDRESS
   const [endCep, setEndCep] = useState('');
@@ -197,24 +212,135 @@ export default function App() {
   const [escOrgao, setEscOrgao] = useState('Exclusivo');
 
   // SECURITY EVENTS HANDLERS
+  const resetFormUsuario = () => {
+    setUsrNome('');
+    setUsrEmail('');
+    setUsrCargo('Engenheiro Civil');
+    setUsrFormacao('Engenharia Civil');
+    setUsrCreaNum('');
+    setUsrCreaSituacao('Ativo');
+    setUsrDataIngresso('');
+    setUsrSituacaoFuncional('Ativo');
+    setUsrTipoVinculo('regional');
+    setUsrEquipeCentral('Planejamento');
+    setUsrRegional('SRE Metropolitana A');
+    setUsrIdEmEdicao(null);
+    setShowCadastroUsuarioModal(false);
+  };
+
+  const abrirEdicaoUsuario = (u: any) => {
+    setUsrIdEmEdicao(u.id);
+    setUsrNome(u.nome);
+    setUsrEmail(u.email);
+    setUsrCargo(u.cargo || 'Engenheiro Civil');
+    setUsrFormacao(u.formacao || 'Engenharia Civil');
+    setUsrCreaNum(u.creaNum || '');
+    setUsrCreaSituacao(u.creaSituacao || 'Ativo');
+    setUsrDataIngresso(u.dataIngresso || '');
+    setUsrSituacaoFuncional(u.situacaoFuncional || 'Ativo');
+    setUsrTipoVinculo(u.tipoVinculo || 'regional');
+    setUsrEquipeCentral(u.equipeCentral || 'Planejamento');
+    setUsrRegional(u.tipoVinculo === 'regional' ? u.departamento : 'SRE Metropolitana A');
+    setShowCadastroUsuarioModal(true);
+  };
+
+  const exportarUsuariosCSV = (usuarios: any[]) => {
+    const perfilLabel = (perfil: string) => {
+      switch (perfil) {
+        case 'tecnico_infra': return 'Técnico de Infraestrutura (SRE)';
+        case 'gestor_dore': return 'Gestor Atendimento (DORE)';
+        case 'analista_dore': return 'Analista de Engenharia (DORE)';
+        case 'gestor_paf': return 'Gestor Geral (PAF)';
+        case 'administrativo_dore': return 'Administrativo DORE';
+        default: return perfil;
+      }
+    };
+
+    const cabecalho = [
+      'ID', 'Nome', 'E-mail', 'Cargo', 'Formação',
+      'Nº Registro CREA/CAU', 'Situação CREA/CAU',
+      'Data de Ingresso', 'Situação do Colaborador',
+      'Perfil SGO', 'Tipo de Vínculo', 'Departamento / SRE',
+      'Equipe Central', 'Data Última Atualização'
+    ];
+
+    const linhas = usuarios.map(u => [
+      u.id,
+      u.nome,
+      u.email,
+      u.cargo || '',
+      u.formacao || '',
+      u.creaNum || '',
+      u.creaSituacao || '',
+      u.dataIngresso || '',
+      u.situacaoFuncional || '',
+      perfilLabel(u.perfil),
+      u.tipoVinculo === 'regional' ? 'Regional (SRE)' : u.tipoVinculo === 'orgao_central' ? 'Órgão Central' : '',
+      u.departamento || '',
+      u.equipeCentral || '',
+      u.dataUltimaAtualizacao || ''
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`));
+
+    const csv = '﻿' + [cabecalho.map(h => `"${h}"`).join(';'), ...linhas.map(l => l.join(';'))].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `usuarios_sgo_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleCadastrarUsuario = (e: React.FormEvent) => {
     e.preventDefault();
     if (!usrNome || !usrEmail) {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
-    const novo = {
-      id: `USR-${String(usuariosSeguranca.length + 1).padStart(2, '0')}`,
+
+    const perfil: PerfilUsuario = usrTipoVinculo === 'regional'
+      ? 'tecnico_infra'
+      : usrEquipeCentral === 'Planejamento' ? 'analista_dore'
+      : usrEquipeCentral === 'Administrativo' ? 'administrativo_dore'
+      : 'gestor_dore';
+
+    const departamento = usrTipoVinculo === 'regional'
+      ? usrRegional
+      : `DORE - ${usrEquipeCentral}`;
+
+    const dadosAtualizados = {
       nome: usrNome,
       email: usrEmail,
-      perfil: usrPerfil,
-      departamento: usrDepto
+      perfil,
+      departamento,
+      cargo: usrCargo,
+      formacao: usrFormacao,
+      creaNum: usrCreaNum || undefined,
+      creaSituacao: usrCreaSituacao,
+      dataIngresso: usrDataIngresso || undefined,
+      situacaoFuncional: usrSituacaoFuncional,
+      dataUltimaAtualizacao: new Date().toISOString().split('T')[0],
+      tipoVinculo: usrTipoVinculo,
+      equipeCentral: usrTipoVinculo === 'orgao_central' ? usrEquipeCentral : undefined
     };
-    setUsuariosSeguranca([...usuariosSeguranca, novo]);
-    setUsrNome('');
-    setUsrEmail('');
-    setUsrDepto('SRE Geral');
-    alert(`Usuário "${usrNome}" cadastrado com sucesso nas diretivas de Segurança!`);
+
+    if (usrIdEmEdicao) {
+      setUsuariosSeguranca(usuariosSeguranca.map(u =>
+        u.id === usrIdEmEdicao ? { ...u, ...dadosAtualizados } : u
+      ));
+      resetFormUsuario();
+      alert(`Cadastro de "${usrNome}" atualizado com sucesso!`);
+    } else {
+      const novo = {
+        id: `USR-${String(usuariosSeguranca.length + 1).padStart(2, '0')}`,
+        ...dadosAtualizados
+      };
+      setUsuariosSeguranca([...usuariosSeguranca, novo]);
+      resetFormUsuario();
+      alert(`Usuário "${usrNome}" cadastrado com sucesso nas diretivas de Segurança!`);
+    }
   };
 
   const handleCadastrarEndereco = (e: React.FormEvent) => {
@@ -318,6 +444,15 @@ export default function App() {
     setEmpMail('');
     alert(`Empresa "${empNome}" pré-cadastrada e homologada com sucesso no módulo de Segurança.`);
   };
+
+  // Controle de acesso regional: tecnico_infra só vê dados da sua SRE
+  const sreDoTecnico = perfilUsuario === 'tecnico_infra'
+    ? (usuariosSeguranca.find(u => u.perfil === 'tecnico_infra')?.departamento || '')
+    : '';
+
+  const solicitacoesVisiveis = sreDoTecnico
+    ? solicitacoes.filter(s => s.sre?.toLowerCase() === sreDoTecnico.toLowerCase())
+    : solicitacoes;
 
   // Initialize from LocalStorage or the rich pre-defined mock set
   useEffect(() => {
@@ -891,18 +1026,20 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="px-3 pt-2 pb-0.5 border-t border-slate-100 flex justify-center">
-                    <button
-                      onClick={() => {
-                        setActiveModule('central_logs');
-                        setActiveSubTask('visao_geral');
-                        setMostrarMenuNotif(false);
-                      }}
-                      className="w-full py-1 text-center text-[10px] font-bold text-[#13264d] hover:bg-slate-50 rounded-lg transition"
-                    >
-                      Ver Tudo (Logs & Auditoria) →
-                    </button>
-                  </div>
+                  {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf') && (
+                    <div className="px-3 pt-2 pb-0.5 border-t border-slate-100 flex justify-center">
+                      <button
+                        onClick={() => {
+                          setActiveModule('central_logs');
+                          setActiveSubTask('visao_geral');
+                          setMostrarMenuNotif(false);
+                        }}
+                        className="w-full py-1 text-center text-[10px] font-bold text-[#13264d] hover:bg-slate-50 rounded-lg transition"
+                      >
+                        Ver Logs do Sistema →
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -922,7 +1059,6 @@ export default function App() {
                 {perfilUsuario === 'analista_dore' && 'FB'}
                 {perfilUsuario === 'gestor_paf' && 'SF'}
                 {perfilUsuario === 'administrativo_dore' && 'RL'}
-                {perfilUsuario === 'fiscal_obra' && 'MS'}
               </div>
               <div className="text-left hidden sm:block font-sans">
                 <p className="text-slate-200 leading-none font-medium flex items-center gap-1">
@@ -931,7 +1067,6 @@ export default function App() {
                   {perfilUsuario === 'analista_dore' && 'Flavia Borges'}
                   {perfilUsuario === 'gestor_paf' && 'Silas Fagundes'}
                   {perfilUsuario === 'administrativo_dore' && 'Rui Lages'}
-                  {perfilUsuario === 'fiscal_obra' && 'Insp. Mariana Souza'}
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 </p>
                 <p className="text-slate-500 text-[10px] mt-0.5 uppercase tracking-wider font-semibold">
@@ -940,7 +1075,6 @@ export default function App() {
                   {perfilUsuario === 'analista_dore' && 'Analista de Engenharia (DORE)'}
                   {perfilUsuario === 'gestor_paf' && 'Gestor Geral (PAF)'}
                   {perfilUsuario === 'administrativo_dore' && 'Administrativo DORE'}
-                  {perfilUsuario === 'fiscal_obra' && 'Fiscalização de Campo'}
                 </p>
               </div>
             </div>
@@ -965,8 +1099,7 @@ export default function App() {
                     { id: 'gestor_dore', nome: 'Aline Davino', cargo: 'Gestor Atendimento DORE', av: 'AD', color: 'bg-indigo-600' },
                     { id: 'analista_dore', nome: 'Flavia Borges', cargo: 'Analista de Engenharia DORE', av: 'FB', color: 'bg-blue-600' },
                     { id: 'gestor_paf', nome: 'Silas Fagundes', cargo: 'Gestor Geral (PAF)', av: 'SF', color: 'bg-cyan-600' },
-                    { id: 'administrativo_dore', nome: 'Rui Lages', cargo: 'Administrativo DORE', av: 'RL', color: 'bg-purple-600' },
-                    { id: 'fiscal_obra', nome: 'Insp. Mariana Souza', cargo: 'Fiscalização de Campo', av: 'MS', color: 'bg-emerald-600' }
+                    { id: 'administrativo_dore', nome: 'Rui Lages', cargo: 'Administrativo DORE', av: 'RL', color: 'bg-purple-600' }
                   ].map((perf) => (
                     <button
                       key={perf.id}
@@ -1103,29 +1236,26 @@ export default function App() {
             <span className="text-[8px] font-bold tracking-tight">Chamados</span>
           </button>
 
-          {/* 6. CENTRAL DE LOGS E NOTIFICAÇÕES */}
-          <button
-            type="button"
-            title="Log do Sistema & Auditoria"
-            onClick={() => {
-              setActiveModule('central_logs');
-              setActiveSubTask('visao_geral');
-              setIdSolicitacaoSelecionada(null);
-            }}
-            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
-              activeModule === 'central_logs'
-                ? 'bg-blue-620 bg-blue-600 text-white border-blue-500 shadow-md'
-                : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
-            }`}
-          >
-            <span className="relative">
+          {/* 6. LOG DO SISTEMA — somente gestores */}
+          {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf') && (
+            <button
+              type="button"
+              title="Log do Sistema & Auditoria"
+              onClick={() => {
+                setActiveModule('central_logs');
+                setActiveSubTask('visao_geral');
+                setIdSolicitacaoSelecionada(null);
+              }}
+              className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
+                activeModule === 'central_logs'
+                  ? 'bg-blue-600 text-white border-blue-500 shadow-md'
+                  : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
+              }`}
+            >
               <FileClock className="w-4 h-4 flex-shrink-0" />
-              {notifications.filter(n => !n.lida).length > 0 && (
-                <span className="absolute -top-1 -right-1.5 w-1.5 h-1.5 bg-rose-500 rounded-full animate-pulse" />
-              )}
-            </span>
-            <span className="text-[8px] font-bold tracking-tight">Logs</span>
-          </button>
+              <span className="text-[8px] font-bold tracking-tight">Logs</span>
+            </button>
+          )}
 
           <div className="mt-auto border-t border-slate-550/35 pt-4 w-10 flex flex-col items-center">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="SGO Online" />
@@ -1211,17 +1341,25 @@ export default function App() {
                 </div>
 
                 {/* 2. ANÁLISE TÉCNICA */}
-                <div className="space-y-1">
+                <div className={`space-y-1 ${perfilUsuario === 'tecnico_infra' ? 'opacity-50' : ''}`}>
                   <button
                     type="button"
-                    onClick={() => toggleCategory('analise')}
-                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-md text-left text-[10px] font-black text-slate-500 uppercase tracking-wider font-sans cursor-pointer group"
+                    onClick={() => perfilUsuario !== 'tecnico_infra' && toggleCategory('analise')}
+                    disabled={perfilUsuario === 'tecnico_infra'}
+                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left text-[10px] font-black uppercase tracking-wider font-sans group ${
+                      perfilUsuario === 'tecnico_infra'
+                        ? 'text-slate-400 cursor-not-allowed'
+                        : 'hover:bg-slate-50 text-slate-500 cursor-pointer'
+                    }`}
                   >
                     <span className="flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <FileText className="w-3.5 h-3.5 shrink-0" />
                       Análise Técnica
                     </span>
-                    <ChevronDown className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-transform ${collapsedCategories.analise ? '-rotate-90' : ''}`} />
+                    {perfilUsuario === 'tecnico_infra'
+                      ? <Lock className="w-3 h-3 text-slate-400" />
+                      : <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsedCategories.analise ? '-rotate-90' : ''}`} />
+                    }
                   </button>
 
                   {!collapsedCategories.analise && (
@@ -1232,20 +1370,25 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
+                        const bloqueado = perfilUsuario === 'tecnico_infra';
                         return (
                           <button
                             key={item.id}
+                            disabled={bloqueado}
                             onClick={() => {
+                              if (bloqueado) return;
                               setActiveSubTask(item.id);
                               setIdSolicitacaoSelecionada(null);
                             }}
-                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left transition-all duration-150 cursor-pointer ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 pl-1.5 rounded-r-md'
-                                : 'hover:bg-slate-50/70 text-slate-600 pl-1.5'
+                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left pl-1.5 ${
+                              bloqueado
+                                ? 'text-slate-400 cursor-not-allowed'
+                                : isActive
+                                  ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 rounded-r-md cursor-pointer transition-all duration-150'
+                                  : 'hover:bg-slate-50/70 text-slate-600 cursor-pointer transition-all duration-150'
                             }`}
                           >
-                            <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <Icon className={`w-3 h-3 shrink-0 ${isActive && !bloqueado ? 'text-blue-600' : 'text-slate-400'}`} />
                             <span className="text-xs font-sans">{item.label}</span>
                           </button>
                         );
@@ -1255,17 +1398,25 @@ export default function App() {
                 </div>
 
                 {/* 3. PAF / CONTRATAÇÕES */}
-                <div className="space-y-1">
+                <div className={`space-y-1 ${perfilUsuario === 'tecnico_infra' ? 'opacity-50' : ''}`}>
                   <button
                     type="button"
-                    onClick={() => toggleCategory('paf')}
-                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-md text-left text-[10px] font-black text-slate-500 uppercase tracking-wider font-sans cursor-pointer group"
+                    onClick={() => perfilUsuario !== 'tecnico_infra' && toggleCategory('paf')}
+                    disabled={perfilUsuario === 'tecnico_infra'}
+                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left text-[10px] font-black uppercase tracking-wider font-sans group ${
+                      perfilUsuario === 'tecnico_infra'
+                        ? 'text-slate-400 cursor-not-allowed'
+                        : 'hover:bg-slate-50 text-slate-500 cursor-pointer'
+                    }`}
                   >
                     <span className="flex items-center gap-1.5">
-                      <Coins className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <Coins className="w-3.5 h-3.5 shrink-0" />
                       PAF / Contratações
                     </span>
-                    <ChevronDown className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-transform ${collapsedCategories.paf ? '-rotate-90' : ''}`} />
+                    {perfilUsuario === 'tecnico_infra'
+                      ? <Lock className="w-3 h-3 text-slate-400" />
+                      : <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsedCategories.paf ? '-rotate-90' : ''}`} />
+                    }
                   </button>
 
                   {!collapsedCategories.paf && (
@@ -1277,20 +1428,25 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
+                        const bloqueado = perfilUsuario === 'tecnico_infra';
                         return (
                           <button
                             key={item.id}
+                            disabled={bloqueado}
                             onClick={() => {
+                              if (bloqueado) return;
                               setActiveSubTask(item.id);
                               setIdSolicitacaoSelecionada(null);
                             }}
-                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left transition-all duration-150 cursor-pointer ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 pl-1.5 rounded-r-md'
-                                : 'hover:bg-slate-50/70 text-slate-600 pl-1.5'
+                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left pl-1.5 ${
+                              bloqueado
+                                ? 'text-slate-400 cursor-not-allowed'
+                                : isActive
+                                  ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 rounded-r-md cursor-pointer transition-all duration-150'
+                                  : 'hover:bg-slate-50/70 text-slate-600 cursor-pointer transition-all duration-150'
                             }`}
                           >
-                            <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <Icon className={`w-3 h-3 shrink-0 ${isActive && !bloqueado ? 'text-blue-600' : 'text-slate-400'}`} />
                             <span className="text-xs font-sans">{item.label}</span>
                           </button>
                         );
@@ -1540,7 +1696,6 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
                       {[
                         { id: 'orca_reports', label: 'Relatórios', func: 'curva ABC e Pareto', icon: BarChart2 },
-                        { id: 'orca_sync', label: 'Análises Síncronas', func: 'inteligência orçamentária', icon: Zap },
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
@@ -1665,41 +1820,21 @@ export default function App() {
                 </span>
                 <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 mt-0.5 font-sans">
                   <FileClock className="w-4 h-4 text-blue-600 shrink-0" />
-                  Logs e Alertas
+                  Log do Sistema
                 </h3>
               </div>
-
-              <div className="space-y-1.5">
-                {[
-                  { id: 'visao_geral', label: 'Monitor de Alertas', desc: 'Central de notificações e avisos', icon: Bell },
-                  { id: 'logs_auditoria', label: 'Logs de Auditoria', desc: 'Rastreabilidade de alterações', icon: FileClock }
-                ].map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeSubTask === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => {
-                        setActiveSubTask(item.id);
-                        setIdSolicitacaoSelecionada(null);
-                      }}
-                      className={`w-full flex flex-col items-start px-3 py-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${
-                        isActive
-                          ? 'bg-blue-50 border border-blue-105 text-blue-800 font-semibold'
-                          : 'hover:bg-slate-50 border border-transparent text-slate-600'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                        <span className="text-xs font-bold font-sans">{item.label}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-400 block ml-5.5 leading-tight font-sans mt-0.5">
-                        {item.desc}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+              <button
+                onClick={() => { setActiveSubTask('logs_auditoria'); setIdSolicitacaoSelecionada(null); }}
+                className="w-full flex flex-col items-start px-3 py-2 rounded-lg text-left bg-blue-50 border border-blue-100 text-blue-800 cursor-default"
+              >
+                <div className="flex items-center gap-2">
+                  <FileClock className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                  <span className="text-xs font-bold font-sans">Logs de Auditoria</span>
+                </div>
+                <span className="text-[10px] text-slate-400 block ml-5.5 leading-tight font-sans mt-0.5">
+                  Rastreabilidade completa de alterações
+                </span>
+              </button>
             </div>
           )}
         </aside>
@@ -1709,7 +1844,7 @@ export default function App() {
           
           {activeModule === 'gestao_obras' && activeSubTask === 'paf_acompanhamento' && !idSolicitacaoSelecionada ? (
             <AcompanhamentoPaf
-              solicitacoes={solicitacoes}
+              solicitacoes={solicitacoesVisiveis}
               onSelectSolicitacao={(id) => setIdSolicitacaoSelecionada(id)}
               onNavigateToTab={(tab, schoolId) => {
                 setActiveSubTask(tab);
@@ -1724,7 +1859,7 @@ export default function App() {
             />
           ) : activeModule === 'gestao_obras' && activeSubTask === 'paf_autorizacao' && !idSolicitacaoSelecionada ? (
             (() => {
-              const schoolsInAutorizacao = solicitacoes.filter(s => s.etapaAtual === 'paf_autorizacao');
+              const schoolsInAutorizacao = solicitacoesVisiveis.filter(s => s.etapaAtual === 'paf_autorizacao');
               
               // Dynamic filter items based on the data
               const uniqueCodesc = Array.from(new Set(schoolsInAutorizacao.map(s => s.codesc).filter(Boolean)));
@@ -2121,7 +2256,7 @@ export default function App() {
             })()
           ) : activeModule === 'gestao_obras' && activeSubTask !== 'visao_geral' && ['analise', 'paf', 'execucao_abertura', 'execucao', 'aditivos', 'conclusao'].includes(activeSubTask) ? (
             (() => {
-              const listFiltered = solicitacoes.filter(s => {
+              const listFiltered = solicitacoesVisiveis.filter(s => {
                 if (activeSubTask === 'analise') return s.etapaAtual === 'analise';
                 if (activeSubTask === 'paf') return s.etapaAtual === 'paf';
                 if (activeSubTask === 'execucao_abertura') return s.etapaAtual === 'ordem_inicio' || s.etapaAtual === 'execucao';
@@ -2575,7 +2710,7 @@ export default function App() {
 
                   {activeSubTask === 'novo_atendimento' ? (
                     <NovoAtendimentoPanel
-                      solicitacoes={solicitacoes}
+                      solicitacoes={solicitacoesVisiveis}
                       onSolicitacaoCriada={(nova) => {
                         setSolicitacoes(prev => [nova, ...prev]);
                         setActiveSubTask('cadastro');
@@ -2584,13 +2719,14 @@ export default function App() {
                       usuariosSeguranca={usuariosSeguranca}
                       onEdit={setSolicitacaoEmEdicao}
                       perfilUsuario={perfilUsuario}
+                      sreDoTecnico={sreDoTecnico}
                       atendimentoEmEdicaoDirect={atendimentoEmEdicaoDirect}
                       onLimparEdicaoDirect={() => setAtendimentoEmEdicaoDirect(null)}
                     />
                   ) : activeSubTask === 'analise_atribuicao' ? (
                     viewMode === 'lista' ? (
                       <AtribuicaoPanel
-                        solicitacoes={solicitacoes}
+                        solicitacoes={solicitacoesVisiveis}
                         onUpdateSolicitacao={handleUpdateSolicitacao}
                         usuariosSeguranca={usuariosSeguranca}
                         atribuicoes={atribuicoesEngenharia}
@@ -2603,7 +2739,7 @@ export default function App() {
                       />
                     ) : (
                       <KanbanViews
-                        solicitacoes={solicitacoes}
+                        solicitacoes={solicitacoesVisiveis}
                         onSelect={handleSelectSolicitacao}
                         perfilUsuario={perfilUsuario}
                         onUpdate={handleUpdateSolicitacao}
@@ -2619,14 +2755,14 @@ export default function App() {
                     )
                   ) : activeSubTask === 'execucao_central' ? (
                     <CentralNavegacaoObras
-                      solicitacoes={solicitacoes}
+                      solicitacoes={solicitacoesVisiveis}
                       perfilUsuario={perfilUsuario}
                       setActiveSubTask={setActiveSubTask}
                     />
                   ) : activeSubTask.startsWith('execucao_') ? (
                     <ExecucaoSubmodulos
                       activeSubTask={activeSubTask}
-                      solicitacoes={solicitacoes}
+                      solicitacoes={solicitacoesVisiveis}
                       onUpdate={handleUpdateSolicitacao}
                       perfilUsuario={perfilUsuario}
                       onSelect={(sol) => handleSelectSolicitacao(sol)}
@@ -2636,17 +2772,17 @@ export default function App() {
                   ) : activeSubTask.startsWith('relat_') ? (
                     <RelatoriosPanel
                       activeReportType={activeSubTask}
-                      solicitacoes={solicitacoes}
+                      solicitacoes={solicitacoesVisiveis}
                     />
                   ) : activeSubTask === 'visao_geral' ? (
                     <VisaoGeralDashboard
-                      solicitacoes={solicitacoes}
+                      solicitacoes={solicitacoesVisiveis}
                       onSelectSchool={(sol) => handleSelectSolicitacao(sol)}
                       onNavigateToSubTask={(subTask) => setActiveSubTask(subTask)}
                     />
                   ) : viewMode === 'lista' ? (
                     <Dashboard
-                      solicitacoes={solicitacoes.filter(s => {
+                      solicitacoes={solicitacoesVisiveis.filter(s => {
                         if (activeSubTask === 'cadastro') return true;
                         if (activeSubTask === 'analise') return s.etapaAtual === 'analise';
                         if (activeSubTask === 'paf_autorizacao') return s.etapaAtual === 'paf_autorizacao';
@@ -2687,7 +2823,7 @@ export default function App() {
                   ) : (
                     <KanbanViews
                       usuariosSeguranca={usuariosSeguranca}
-                      solicitacoes={solicitacoes.filter(s => {
+                      solicitacoes={solicitacoesVisiveis.filter(s => {
                         if (activeSubTask === 'cadastro') return true;
                         if (activeSubTask === 'analise') return s.etapaAtual === 'analise';
                         if (activeSubTask === 'paf_autorizacao') return s.etapaAtual === 'paf_autorizacao';
@@ -2727,145 +2863,219 @@ export default function App() {
                   {activeSubTask === 'cadastro_usuario' && (
                     <div className="space-y-6 animate-in fade-in duration-200">
                       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-3xs text-left">
-                        <h2 className="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
-                          <UserPlus className="w-5 h-5 text-rose-600 text-rose-600 shrink-0" />
-                          Cadastro de Usuário Simulado (Níveis de Acesso)
-                        </h2>
-                        <p className="text-xs text-slate-500 mb-6">
-                          Adicione novas credenciais para simular papéis concorrentes (Técnicos SRE, Analistas DORE, Engenheiros e Fiscais de Obra) nas validações e auditorias do GESTO.
-                        </p>
-
-                        <form onSubmit={handleCadastrarUsuario} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="flex items-start justify-between">
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              Nome Completo *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={usrNome}
-                              onChange={(e) => setUsrNome(e.target.value)}
-                              placeholder="ex: Eng. Roberto Carlos"
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                            />
+                            <h2 className="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
+                              <UserPlus className="w-5 h-5 text-rose-600 shrink-0" />
+                              Usuários do Sistema (Níveis de Acesso)
+                            </h2>
+                            <p className="text-xs text-slate-500">
+                              Gerencie os usuários e seus perfis de atribuição no GESTO.
+                            </p>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowCadastroUsuarioModal(true)}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-all shrink-0"
+                          >
+                            <UserPlus className="w-3.5 h-3.5" /> Novo Usuário
+                          </button>
+                        </div>
+                      </div>
 
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              E-mail Institucional *
-                            </label>
-                            <input
-                              type="email"
-                              required
-                              value={usrEmail}
-                              onChange={(e) => setUsrEmail(e.target.value)}
-                              placeholder="ex: roberto.carlos@sre.mg.gov.br"
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              Perfil de Atribuição (Role) *
-                            </label>
-                            <select
-                              value={usrPerfil}
-                              onChange={(e) => setUsrPerfil(e.target.value as PerfilUsuario)}
-                              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-505 focus:border-rose-500 outline-hidden cursor-pointer"
-                            >
-                              <option value="tecnico_infra">Técnico de Infraestrutura (SRE)</option>
-                              <option value="gestor_dore">Gestor Atendimento (DORE)</option>
-                              <option value="analista_dore">Analista de Engenharia (DORE)</option>
-                              <option value="gestor_paf">Gestor Geral Plano (SAF/PAF)</option>
-                              <option value="administrativo_dore">Administrativo DORE</option>
-                              <option value="fiscal_obra">Fiscal de Obra de Campo</option>
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                              Departamento / SRE *
-                            </label>
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                required
-                                value={usrDepto}
-                                onChange={(e) => setUsrDepto(e.target.value)}
-                                placeholder="ex: SRE Patos de Minas"
-                                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
-                              />
-                              <button
-                                type="submit"
-                                className="px-4 py-2 bg-rose-600 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer inline-flex items-center whitespace-nowrap"
-                              >
-                                Cadastrar
-                              </button>
+                      {/* FILTROS DA TABELA */}
+                      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-3xs space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                            <Search className="w-3.5 h-3.5 text-rose-500" /> Filtros de Pesquisa
+                          </span>
+                          {(filtroUsrBusca || filtroUsrCargo !== 'todos' || filtroUsrSituacao !== 'todos' || filtroUsrPerfil !== 'todos' || filtroUsrVinculo !== 'todos') && (
+                            <button type="button" onClick={() => { setFiltroUsrBusca(''); setFiltroUsrCargo('todos'); setFiltroUsrSituacao('todos'); setFiltroUsrPerfil('todos'); setFiltroUsrVinculo('todos'); }} className="text-[10px] text-rose-600 font-bold hover:underline cursor-pointer">
+                              Limpar Filtros
+                            </button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                          <div className="md:col-span-2">
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Buscar por nome ou e-mail</label>
+                            <div className="relative">
+                              <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                              <input type="text" value={filtroUsrBusca} onChange={(e) => setFiltroUsrBusca(e.target.value)} placeholder="Nome, e-mail..." className="w-full text-xs border border-slate-200 rounded-lg pl-7 pr-3 py-1.5 bg-white text-slate-800 focus:ring-1 focus:ring-rose-400 outline-hidden" />
                             </div>
                           </div>
-                        </form>
-                      </div>
-
-                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-3xs">
-                        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center text-left">
-                          <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                            Lista de Usuários no Sistema ({usuariosSeguranca.length})
-                          </h3>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                          <table className="w-full border-collapse">
-                            <thead>
-                              <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase bg-slate-50 text-left">
-                                <th className="py-2.5 px-4 w-12">Iniciais</th>
-                                <th className="py-2.5 px-4 font-sans">Usuário</th>
-                                <th className="py-2.5 px-4 font-sans">E-mail</th>
-                                <th className="py-2.5 px-4 font-sans">Perfil / Alçada SGO</th>
-                                <th className="py-2.5 px-4 font-sans">SRE / Local</th>
-                                <th className="py-2.5 px-4 font-sans text-center">Ações</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {usuariosSeguranca.map(u => (
-                                <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/20 text-xs text-left">
-                                  <td className="py-3 px-4">
-                                    <div className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-extrabold text-slate-600">
-                                      {u.nome.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase()}
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-4 font-bold text-slate-700">{u.nome}</td>
-                                  <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">{u.email}</td>
-                                  <td className="py-3 px-4">
-                                    <span className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold ${
-                                      u.perfil === 'tecnico_infra' ? 'bg-amber-100 text-amber-850' :
-                                      u.perfil === 'gestor_dore' ? 'bg-indigo-100 text-indigo-850' :
-                                      u.perfil === 'analista_dore' ? 'bg-blue-100 text-blue-850' :
-                                      u.perfil === 'gestor_paf' ? 'bg-cyan-100 text-cyan-850' :
-                                      u.perfil === 'administrativo_dore' ? 'bg-purple-100 text-purple-850' :
-                                      'bg-emerald-100 text-emerald-850'
-                                    }`}>
-                                      {u.perfil.toUpperCase()}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-4 text-slate-600 font-medium">{u.departamento}</td>
-                                  <td className="py-3 px-4 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setUsuariosSeguranca(usuariosSeguranca.filter(usr => usr.id !== u.id));
-                                      }}
-                                      className="text-[14px] leading-none hover:scale-110 active:scale-95 transition-all text-slate-400 hover:text-red-600 hover:text-red-500 cursor-pointer p-1"
-                                      title="Remover usuário"
-                                    >
-                                      🗑️
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cargo</label>
+                            <select value={filtroUsrCargo} onChange={(e) => setFiltroUsrCargo(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 focus:ring-1 focus:ring-rose-400 outline-hidden cursor-pointer">
+                              <option value="todos">Todos os cargos</option>
+                              {['Engenheiro Civil','Arquiteto','Técnico em Edificações','Analista','Coordenador','Diretor','Fiscal','Administrador'].map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Situação</label>
+                            <select value={filtroUsrSituacao} onChange={(e) => setFiltroUsrSituacao(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 focus:ring-1 focus:ring-rose-400 outline-hidden cursor-pointer">
+                              <option value="todos">Todas</option>
+                              {['Ativo','Férias','Licença','Afastado','Desligado'].map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vínculo</label>
+                            <select value={filtroUsrVinculo} onChange={(e) => setFiltroUsrVinculo(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 focus:ring-1 focus:ring-rose-400 outline-hidden cursor-pointer">
+                              <option value="todos">Todos</option>
+                              <option value="regional">Regional (SRE)</option>
+                              <option value="orgao_central">Órgão Central</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
+
+                      {/* TABELA DE USUÁRIOS */}
+                      {(() => {
+                        const usuariosFiltrados = usuariosSeguranca.filter(u => {
+                          const busca = filtroUsrBusca.toLowerCase();
+                          if (busca && !u.nome.toLowerCase().includes(busca) && !u.email.toLowerCase().includes(busca)) return false;
+                          if (filtroUsrCargo !== 'todos' && (u as any).cargo !== filtroUsrCargo) return false;
+                          if (filtroUsrSituacao !== 'todos' && (u as any).situacaoFuncional !== filtroUsrSituacao) return false;
+                          if (filtroUsrVinculo !== 'todos' && (u as any).tipoVinculo !== filtroUsrVinculo) return false;
+                          return true;
+                        });
+
+                        return (
+                          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-3xs">
+                            <div className="p-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                                Lista de Usuários ({usuariosFiltrados.length} de {usuariosSeguranca.length})
+                              </h3>
+                              <button
+                                type="button"
+                                onClick={() => exportarUsuariosCSV(usuariosFiltrados)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg cursor-pointer transition-all shadow-xs"
+                                title="Exportar lista filtrada para Excel"
+                              >
+                                <Database className="w-3 h-3" />
+                                Exportar Excel
+                              </button>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse text-xs">
+                                <thead>
+                                  <tr className="border-b border-slate-100 text-[9px] font-bold text-slate-400 uppercase bg-slate-50 text-left whitespace-nowrap">
+                                    <th className="py-2.5 px-3 w-10"></th>
+                                    <th className="py-2.5 px-3">Nome / E-mail</th>
+                                    <th className="py-2.5 px-3">Cargo</th>
+                                    <th className="py-2.5 px-3">Formação</th>
+                                    <th className="py-2.5 px-3">CREA / CAU</th>
+                                    <th className="py-2.5 px-3">Ingresso</th>
+                                    <th className="py-2.5 px-3">Situação</th>
+                                    <th className="py-2.5 px-3">Perfil SGO</th>
+                                    <th className="py-2.5 px-3">Vínculo / Local</th>
+                                    <th className="py-2.5 px-3">Atualizado em</th>
+                                    <th className="py-2.5 px-3 text-center">Ações</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {usuariosFiltrados.length === 0 ? (
+                                    <tr>
+                                      <td colSpan={11} className="py-10 text-center text-slate-400 text-xs font-medium">
+                                        Nenhum usuário encontrado com os filtros aplicados.
+                                      </td>
+                                    </tr>
+                                  ) : usuariosFiltrados.map(u => {
+                                    const usr = u as any;
+                                    const situacaoColor = usr.situacaoFuncional === 'Ativo' ? 'bg-emerald-100 text-emerald-700' :
+                                      usr.situacaoFuncional === 'Férias' ? 'bg-blue-100 text-blue-700' :
+                                      usr.situacaoFuncional === 'Licença' ? 'bg-amber-100 text-amber-700' :
+                                      usr.situacaoFuncional === 'Afastado' ? 'bg-orange-100 text-orange-700' :
+                                      usr.situacaoFuncional === 'Desligado' ? 'bg-rose-100 text-rose-700' :
+                                      'bg-slate-100 text-slate-600';
+                                    const perfilColor = u.perfil === 'tecnico_infra' ? 'bg-amber-100 text-amber-800' :
+                                      u.perfil === 'gestor_dore' ? 'bg-indigo-100 text-indigo-800' :
+                                      u.perfil === 'analista_dore' ? 'bg-blue-100 text-blue-800' :
+                                      u.perfil === 'gestor_paf' ? 'bg-cyan-100 text-cyan-800' :
+                                      u.perfil === 'administrativo_dore' ? 'bg-purple-100 text-purple-800' :
+                                      'bg-slate-100 text-slate-700';
+                                    const creaSituacaoColor = usr.creaSituacao === 'Ativo' ? 'text-emerald-600' : usr.creaSituacao === 'Inativo' ? 'text-rose-600' : 'text-slate-400';
+
+                                    return (
+                                      <tr key={u.id} className="hover:bg-slate-50/50 transition-colors text-left">
+                                        <td className="py-2.5 px-3">
+                                          <div className="w-7 h-7 bg-rose-50 border border-rose-100 rounded-full flex items-center justify-center text-[9px] font-black text-rose-700">
+                                            {u.nome.split(' ').map((n: string) => n[0]).join('').substring(0,2).toUpperCase()}
+                                          </div>
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                          <p className="font-bold text-slate-800 text-[11px]">{u.nome}</p>
+                                          <p className="text-[10px] text-slate-400 font-mono">{u.email}</p>
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-700 font-medium whitespace-nowrap">
+                                          {usr.cargo || <span className="text-slate-400 italic">—</span>}
+                                        </td>
+                                        <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">
+                                          {usr.formacao || <span className="text-slate-400 italic">—</span>}
+                                        </td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap">
+                                          {usr.creaNum ? (
+                                            <div>
+                                              <p className="font-mono text-[10px] text-slate-700 font-semibold">{usr.creaNum}</p>
+                                              <p className={`text-[9px] font-bold ${creaSituacaoColor}`}>{usr.creaSituacao}</p>
+                                            </div>
+                                          ) : <span className="text-slate-400 italic text-[10px]">—</span>}
+                                        </td>
+                                        <td className="py-2.5 px-3 font-mono text-[10px] text-slate-600 whitespace-nowrap">
+                                          {usr.dataIngresso || <span className="text-slate-400 italic">—</span>}
+                                        </td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap">
+                                          <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-bold ${situacaoColor}`}>
+                                            {usr.situacaoFuncional || '—'}
+                                          </span>
+                                        </td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap">
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold ${perfilColor}`}>
+                                            {u.perfil === 'tecnico_infra' ? 'TÉC. INFRA' :
+                                             u.perfil === 'gestor_dore' ? 'GESTOR DORE' :
+                                             u.perfil === 'analista_dore' ? 'ANALISTA' :
+                                             u.perfil === 'gestor_paf' ? 'GESTOR PAF' :
+                                             u.perfil === 'administrativo_dore' ? 'ADMIN DORE' :
+                                             u.perfil.toUpperCase()}
+                                          </span>
+                                        </td>
+                                        <td className="py-2.5 px-3 whitespace-nowrap">
+                                          <p className="text-[10px] font-semibold text-slate-700">
+                                            {usr.tipoVinculo === 'regional' ? '🏫 Regional' : usr.tipoVinculo === 'orgao_central' ? '🏛️ Central' : '—'}
+                                          </p>
+                                          <p className="text-[9.5px] text-slate-500">{u.departamento}</p>
+                                        </td>
+                                        <td className="py-2.5 px-3 font-mono text-[10px] text-slate-500 whitespace-nowrap">
+                                          {usr.dataUltimaAtualizacao || <span className="text-slate-400 italic">—</span>}
+                                        </td>
+                                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                                          <div className="flex items-center justify-center gap-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => abrirEdicaoUsuario(u)}
+                                              className="px-2 py-1 text-[9.5px] font-extrabold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-lg cursor-pointer transition"
+                                              title="Editar usuário"
+                                            >
+                                              Editar
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => setUsuariosSeguranca(usuariosSeguranca.filter(usr2 => usr2.id !== u.id))}
+                                              className="text-[13px] leading-none hover:scale-110 active:scale-95 transition-all text-slate-400 hover:text-red-600 cursor-pointer p-1"
+                                              title="Remover usuário"
+                                            >
+                                              🗑️
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -3040,7 +3250,12 @@ export default function App() {
               )}
 
               {activeModule === 'orcamento' && (
-                <OrcamentoModule activeSubTask={activeSubTask} setActiveSubTask={setActiveSubTask} />
+                <OrcamentoModule
+                  activeSubTask={activeSubTask}
+                  setActiveSubTask={setActiveSubTask}
+                  sreDoTecnico={sreDoTecnico}
+                  perfilUsuario={perfilUsuario}
+                />
               )}
 
               {activeModule === 'imoveis' && (
@@ -3156,36 +3371,23 @@ export default function App() {
               )}
 
               {activeModule === 'central_logs' && (
-                <CentralNotificacoesLogs
-                  notifications={notifications}
-                  logs={logs}
-                  solicitacoes={solicitacoes}
-                  perfilUsuario={perfilUsuario}
-                  onSelectSolicitacao={(id, subTask) => {
-                    const sol = solicitacoes.find(s => s.id === id);
-                    if (sol) {
-                      handleSelectSolicitacao(sol);
-                      if (subTask) setActiveSubTask(subTask);
-                    }
-                  }}
-                  onMarkAsRead={(id) => {
-                    const updated = notifications.map(n => n.id === id ? { ...n, lida: true } : n);
-                    setNotifications(updated);
-                    localStorage.setItem('sgo_notifications', JSON.stringify(updated));
-                  }}
-                  onMarkAllAsRead={() => {
-                    const lidas = notifications.map(n => ({ ...n, lida: true }));
-                    setNotifications(lidas);
-                    localStorage.setItem('sgo_notifications', JSON.stringify(lidas));
-                  }}
-                  onClearNotifications={() => {
-                    setNotifications([]);
-                    localStorage.setItem('sgo_notifications', JSON.stringify([]));
-                  }}
-                  onAddSimulatedLog={(action, detail, tipo) => {
-                    registrarLog(action, detail, tipo);
-                  }}
-                />
+                perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' ? (
+                  <CentralNotificacoesLogs
+                    logs={logs}
+                    perfilUsuario={perfilUsuario}
+                    onAddSimulatedLog={(action, detail, tipo) => registrarLog(action, detail, tipo)}
+                  />
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center py-20 text-center select-none animate-in fade-in duration-200 space-y-4">
+                    <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center border border-rose-100 mb-2">
+                      <FileClock className="w-7 h-7 text-rose-400" />
+                    </div>
+                    <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">Acesso Restrito</h3>
+                    <p className="text-xs text-slate-400 max-w-xs">
+                      O módulo de Log do Sistema é de acesso exclusivo para perfis de Gestor. Solicite ao responsável caso precise visualizar os registros.
+                    </p>
+                  </div>
+                )
               )}
 
             </div>
@@ -3202,6 +3404,148 @@ export default function App() {
         </div>
       </footer>
 
+      {/* MODAL CADASTRO DE USUÁRIO */}
+      {showCadastroUsuarioModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[92vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60 sticky top-0">
+              <div>
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-rose-600" />
+                  {usrIdEmEdicao ? 'Editar Cadastro de Usuário' : 'Cadastro de Novo Usuário'}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {usrIdEmEdicao ? 'Atualize os dados profissionais e o perfil de atribuição.' : 'Preencha os dados profissionais e o perfil de atribuição.'}
+                </p>
+              </div>
+              <button type="button" onClick={resetFormUsuario} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCadastrarUsuario} className="p-6 space-y-5">
+
+              {/* Seção 1: Identificação */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-1.5">Dados de Identificação</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nome Completo *</label>
+                    <input type="text" required value={usrNome} onChange={(e) => setUsrNome(e.target.value)} placeholder="Ex: Eng. Roberto Carlos" className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">E-mail Institucional *</label>
+                    <input type="email" required value={usrEmail} onChange={(e) => setUsrEmail(e.target.value)} placeholder="Ex: roberto@sre.mg.gov.br" className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 2: Dados Profissionais */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-1.5">Dados Profissionais</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Cargo *</label>
+                    <select value={usrCargo} onChange={(e) => setUsrCargo(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
+                      <option>Engenheiro Civil</option>
+                      <option>Arquiteto</option>
+                      <option>Técnico em Edificações</option>
+                      <option>Analista</option>
+                      <option>Coordenador</option>
+                      <option>Diretor</option>
+                      <option>Fiscal</option>
+                      <option>Administrador</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Formação</label>
+                    <select value={usrFormacao} onChange={(e) => setUsrFormacao(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
+                      <option>Engenharia Civil</option>
+                      <option>Arquitetura</option>
+                      <option>Técnico em Edificações</option>
+                      <option>Administração</option>
+                      <option>Outro</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nº Registro CREA/CAU</label>
+                    <input type="text" value={usrCreaNum} onChange={(e) => setUsrCreaNum(e.target.value)} placeholder="Ex: CREA 142.532/D" className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Situação do Registro</label>
+                    <select value={usrCreaSituacao} onChange={(e) => setUsrCreaSituacao(e.target.value as 'Ativo' | 'Inativo')} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
+                      <option>Ativo</option>
+                      <option>Inativo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Data de Ingresso</label>
+                    <input type="date" value={usrDataIngresso} onChange={(e) => setUsrDataIngresso(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden font-mono" />
+                  </div>
+                </div>
+
+                <div className="max-w-xs">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Situação do Colaborador *</label>
+                  <select value={usrSituacaoFuncional} onChange={(e) => setUsrSituacaoFuncional(e.target.value as typeof usrSituacaoFuncional)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
+                    <option>Ativo</option>
+                    <option>Férias</option>
+                    <option>Licença</option>
+                    <option>Afastado</option>
+                    <option>Desligado</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Seção 3: Perfil de Atribuição */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-1.5">Perfil de Atribuição (Role) *</h4>
+
+                <div className="flex gap-4">
+                  {(['regional', 'orgao_central'] as const).map(tipo => (
+                    <label key={tipo} className={`flex-1 flex items-center gap-2.5 p-3 border rounded-xl cursor-pointer transition-all text-xs font-semibold ${usrTipoVinculo === tipo ? 'bg-rose-50 border-rose-400 text-rose-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                      <input type="radio" name="tipoVinculo" value={tipo} checked={usrTipoVinculo === tipo} onChange={() => setUsrTipoVinculo(tipo)} className="accent-rose-600" />
+                      {tipo === 'regional' ? '🏫 Regional (SRE)' : '🏛️ Órgão Central'}
+                    </label>
+                  ))}
+                </div>
+
+                {usrTipoVinculo === 'regional' && (
+                  <div className="animate-in slide-in-from-top-1 duration-200">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Superintendência Regional *</label>
+                    <select value={usrRegional} onChange={(e) => setUsrRegional(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
+                      {['SRE Metropolitana A','SRE Metropolitana B','SRE Metropolitana C','SRE Patos de Minas','SRE Diamantina','SRE Itajubá','SRE Pouso Alegre','SRE Juiz de Fora','SRE Ouro Preto','SRE Montes Claros','SRE Uberaba','SRE Uberlândia','SRE Governador Valadares','SRE Teófilo Otoni','SRE Ipatinga','SRE Coronel Fabriciano','SRE Passos','SRE São João del-Rei','SRE Barbacena'].map(sre => (
+                        <option key={sre} value={sre}>{sre}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {usrTipoVinculo === 'orgao_central' && (
+                  <div className="animate-in slide-in-from-top-1 duration-200">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Equipe / Setor *</label>
+                    <select value={usrEquipeCentral} onChange={(e) => setUsrEquipeCentral(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
+                      <option value="Planejamento">Equipe de Planejamento</option>
+                      <option value="Ajuste">Equipe de Ajuste</option>
+                      <option value="Administrativo">Equipe Administrativa</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onClick={resetFormUsuario} className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer transition">Cancelar</button>
+                <button type="submit" className="px-5 py-2 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl cursor-pointer transition shadow-xs flex items-center gap-1.5">
+                  <UserPlus className="w-3.5 h-3.5" /> {usrIdEmEdicao ? 'Salvar Alterações' : 'Cadastrar Usuário'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL CO-CRIADOR DE SOLICITAÇÃO */}
       {abrirModalCadastro && (
         <NovaSolicitacaoModal
@@ -3209,6 +3553,7 @@ export default function App() {
           onSave={handleNovaSolicitacao}
           perfilUsuario={perfilUsuario}
           usuariosSeguranca={usuariosSeguranca}
+          sreDoTecnico={sreDoTecnico}
         />
       )}
 

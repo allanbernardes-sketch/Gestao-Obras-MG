@@ -133,7 +133,7 @@ export default function SolicitacaoDetalhes({
   usuariosSeguranca = []
 }: SolicitacaoDetalhesProps) {
   const analistas = usuariosSeguranca.filter(u => u.perfil === 'analista_dore');
-  const fiscais = usuariosSeguranca.filter(u => u.perfil === 'fiscal_obra' || u.perfil === 'tecnico_infra');
+  const fiscais = usuariosSeguranca.filter(u => u.perfil === 'tecnico_infra' || u.perfil === 'tecnico_infra');
   const currentUserNome = usuariosSeguranca.find(u => u.perfil === perfilUsuario)?.nome || '';
   // Navigation internal view
   const [activeTab, setActiveTab ] = useState<'checklist' | 'paf' | 'ordem_inicio' | 'execucao' | 'ajustes' | 'aditivos' | 'conclusao'>('checklist');
@@ -2717,7 +2717,7 @@ ${totalPendencias > 0
                           type="date"
                           value={dataOrdemInicioInput}
                           onChange={(e) => setDataOrdemInicioInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
                         />
@@ -2734,7 +2734,7 @@ ${totalPendencias > 0
                           type="date"
                           value={previsaoTerminoInput}
                           onChange={(e) => setPrevisaoTerminoInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-1.5 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
                         />
@@ -2756,7 +2756,7 @@ ${totalPendencias > 0
                             placeholder="0,00"
                             value={valorHomologadoContratacaoInput}
                             onChange={(e) => setValorHomologadoContratacaoInput(e.target.value)}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             required
                             className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
                           />
@@ -2770,7 +2770,7 @@ ${totalPendencias > 0
                         <select
                           value={tipoObraInput}
                           onChange={(e) => setTipoObraInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700 font-sans"
                         >
@@ -2793,7 +2793,7 @@ ${totalPendencias > 0
                           placeholder="Digite o nome do engenheiro fiscal responsável pela obra"
                           value={fiscalObraAtribuidoInput}
                           onChange={(e) => setFiscalObraAtribuidoInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700"
                         />
@@ -2891,7 +2891,7 @@ ${totalPendencias > 0
                           </div>
                         </div>
 
-                        {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                        {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                           <button
                             type="button"
                             onClick={removerCronograma}
@@ -2905,12 +2905,12 @@ ${totalPendencias > 0
                     ) : (
                       <div 
                         onClick={() => {
-                          if (perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') {
+                          if (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') {
                             cronogramaInputRef.current?.click();
                           }
                         }}
                         className={`border-2 border-dashed rounded-xl p-6 text-center transition-all ${
-                          perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf'
+                          perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf'
                             ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/55 cursor-pointer'
                             : 'border-neutral-200 bg-neutral-50/20 cursor-not-allowed'
                         }`}
@@ -2924,14 +2924,14 @@ ${totalPendencias > 0
                           accept=".pdf,.xls,.xlsx"
                           onChange={handleCronogramaUpload}
                           className="hidden"
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                         />
                       </div>
                     )}
                   </div>
 
                   {/* SAVE ACTION */}
-                  {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                  {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                     <div className="pt-2 flex justify-end">
                       <button
                         type="submit"
@@ -3093,7 +3093,7 @@ ${totalPendencias > 0
                   </div>
                 )}
 
-                {perfilUsuario !== 'fiscal_obra' && (
+                {perfilUsuario !== 'tecnico_infra' && (
                   <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl text-[11px] text-orange-800 leading-relaxed">
                     <span className="font-bold block text-xs mb-1 text-orange-900">Acesso Restrito:</span>
                     Essas informações são protegidas e devem ser inseridas pelo perfil de <strong>Fiscal de Obra</strong>. Atualmente, os formulários estão abertos apenas para leitura.
@@ -3179,7 +3179,7 @@ ${totalPendencias > 0
                           type="date"
                           value={dataOrdemInicioInput}
                           onChange={(e) => setDataOrdemInicioInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
                         />
@@ -3193,7 +3193,7 @@ ${totalPendencias > 0
                           type="date"
                           value={previsaoTerminoInput}
                           onChange={(e) => setPrevisaoTerminoInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
                         />
@@ -3215,7 +3215,7 @@ ${totalPendencias > 0
                             placeholder="0,00"
                             value={valorHomologadoContratacaoInput}
                             onChange={(e) => setValorHomologadoContratacaoInput(e.target.value)}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             required
                             className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
                           />
@@ -3229,7 +3229,7 @@ ${totalPendencias > 0
                         <select
                           value={tipoObraInput}
                           onChange={(e) => setTipoObraInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700"
                         >
@@ -3252,7 +3252,7 @@ ${totalPendencias > 0
                           placeholder="Digite o nome do engenheiro fiscal responsável pela obra"
                           value={fiscalObraAtribuidoInput}
                           onChange={(e) => setFiscalObraAtribuidoInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700"
                         />
@@ -3310,7 +3310,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                               <button
                                 type="button"
                                 onClick={removerCronograma}
@@ -3324,12 +3324,12 @@ ${totalPendencias > 0
                       ) : (
                         <div 
                           onClick={() => {
-                            if (perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') {
+                            if (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') {
                               cronogramaInputRef.current?.click();
                             }
                           }}
                           className={`border-2 border-dashed rounded-xl p-4 text-center transition-all ${
-                            perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf'
+                            perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf'
                               ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/50 cursor-pointer'
                               : 'border-neutral-200 bg-neutral-50/25 cursor-not-allowed'
                           }`}
@@ -3343,14 +3343,14 @@ ${totalPendencias > 0
                             accept=".pdf,.xls,.xlsx"
                             onChange={handleCronogramaUpload}
                             className="hidden"
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           />
                         </div>
                       )}
                     </div>
 
                     <div className="pt-2 flex justify-end gap-2.5">
-                      {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                      {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                         <button
                           type="submit"
                           className="px-3.5 py-1.5 border border-blue-600 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-extrabold cursor-pointer transition-colors"
@@ -3359,7 +3359,7 @@ ${totalPendencias > 0
                         </button>
                       )}
 
-                      {solicitacao.etapaAtual === 'ordem_inicio' && (perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                      {solicitacao.etapaAtual === 'ordem_inicio' && (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                         <button
                           type="button"
                           onClick={emitirOrdemEIniciarObra}
@@ -3406,7 +3406,7 @@ ${totalPendencias > 0
                           placeholder="Ex: Construtora Triângulo Ltda"
                           value={empresaInput}
                           onChange={(e) => setEmpresaInput(e.target.value)}
-                          disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white hover:border-neutral-400 transition-colors"
                         />
                       </div>
@@ -3421,7 +3421,7 @@ ${totalPendencias > 0
                         placeholder="Ex: 12.345.678/0001-90"
                         value={cnpjInput}
                         onChange={(e) => setCnpjInput(e.target.value)}
-                        disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white hover:border-neutral-400 transition-colors font-mono"
                       />
                     </div>
@@ -3433,7 +3433,7 @@ ${totalPendencias > 0
                       <select
                         value={statusContratoInput}
                         onChange={(e) => setStatusContratoInput(e.target.value as any)}
-                        disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white font-sans text-neutral-700"
                       >
                         <option value="Ativa">Ativa (Mão de obra ativa)</option>
@@ -3448,7 +3448,7 @@ ${totalPendencias > 0
                       <select
                         value={statusObraInput}
                         onChange={(e) => setStatusObraInput(e.target.value)}
-                        disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white font-sans text-neutral-700"
                       >
                         <option value="Não Iniciada">Não Iniciada</option>
@@ -3477,7 +3477,7 @@ ${totalPendencias > 0
                           <select
                             value={justificativaDistratoInput}
                             onChange={(e) => setJustificativaDistratoInput(e.target.value)}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden bg-white text-neutral-700"
                           >
                             <option value="Planilha de orçamento defasada">Planilha de orçamento defasada</option>
@@ -3500,7 +3500,7 @@ ${totalPendencias > 0
                             type="date"
                             value={dataDistratoInput}
                             onChange={(e) => setDataDistratoInput(e.target.value)}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             className="w-full px-3 py-1.5 text-xs border border-neutral-300 rounded-lg focus:outline-hidden bg-white text-neutral-700 font-mono"
                           />
                         </div>
@@ -3524,7 +3524,7 @@ ${totalPendencias > 0
                                 </span>
                               </div>
                             </div>
-                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3557,7 +3557,7 @@ ${totalPendencias > 0
                             <button
                               type="button"
                               onClick={() => distratoInputRef.current?.click()}
-                              disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                              disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                               className="px-3 py-1.5 border border-dashed border-red-300 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
                             >
                               <Paperclip className="w-3.5 h-3.5 text-neutral-500" />
@@ -3590,7 +3590,7 @@ ${totalPendencias > 0
                           <select
                             value={justificativaParalizacaoInput}
                             onChange={(e) => setJustificativaParalizacaoInput(e.target.value)}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden bg-white text-neutral-700"
                           >
                             <option value="Aguardando diretor da cx escolar realizar notificação empresa">
@@ -3609,7 +3609,7 @@ ${totalPendencias > 0
                             type="date"
                             value={dataParalizacaoInput}
                             onChange={(e) => setDataParalizacaoInput(e.target.value)}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             className="w-full px-3 py-1.5 text-xs border border-neutral-300 rounded-lg focus:outline-hidden bg-white text-neutral-700 font-mono"
                           />
                         </div>
@@ -3728,7 +3728,7 @@ ${totalPendencias > 0
                     </div>
                   )}
 
-                  {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                  {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                     <div className="flex justify-end pt-1">
                       <button
                         onClick={salvarDadosGeraisObra}
@@ -3760,7 +3760,7 @@ ${totalPendencias > 0
                     </div>
 
                     {/* Button to show Measurement Form */}
-                    {(perfilUsuario === 'fiscal_obra') && !mostrandoNovaMedicao && (
+                    {(perfilUsuario === 'tecnico_infra') && !mostrandoNovaMedicao && (
                       <button
                         onClick={() => setMostrandoNovaMedicao(true)}
                         className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-all"
@@ -3957,7 +3957,7 @@ ${totalPendencias > 0
                                 R$ {med.valor.toLocaleString('pt-BR')}
                               </span>
 
-                              {perfilUsuario === 'fiscal_obra' && (
+                              {perfilUsuario === 'tecnico_infra' && (
                                 <button
                                   onClick={() => excluirMedicao(med.id)}
                                   className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg hover:text-red-700 transition cursor-pointer"
@@ -4857,7 +4857,7 @@ ${totalPendencias > 0
               <div className="lg:col-span-2 space-y-6">
                 
                 {/* 1. REGISTER NEW ADITIVO */}
-                {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                   <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
                     <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
                       <h3 className="font-bold text-sm text-neutral-800">Nova Solicitação de Aditivo</h3>
@@ -5032,7 +5032,7 @@ ${totalPendencias > 0
                                       {/* Document operations */}
                                       <div className="shrink-0 flex items-center gap-2">
                                         {/* File Simulation Button for Contractor */}
-                                        {(perfilUsuario === 'fiscal_obra') && doc.status !== 'aprovado' && (
+                                        {(perfilUsuario === 'tecnico_infra') && doc.status !== 'aprovado' && (
                                           <button
                                             type="button"
                                             onClick={() => anexarDocumentoAditivo(adt.id, doc.id, `parecer_aditivo_${doc.id}_v1.pdf`)}
@@ -5232,7 +5232,7 @@ ${totalPendencias > 0
                       <input
                         type="date"
                         required
-                        disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                        disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                         value={dataConclusaoInput}
                         onChange={(e) => setDataConclusaoInput(e.target.value)}
                         className="w-full text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white disabled:opacity-60"
@@ -5285,7 +5285,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5319,7 +5319,7 @@ ${totalPendencias > 0
                           <button
                             type="button"
                             onClick={() => laudoConclusivoInputRef.current?.click()}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             className="px-3.5 py-2 border border-dashed border-slate-350 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                           >
                             <UploadCloud className="w-4 h-3.5 text-neutral-500 animate-bounce" />
@@ -5365,7 +5365,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5399,7 +5399,7 @@ ${totalPendencias > 0
                           <button
                             type="button"
                             onClick={() => relatorioFotograficoInputRef.current?.click()}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             className="px-3.5 py-2 border border-dashed border-slate-350 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                           >
                             <UploadCloud className="w-4 h-3.5 text-neutral-500 animate-bounce" />
@@ -5445,7 +5445,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5479,7 +5479,7 @@ ${totalPendencias > 0
                           <button
                             type="button"
                             onClick={() => planilhaMedicaoFinalInputRef.current?.click()}
-                            disabled={perfilUsuario !== 'fiscal_obra' && perfilUsuario !== 'gestor_paf'}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                             className="px-3.5 py-2 border border-dashed border-slate-350 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
                           >
                             <UploadCloud className="w-4 h-3.5 text-neutral-500 animate-bounce" />
@@ -5493,7 +5493,7 @@ ${totalPendencias > 0
                     </div>
                   </div>
 
-                  {(perfilUsuario === 'fiscal_obra' || perfilUsuario === 'gestor_paf') && (
+                  {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
                     <div className="flex justify-end pt-3 border-t border-neutral-100">
                       <button
                         type="submit"

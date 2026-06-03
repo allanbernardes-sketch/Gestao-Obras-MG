@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   ClipboardList, 
@@ -31,11 +31,42 @@ import { CHECKLIST_PADRAO } from '../initialData';
 
 // DEFAULT AUTOPREFILL BASE DATA
 const baseDados = [
-  { codesc: '1902', sre: 'SRE METROPOLITANA B', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSORA MARIA BELMIRA TRINDADE' },
-  { codesc: '106470', sre: 'SRE OURO PRETO', municipio: 'OURO PRETO', escola: 'EE DOM VELLOSO' },
-  { codesc: '205', sre: 'SRE METROPOLITANA C', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSORA FRANCISCA MALHEIROS' },
-  { codesc: '1821', sre: 'SRE METROPOLITANA A', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSORA MARIA AMÉLIA GUIMARÃES' },
-  { codesc: '1104', sre: 'SRE METROPOLITANA B', municipio: 'BELO HORIZONTE', escola: 'EE PROFESSOR FRANCISCO BRANT' }
+  // SRE Patos de Minas — regional do técnico de infraestrutura (simulação)
+  { codesc: '145236', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Padre Almir Neves' },
+  { codesc: '145298', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Santos Dumont' },
+  { codesc: '145312', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Coronel Linhares' },
+  { codesc: '145401', sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'EE Governador Milton Campos' },
+  { codesc: '145489', sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'EE Professor Arlindo Luz' },
+  { codesc: '145524', sre: 'SRE Patos de Minas', municipio: 'Lagoa Formosa', escola: 'EE Padre Eustáquio' },
+  { codesc: '145603', sre: 'SRE Patos de Minas', municipio: 'Varjão de Minas', escola: 'EE Deputado Geraldo Pereira' },
+  { codesc: '145678', sre: 'SRE Patos de Minas', municipio: 'Rio Paranaíba', escola: 'EE Tiradentes' },
+  // SRE Metropolitana A
+  { codesc: '1821', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Professora Maria Amélia Guimarães' },
+  { codesc: '102547', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Milton Campos' },
+  { codesc: '103210', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Henrique Diniz' },
+  { codesc: '103456', sre: 'SRE Metropolitana A', municipio: 'Contagem', escola: 'EE João Monlevade' },
+  // SRE Metropolitana B
+  { codesc: '1902', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Professora Maria Belmira Trindade' },
+  { codesc: '1104', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Professor Francisco Brant' },
+  { codesc: '104112', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Dom Pedro II' },
+  // SRE Metropolitana C
+  { codesc: '205', sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'EE Professora Francisca Malheiros' },
+  { codesc: '201334', sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'EE Estadual Centro' },
+  // SRE Ouro Preto
+  { codesc: '106470', sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'EE Dom Velloso' },
+  { codesc: '106537', sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'EE Tiradentes' },
+  // SRE Diamantina
+  { codesc: '304958', sre: 'SRE Diamantina', municipio: 'Diamantina', escola: 'EE Juscelino Kubitschek' },
+  { codesc: '305012', sre: 'SRE Diamantina', municipio: 'Serro', escola: 'EE Cônego Guimarães' },
+  // SRE Itajubá
+  { codesc: '205847', sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'EE Wenceslau Braz' },
+  { codesc: '205901', sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'EE Professor Oswaldo Cruz' },
+  // SRE Pouso Alegre
+  { codesc: '405912', sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'EE Delfim Moreira' },
+  { codesc: '405988', sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'EE Coronel José Caetano' },
+  // SRE Juiz de Fora
+  { codesc: '501234', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Carlos Drummond de Andrade' },
+  { codesc: '501301', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Duque de Caxias' },
 ];
 
 // ==========================================
@@ -48,20 +79,32 @@ interface NovoAtendimentoPanelProps {
   usuariosSeguranca: { id: string; nome: string; perfil: string; depto?: string }[];
   onEdit?: (sol: Solicitacao) => void;
   perfilUsuario?: string;
+  sreDoTecnico?: string;
   atendimentoEmEdicaoDirect?: Solicitacao | null;
   onLimparEdicaoDirect?: () => void;
 }
 
-export function NovoAtendimentoPanel({ 
-  solicitacoes, 
-  onSolicitacaoCriada, 
-  onUpdateSolicitacao, 
+export function NovoAtendimentoPanel({
+  solicitacoes,
+  onSolicitacaoCriada,
+  onUpdateSolicitacao,
   usuariosSeguranca,
   onEdit,
   perfilUsuario,
+  sreDoTecnico,
   atendimentoEmEdicaoDirect,
   onLimparEdicaoDirect
 }: NovoAtendimentoPanelProps) {
+  // Filtra o banco de escolas pela SRE do técnico (se aplicável)
+  const baseDadosFiltrados = sreDoTecnico
+    ? baseDados.filter(item => item.sre.toLowerCase() === sreDoTecnico.toLowerCase())
+    : baseDados;
+
+  // Pré-preenche a SRE ao montar o componente para tecnico_infra
+  useEffect(() => {
+    if (sreDoTecnico) setSre(sreDoTecnico);
+  }, [sreDoTecnico]);
+
   // Navigation: 'form' | 'checklist' | 'intermediaria'
   const [currentView, setCurrentView] = useState<'form' | 'checklist' | 'intermediaria'>('form');
   
@@ -174,7 +217,7 @@ export function NovoAtendimentoPanel({
 
   const handleCodescChange = (val: string) => {
     setCodesc(val);
-    const match = baseDados.find(item => item.codesc === val.trim());
+    const match = baseDadosFiltrados.find(item => item.codesc === val.trim());
     if (match) {
       setNomeEscola(match.escola);
       setMunicipio(match.municipio);
@@ -540,7 +583,7 @@ export function NovoAtendimentoPanel({
                     onChange={(e) => {
                       const val = e.target.value;
                       setCodesc(val);
-                      const match = baseDados.find(item => item.codesc === val);
+                      const match = baseDadosFiltrados.find(item => item.codesc === val);
                       if (match) {
                         setNomeEscola(match.escola);
                         setMunicipio(match.municipio);
@@ -550,7 +593,7 @@ export function NovoAtendimentoPanel({
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans font-medium bg-white cursor-pointer text-slate-800"
                   >
                     <option value="">Selecione o CODESC...</option>
-                    {baseDados.map(item => (
+                    {baseDadosFiltrados.map(item => (
                       <option key={item.codesc} value={item.codesc}>{item.codesc}</option>
                     ))}
                   </select>
@@ -566,7 +609,7 @@ export function NovoAtendimentoPanel({
                     onChange={(e) => {
                       const val = e.target.value;
                       setNomeEscola(val);
-                      const match = baseDados.find(item => item.escola === val);
+                      const match = baseDadosFiltrados.find(item => item.escola === val);
                       if (match) {
                         setCodesc(match.codesc);
                         setMunicipio(match.municipio);
@@ -576,7 +619,7 @@ export function NovoAtendimentoPanel({
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
                   >
                     <option value="">Selecione a escola...</option>
-                    {baseDados.map(item => (
+                    {baseDadosFiltrados.map(item => (
                       <option key={item.codesc} value={item.escola}>{item.escola}</option>
                     ))}
                   </select>
@@ -595,7 +638,7 @@ export function NovoAtendimentoPanel({
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
                   >
                     <option value="">Selecione o município...</option>
-                    {[...new Set(baseDados.map(item => item.municipio))].sort().map(m => (
+                    {[...new Set(baseDadosFiltrados.map(item => item.municipio))].sort().map(m => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>
@@ -604,17 +647,24 @@ export function NovoAtendimentoPanel({
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Superintendência Regional (SRE) *
                   </label>
-                  <select
-                    required
-                    value={sre}
-                    onChange={(e) => setSre(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
-                  >
-                    <option value="">Selecione a SRE...</option>
-                    {[...new Set(baseDados.map(item => item.sre))].sort().map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
+                  {perfilUsuario === 'tecnico_infra' ? (
+                    <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold flex items-center gap-2 cursor-default">
+                      <span className="text-[10px] text-slate-400 uppercase font-sans shrink-0">Sua regional:</span>
+                      {sre}
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={sre}
+                      onChange={(e) => setSre(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
+                    >
+                      <option value="">Selecione a SRE...</option>
+                      {[...new Set(baseDadosFiltrados.map(item => item.sre))].sort().map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
             </div>
@@ -1371,7 +1421,7 @@ export function NovoAtendimentoPanel({
                   value={selectedAtendimentoForEdit.codesc || ''}
                   onChange={(e) => {
                     const val = e.target.value;
-                    const match = baseDados.find(item => item.codesc === val);
+                    const match = baseDadosFiltrados.find(item => item.codesc === val);
                     setSelectedAtendimentoForEdit({
                       ...selectedAtendimentoForEdit,
                       codesc: val,
@@ -1381,7 +1431,7 @@ export function NovoAtendimentoPanel({
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
                 >
                   <option value="">Selecione o CODESC...</option>
-                  {baseDados.map(item => (
+                  {baseDadosFiltrados.map(item => (
                     <option key={item.codesc} value={item.codesc}>{item.codesc}</option>
                   ))}
                 </select>
@@ -1395,7 +1445,7 @@ export function NovoAtendimentoPanel({
                   value={selectedAtendimentoForEdit.nomeEscola || ''}
                   onChange={(e) => {
                     const val = e.target.value;
-                    const match = baseDados.find(item => item.escola === val);
+                    const match = baseDadosFiltrados.find(item => item.escola === val);
                     setSelectedAtendimentoForEdit({
                       ...selectedAtendimentoForEdit,
                       nomeEscola: val,
@@ -1405,7 +1455,7 @@ export function NovoAtendimentoPanel({
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
                 >
                   <option value="">Selecione a escola...</option>
-                  {baseDados.map(item => (
+                  {baseDadosFiltrados.map(item => (
                     <option key={item.codesc} value={item.escola}>{item.escola}</option>
                   ))}
                 </select>
@@ -1421,7 +1471,7 @@ export function NovoAtendimentoPanel({
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
                 >
                   <option value="">Selecione o município...</option>
-                  {[...new Set(baseDados.map(item => item.municipio))].sort().map(m => (
+                  {[...new Set(baseDadosFiltrados.map(item => item.municipio))].sort().map(m => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
@@ -1437,7 +1487,7 @@ export function NovoAtendimentoPanel({
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
                 >
                   <option value="">Selecione a SRE...</option>
-                  {[...new Set(baseDados.map(item => item.sre))].sort().map(s => (
+                  {[...new Set(baseDadosFiltrados.map(item => item.sre))].sort().map(s => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
@@ -2116,7 +2166,7 @@ export function AtribuicaoPanel({
   const [filtroAtribuicao, setFiltroAtribuicao] = useState<'todos' | 'minhas'>('todos');
 
   const analistasSgo = usuariosSeguranca.filter(
-    u => u.perfil === 'analista_dore' || u.perfil === 'tecnico_infra' || u.perfil === 'fiscal_obra'
+    u => u.perfil === 'analista_dore' || u.perfil === 'tecnico_infra' || u.perfil === 'tecnico_infra'
   );
 
   // Valores Únicos para os selects
@@ -2671,7 +2721,7 @@ export function AtribuicaoPanel({
                           -- Não Atribuído --
                         </option>
                         {analistasSgo.map(usr => {
-                          const formattedLabel = usr.perfil === 'fiscal_obra' 
+                          const formattedLabel = usr.perfil === 'tecnico_infra' 
                             ? `${usr.nome} (Fiscal)` 
                             : `${usr.nome} (DORE)`;
                           return (

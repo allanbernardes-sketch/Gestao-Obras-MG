@@ -191,7 +191,7 @@ export default function Dashboard({
       colorClass: 'border-purple-200 bg-purple-50/70 text-purple-800'
     },
     { 
-      id: 'fiscal_obra' as PerfilUsuario, 
+      id: 'tecnico_infra' as PerfilUsuario, 
       label: 'Fiscalização de Obra', 
       desc: 'Acompanha obras presenciais, registra medições periódicas e gerencia aditivos técnicos.', 
       icon: Building,

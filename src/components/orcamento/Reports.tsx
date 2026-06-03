@@ -96,60 +96,67 @@ export default function Reports({ budgets }: Props) {
   const classCount = { A: abcData.filter(d => d.category === 'A').length, B: abcData.filter(d => d.category === 'B').length, C: abcData.filter(d => d.category === 'C').length };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-end justify-between border-b border-gray-200 pb-6">
-        <div className="flex-1">
+    <div className="p-6 space-y-6 w-full animate-in fade-in duration-500">
+      {/* Header + seletor + botão em linha */}
+      <div className="flex flex-col md:flex-row md:items-end gap-4 border-b border-gray-200 pb-5">
+        <div>
           <h1 className="text-xl font-black text-[#13264d] font-sans">
             Análise de <span className="text-red-600">Curva ABC</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1 font-sans">
             Identifique os itens de maior impacto financeiro no seu orçamento.
           </p>
-          <div className="mt-4 max-w-md">
-            <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Selecione o Orçamento</label>
-            <select value={selectedBudgetId} onChange={e => setSelectedBudgetId(e.target.value)}
-              className="w-full px-4 py-2 bg-white border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all">
-              {budgets.length === 0 && <option value="">Nenhum orçamento disponível</option>}
-              {budgets.map(b => <option key={b.id} value={b.id}>{(b.name || 'SEM NOME').toUpperCase()} ({b.school || ''})</option>)}
-            </select>
-          </div>
         </div>
-        <button className="px-5 py-2.5 bg-blue-700 text-white text-xs font-bold uppercase tracking-widest hover:bg-blue-800 transition-shadow shadow-md flex items-center gap-2">
+        <div className="flex-1 min-w-0">
+          <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-1.5">Selecione o Orçamento</label>
+          <select value={selectedBudgetId} onChange={e => setSelectedBudgetId(e.target.value)}
+            className="w-full px-4 py-2 bg-white border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all">
+            {budgets.length === 0 && <option value="">Nenhum orçamento disponível</option>}
+            {budgets.map(b => <option key={b.id} value={b.id}>{(b.name || 'SEM NOME').toUpperCase()} ({b.school || ''})</option>)}
+          </select>
+        </div>
+        <button className="px-5 py-2.5 bg-blue-700 text-white text-xs font-bold uppercase tracking-widest hover:bg-blue-800 transition-shadow shadow-md flex items-center gap-2 shrink-0">
           <Download className="h-4 w-4" /> Exportar PDF
         </button>
       </div>
 
-      {/* Tab buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { id: 'global', label: 'ABC Global', icon: PieChart, color: 'border-red-600' },
-          { id: 'servico', label: 'ABC de Serviços', icon: TrendingDown, color: 'border-green-600' },
-          { id: 'material', label: 'ABC de Materiais', icon: TrendingDown, color: 'border-orange-500' },
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)}
-            className={cn('p-6 bg-white border-b-4 transition-all text-left shadow-sm hover:shadow-md', activeTab === tab.id ? tab.color : 'border-transparent opacity-60')}>
-            <tab.icon className={cn('h-6 w-6 mb-3', activeTab === tab.id ? 'text-slate-900' : 'text-gray-400')} />
-            <span className="text-xs font-black uppercase tracking-widest text-slate-900">{tab.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Abas + resumo ABC em linha */}
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
+        {/* Tab buttons — 3 cols */}
+        <div className="lg:col-span-3 grid grid-cols-3 gap-3">
+          {[
+            { id: 'global', label: 'ABC Global', icon: PieChart, color: 'border-red-600' },
+            { id: 'servico', label: 'ABC Serviços', icon: TrendingDown, color: 'border-green-600' },
+            { id: 'material', label: 'ABC Materiais', icon: TrendingDown, color: 'border-orange-500' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              className={cn('p-4 bg-white border-b-4 transition-all text-left shadow-sm hover:shadow-md', activeTab === tab.id ? tab.color : 'border-transparent opacity-60')}>
+              <tab.icon className={cn('h-5 w-5 mb-2', activeTab === tab.id ? 'text-slate-900' : 'text-gray-400')} />
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 block">{tab.label}</span>
+            </button>
+          ))}
+        </div>
 
-      {/* ABC Class summary */}
-      <div className="grid grid-cols-3 gap-4">
+        {/* ABC Class summary — 3 cols */}
+        <div className="lg:col-span-3 grid grid-cols-3 gap-3">
         {[
-          { cat: 'A', label: 'Classe A — 80% do custo', count: classCount.A, color: 'border-red-600 text-red-600', bg: 'bg-red-50' },
-          { cat: 'B', label: 'Classe B — 15% do custo', count: classCount.B, color: 'border-blue-700 text-blue-700', bg: 'bg-blue-50' },
-          { cat: 'C', label: 'Classe C — 5% do custo', count: classCount.C, color: 'border-gray-400 text-gray-500', bg: 'bg-gray-50' },
+          { cat: 'A', label: 'Classe A — 80%', count: classCount.A, color: 'border-red-600 text-red-600', bg: 'bg-red-50' },
+          { cat: 'B', label: 'Classe B — 15%', count: classCount.B, color: 'border-blue-700 text-blue-700', bg: 'bg-blue-50' },
+          { cat: 'C', label: 'Classe C — 5%', count: classCount.C, color: 'border-gray-400 text-gray-500', bg: 'bg-gray-50' },
         ].map(c => (
           <div key={c.cat} className={cn('p-4 border-l-4 rounded-r-xl', c.color, c.bg)}>
             <p className="text-[10px] font-black uppercase tracking-wider font-sans opacity-70">{c.label}</p>
-            <p className="text-3xl font-black mt-1">{c.count} itens</p>
+            <p className="text-2xl font-black mt-1">{c.count} itens</p>
           </div>
         ))}
-      </div>
+        </div>{/* fecha grid cols 3 do resumo */}
+      </div>{/* fecha grid lg:col-span-6 */}
+
+      {/* Bar visualization + Table lado a lado em telas largas */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
       {/* Bar visualization */}
-      <div className="bg-white p-8 border border-gray-200 shadow-sm space-y-4">
+      <div className="bg-white p-6 border border-gray-200 shadow-sm space-y-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">
             Pareto — {activeTab.toUpperCase()}
@@ -164,7 +171,7 @@ export default function Reports({ budgets }: Props) {
       </div>
 
       {/* Table */}
-      <div className="bg-white border-t-8 border-slate-900 shadow-xl overflow-hidden">
+      <div className="bg-white border-t-8 border-slate-900 shadow-xl overflow-hidden flex flex-col">
         <div className="flex items-center gap-2 py-4 px-6 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider">
           <div className="w-20">Class.</div>
           <div className="w-24">Código</div>
@@ -188,21 +195,23 @@ export default function Reports({ budgets }: Props) {
             <div className="w-24 text-right text-xs font-black text-red-600">{item.cumulativePercentage.toFixed(2)}%</div>
           </div>
         ))}
-        <div className="p-8 bg-slate-50/30 flex items-center justify-between">
+        <div className="p-5 bg-slate-50/30 flex items-center justify-between mt-auto">
           <div>
             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resumo ABC</p>
-            <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight mt-1">
-              Total de Itens: <span className="text-red-600">{abcData.length}</span>
+            <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-0.5">
+              Itens: <span className="text-red-600">{abcData.length}</span>
             </h4>
           </div>
           <div className="text-right">
             <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Custo Total</p>
-            <p className="text-lg font-black text-slate-800 font-sans">
+            <p className="text-base font-black text-slate-800 font-sans">
               R$ {totalValue.toLocaleString('pt-BR')}
             </p>
           </div>
         </div>
       </div>
+
+      </div>{/* fecha grid xl:grid-cols-2 */}
     </div>
   );
 }

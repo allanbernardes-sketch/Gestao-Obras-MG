@@ -5,13 +5,14 @@ import BudgetDetail from './BudgetDetail';
 import CompositionsManager from './CompositionsManager';
 import SuppliesManager from './SuppliesManager';
 import Reports from './Reports';
-import SyncAnalysis from './SyncAnalysis';
 
 const STORAGE_KEY = 'orca_budgets_mg';
 
 interface Props {
   activeSubTask: string;
   setActiveSubTask: (s: string) => void;
+  sreDoTecnico?: string;
+  perfilUsuario?: string;
 }
 
 function loadBudgets(): Budget[] {
@@ -21,7 +22,7 @@ function loadBudgets(): Budget[] {
   } catch { return []; }
 }
 
-export default function OrcamentoModule({ activeSubTask, setActiveSubTask }: Props) {
+export default function OrcamentoModule({ activeSubTask, setActiveSubTask, sreDoTecnico, perfilUsuario }: Props) {
   const [budgets, setBudgets] = useState<Budget[]>(loadBudgets);
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
 
@@ -54,17 +55,14 @@ export default function OrcamentoModule({ activeSubTask, setActiveSubTask }: Pro
 
   switch (activeSubTask) {
     case 'orca_budgets':
-      return <BudgetList budgets={budgets} onSelect={setSelectedBudgetId} onCreate={handleCreate} onUpdate={handleUpdate} onDelete={handleDelete} />;
+      return <BudgetList budgets={budgets} onSelect={setSelectedBudgetId} onCreate={handleCreate} onUpdate={handleUpdate} onDelete={handleDelete} sreDoTecnico={sreDoTecnico} perfilUsuario={perfilUsuario} />;
     case 'orca_compositions':
       return <CompositionsManager budgets={budgets} />;
     case 'orca_supplies':
       return <SuppliesManager />;
     case 'orca_reports':
       return <Reports budgets={budgets} />;
-    case 'orca_sync':
-      return <SyncAnalysis budgets={budgets} />;
     default:
-      // Default to budget list
-      return <BudgetList budgets={budgets} onSelect={setSelectedBudgetId} onCreate={handleCreate} onUpdate={handleUpdate} onDelete={handleDelete} />;
+      return <BudgetList budgets={budgets} onSelect={setSelectedBudgetId} onCreate={handleCreate} onUpdate={handleUpdate} onDelete={handleDelete} sreDoTecnico={sreDoTecnico} perfilUsuario={perfilUsuario} />;
   }
 }

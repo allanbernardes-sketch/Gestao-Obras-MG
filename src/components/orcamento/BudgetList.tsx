@@ -3,7 +3,7 @@
  * Firebase removed; uses props for state management.
  */
 
-import { useState, FormEvent, MouseEvent } from 'react';
+import { useState, useEffect, FormEvent, MouseEvent } from 'react';
 import {
   MoreVertical,
   Trash2,
@@ -18,27 +18,75 @@ import { Budget } from './types';
 
 const cn = (...classes: (string | undefined | false | null)[]) => classes.filter(Boolean).join(' ');
 
+// Banco de escolas estaduais por SRE
+const escolasDatabase = [
+  { sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'E.E. Milton Campos', codesc: '102547' },
+  { sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'E.E. Professora Maria Amélia Guimarães', codesc: '1821' },
+  { sre: 'SRE Metropolitana A', municipio: 'Contagem', escola: 'E.E. João Monlevade', codesc: '110238' },
+  { sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'E.E. Professora Maria Belmira Trindade', codesc: '1902' },
+  { sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'E.E. Professor Francisco Brant', codesc: '1104' },
+  { sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'E.E. Professora Francisca Malheiros', codesc: '205' },
+  { sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'E.E. Estadual Centro', codesc: '201334' },
+  { sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'E.E. Padre Almir Neves', codesc: '145236' },
+  { sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'E.E. Santos Dumont', codesc: '145298' },
+  { sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'E.E. Governador Milton Campos', codesc: '145401' },
+  { sre: 'SRE Diamantina', municipio: 'Diamantina', escola: 'E.E. Juscelino Kubitschek', codesc: '304958' },
+  { sre: 'SRE Diamantina', municipio: 'Serro', escola: 'E.E. Cônego Guimarães', codesc: '305012' },
+  { sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'E.E. Wenceslau Braz', codesc: '205847' },
+  { sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'E.E. Professor Oswaldo Cruz', codesc: '205901' },
+  { sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'E.E. Delfim Moreira', codesc: '405912' },
+  { sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'E.E. Coronel José Caetano', codesc: '405988' },
+  { sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'E.E. Carlos Drummond de Andrade', codesc: '501234' },
+  { sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'E.E. Duque de Caxias', codesc: '501301' },
+  { sre: 'SRE Uberlândia', municipio: 'Uberlândia', escola: 'E.E. Clarimundo Carneiro', codesc: '601122' },
+  { sre: 'SRE Uberlândia', municipio: 'Uberlândia', escola: 'E.E. Messias Pedreiro', codesc: '601189' },
+  { sre: 'SRE Contagem', municipio: 'Contagem', escola: 'E.E. Henrique Diniz', codesc: '701045' },
+  { sre: 'SRE Contagem', municipio: 'Contagem', escola: 'E.E. Dom Bosco', codesc: '701112' },
+  { sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'E.E. Dom Velloso', codesc: '106470' },
+  { sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'E.E. Tiradentes', codesc: '106537' },
+];
+
 interface Props {
   budgets: Budget[];
   onSelect: (id: string) => void;
   onCreate: (budget: Budget) => void;
   onUpdate: (id: string, data: Partial<Budget>) => void;
   onDelete: (id: string) => void;
+  sreDoTecnico?: string;
+  perfilUsuario?: string;
 }
 
-export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDelete }: Props) {
+export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDelete, sreDoTecnico, perfilUsuario }: Props) {
+  const isTecnicoInfra = perfilUsuario === 'tecnico_infra';
+
+  // Filtra escolas disponíveis pela SRE do técnico (se aplicável)
+  const escolasVisiveis = sreDoTecnico
+    ? escolasDatabase.filter(e => e.sre.toLowerCase() === sreDoTecnico.toLowerCase())
+    : escolasDatabase;
+
+  // Filtra orçamentos pela SRE do técnico (se aplicável)
+  const budgetsVisiveis = sreDoTecnico
+    ? budgets.filter(b => b.sre?.toLowerCase() === sreDoTecnico.toLowerCase())
+    : budgets;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [newBudgetData, setNewBudgetData] = useState({
-    name: '',
-    sre: '',
+    sre: sreDoTecnico || '',
     municipality: '',
     school: '',
-    schoolAddress: '',
+    codesc: '',
     templateId: ''
   });
+
+  // Ao abrir o modal, pré-preenche a SRE do técnico
+  useEffect(() => {
+    if (isModalOpen && sreDoTecnico) {
+      setNewBudgetData(prev => ({ ...prev, sre: sreDoTecnico }));
+    }
+  }, [isModalOpen, sreDoTecnico]);
 
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -67,13 +115,16 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
     }
 
     const now = new Date().toISOString();
+    const autoName = newBudgetData.school
+      ? `${newBudgetData.school} — ${now.split('T')[0]}`
+      : `Orçamento SGO — ${now.split('T')[0]}`;
     const newBudget: Budget = {
       id: Math.random().toString(36).substr(2, 9),
-      name: newBudgetData.name,
+      name: autoName,
       sre: newBudgetData.sre,
       municipality: newBudgetData.municipality,
       school: newBudgetData.school,
-      schoolAddress: newBudgetData.schoolAddress,
+      codesc: newBudgetData.codesc,
       date: now.split('T')[0],
       status: 'Draft',
       eap: [],
@@ -85,7 +136,7 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
 
     onCreate(newBudget);
     setIsModalOpen(false);
-    setNewBudgetData({ name: '', sre: '', municipality: '', school: '', schoolAddress: '', templateId: '' });
+    setNewBudgetData({ sre: sreDoTecnico || '', municipality: '', school: '', codesc: '', templateId: '' });
   };
 
   const handleUpdateBudget = (e: FormEvent) => {
@@ -144,7 +195,7 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
     }
   };
 
-  const filteredBudgets = budgets.filter(b => {
+  const filteredBudgets = budgetsVisiveis.filter(b => {
     if (filterId && b.id !== filterId) return false;
     if (filterNome && b.name !== filterNome) return false;
     if (filterMunicipality && b.municipality !== filterMunicipality) return false;
@@ -163,16 +214,22 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
   };
 
   const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
-  const ids = uniq(budgets.map(b => b.id));
-  const nomes = uniq(budgets.map(b => b.name));
-  const municipios = uniq(budgets.map(b => b.municipality));
-  const sres = uniq(budgets.map(b => b.sre));
+  const ids = uniq(budgetsVisiveis.map(b => b.id));
+  const nomes = uniq(budgetsVisiveis.map(b => b.name));
+  const municipios = uniq(budgetsVisiveis.map(b => b.municipality));
+  const sres = uniq(budgetsVisiveis.map(b => b.sre));
+
+  // Selects cascateados para o modal (respeitam sreDoTecnico)
+  const sreOptions = uniq(escolasVisiveis.map(e => e.sre)).sort();
+  const codescOptions = (sre: string, mun: string) => escolasVisiveis.filter(e => (!sre || e.sre === sre) && (!mun || e.municipio === mun));
+  const municipioOptions = (sre: string) => uniq(escolasVisiveis.filter(e => !sre || e.sre === sre).map(e => e.municipio)).sort();
+  const escolaOptions = (sre: string, mun: string) => escolasVisiveis.filter(e => (!sre || e.sre === sre) && (!mun || e.municipio === mun));
   const escolas = uniq(budgets.map(b => b.school));
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-6 space-y-6 w-full">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 pb-6">
+      <div className="flex items-center justify-between border-b border-gray-200 pb-5">
         <div>
           <h1 className="text-xl font-black text-[#13264d] font-sans">
             Meus <span className="text-red-600">Orçamentos</span>
@@ -192,18 +249,16 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
 
       {/* Filter panel */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 space-y-4">
-        <div className="grid grid-cols-3 gap-4">
-          {/* ID de Obra */}
+        <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
           <div>
             <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">ID de Obra</label>
             <select value={filterId} onChange={e => setFilterId(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all">
-              <option value="">Todos os IDs</option>
+              <option value="">Todos</option>
               {ids.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
-          {/* Nome do Projeto */}
-          <div>
+          <div className="md:col-span-2">
             <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Nome do Projeto</label>
             <select value={filterNome} onChange={e => setFilterNome(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all">
@@ -211,39 +266,32 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
               {nomes.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
-          {/* Município */}
           <div>
             <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Município</label>
             <select value={filterMunicipality} onChange={e => setFilterMunicipality(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all">
-              <option value="">Todos os Municípios</option>
+              <option value="">Todos</option>
               {municipios.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          {/* Regional SRE */}
           <div>
             <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Regional (SRE)</label>
             <select value={filterSre} onChange={e => setFilterSre(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all">
-              <option value="">Todas as Regionais (SRE)</option>
+              <option value="">Todas as SREs</option>
               {sres.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
-          {/* Escola */}
           <div>
             <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Escola</label>
             <select value={filterSchool} onChange={e => setFilterSchool(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all">
-              <option value="">Todas as Escolas</option>
+              <option value="">Todas</option>
               {escolas.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
-          {/* Status */}
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Etapa Atual</label>
+            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Status</label>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all">
               <option value="">Todas as etapas</option>
@@ -254,19 +302,21 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
           </div>
         </div>
 
-        {/* Date range */}
         <div className="flex items-end gap-4">
-          <div className="flex-1">
-            <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Data de Criação</label>
-            <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Data Criação — De</label>
               <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all" />
-              <span className="text-gray-400 font-bold text-sm shrink-0">à</span>
+                className="px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all" />
+            </div>
+            <span className="text-gray-400 font-bold text-sm mt-5 shrink-0">à</span>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-wider text-gray-500 mb-1.5">Até</label>
               <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all" />
+                className="px-3 py-2 border border-gray-200 rounded-lg text-xs font-bold text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 transition-all" />
             </div>
           </div>
-          <div className="flex items-center gap-3 pb-0.5">
+          <div className="flex items-center gap-3 ml-auto pb-0.5">
             <span className="text-[10px] text-gray-400 font-bold">{filteredBudgets.length} resultado{filteredBudgets.length !== 1 ? 's' : ''}</span>
             <button onClick={limparFiltros}
               className="text-[10px] font-black uppercase tracking-wider font-sans text-blue-700 hover:underline flex items-center gap-1">
@@ -476,49 +526,54 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">SRE (Superintendência)</label>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">SRE (Superintendência) *</label>
                     <select
                       required
                       value={editingBudget.sre}
-                      onChange={(e) => setEditingBudget({ ...editingBudget, sre: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 outline-none transition-all"
+                      onChange={(e) => setEditingBudget({ ...editingBudget, sre: e.target.value, municipality: '', school: '', codesc: '' })}
+                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 outline-none transition-all cursor-pointer"
                     >
-                      <option value="">Selecione a SRE</option>
-                      <option value="SRE Metropolitana A">SRE Metropolitana A</option>
-                      <option value="SRE Metropolitana B">SRE Metropolitana B</option>
-                      <option value="SRE Metropolitana C">SRE Metropolitana C</option>
-                      <option value="SRE Contagem">SRE Contagem</option>
-                      <option value="SRE Uberlândia">SRE Uberlândia</option>
-                      <option value="SRE Juiz de Fora">SRE Juiz de Fora</option>
+                      <option value="">Selecione a SRE...</option>
+                      {sreOptions.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Município</label>
-                    <input
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Município *</label>
+                    <select
                       required
-                      type="text"
                       value={editingBudget.municipality}
-                      onChange={(e) => setEditingBudget({ ...editingBudget, municipality: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 outline-none transition-all"
-                    />
+                      onChange={(e) => setEditingBudget({ ...editingBudget, municipality: e.target.value, school: '', codesc: '' })}
+                      disabled={!editingBudget.sre}
+                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">{editingBudget.sre ? 'Selecione o município...' : 'Selecione a SRE primeiro'}</option>
+                      {municipioOptions(editingBudget.sre).map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Escola</label>
-                    <input
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Escola *</label>
+                    <select
                       required
-                      type="text"
                       value={editingBudget.school}
-                      onChange={(e) => setEditingBudget({ ...editingBudget, school: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 outline-none transition-all"
-                    />
+                      onChange={(e) => {
+                        const found = escolasVisiveis.find(es => es.escola === e.target.value && es.sre === editingBudget.sre && es.municipio === editingBudget.municipality);
+                        setEditingBudget({ ...editingBudget, school: e.target.value, codesc: found?.codesc || editingBudget.codesc || '' });
+                      }}
+                      disabled={!editingBudget.municipality}
+                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">{editingBudget.municipality ? 'Selecione a escola...' : 'Selecione o município primeiro'}</option>
+                      {escolaOptions(editingBudget.sre, editingBudget.municipality).map(e => <option key={e.escola} value={e.escola}>{e.escola}</option>)}
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Endereço</label>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">CODESC</label>
                     <input
                       type="text"
-                      value={editingBudget.schoolAddress || ''}
-                      onChange={(e) => setEditingBudget({ ...editingBudget, schoolAddress: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 outline-none transition-all"
+                      readOnly
+                      value={editingBudget.codesc || ''}
+                      placeholder="Preenchido ao selecionar a escola"
+                      className="w-full px-4 py-3 bg-slate-100 border border-gray-200 rounded font-bold text-sm text-slate-600 outline-none font-mono cursor-default"
                     />
                   </div>
                 </div>
@@ -561,6 +616,8 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
 
               <form onSubmit={handleCreateBudget} className="p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  {/* Template base (opcional) */}
                   <div className="md:col-span-2">
                     <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">
                       Usar Orçamento como Base (Opcional)
@@ -571,71 +628,91 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
                       className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all"
                     >
                       <option value="">-- CRIAR DO ZERO (VAZIO) --</option>
-                      {budgets.map(b => (
+                      {budgetsVisiveis.map(b => (
                         <option key={b.id} value={b.id}>{b.name.toUpperCase()} ({b.school})</option>
                       ))}
                     </select>
                   </div>
+
+                  {/* 1. SRE */}
                   <div className="md:col-span-2">
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Nome do Orçamento</label>
-                    <input
-                      required
-                      type="text"
-                      value={newBudgetData.name}
-                      onChange={(e) => setNewBudgetData({ ...newBudgetData, name: e.target.value })}
-                      placeholder="Ex: Reforma Geral Bloco A"
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all"
-                    />
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">
+                      SRE (Superintendência Regional) *
+                    </label>
+                    {isTecnicoInfra ? (
+                      <div className="w-full px-4 py-3 bg-slate-100 border border-gray-200 rounded font-bold text-sm text-slate-700 font-mono flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400 uppercase font-sans">Sua regional:</span>
+                        {newBudgetData.sre}
+                      </div>
+                    ) : (
+                      <select
+                        required
+                        value={newBudgetData.sre}
+                        onChange={(e) => setNewBudgetData({ ...newBudgetData, sre: e.target.value, municipality: '', school: '', codesc: '' })}
+                        className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all cursor-pointer"
+                      >
+                        <option value="">Selecione a SRE...</option>
+                        {sreOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    )}
                   </div>
+
+                  {/* 2. CODESC */}
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">SRE (Superintendência)</label>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">CODESC *</label>
                     <select
                       required
-                      value={newBudgetData.sre}
-                      onChange={(e) => setNewBudgetData({ ...newBudgetData, sre: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all"
+                      value={newBudgetData.codesc}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const found = escolasVisiveis.find(es => es.codesc === val);
+                        setNewBudgetData({ ...newBudgetData, codesc: val, municipality: found?.municipio || '', school: found?.escola || '' });
+                      }}
+                      disabled={!newBudgetData.sre}
+                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed font-mono"
                     >
-                      <option value="">Selecione a SRE</option>
-                      <option value="SRE Metropolitana A">SRE Metropolitana A</option>
-                      <option value="SRE Metropolitana B">SRE Metropolitana B</option>
-                      <option value="SRE Metropolitana C">SRE Metropolitana C</option>
-                      <option value="SRE Contagem">SRE Contagem</option>
-                      <option value="SRE Uberlândia">SRE Uberlândia</option>
-                      <option value="SRE Juiz de Fora">SRE Juiz de Fora</option>
+                      <option value="">{newBudgetData.sre ? 'Selecione o CODESC...' : 'Selecione a SRE primeiro'}</option>
+                      {codescOptions(newBudgetData.sre, newBudgetData.municipality).map(e => (
+                        <option key={e.codesc} value={e.codesc}>{e.codesc} — {e.escola}</option>
+                      ))}
                     </select>
                   </div>
+
+                  {/* 3. Município */}
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Município</label>
-                    <input
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Município *</label>
+                    <select
                       required
-                      type="text"
                       value={newBudgetData.municipality}
-                      onChange={(e) => setNewBudgetData({ ...newBudgetData, municipality: e.target.value })}
-                      placeholder="Ex: Belo Horizonte"
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all"
-                    />
+                      onChange={(e) => setNewBudgetData({ ...newBudgetData, municipality: e.target.value, school: '', codesc: '' })}
+                      disabled={!newBudgetData.sre}
+                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">{newBudgetData.sre ? 'Selecione o município...' : 'Selecione a SRE primeiro'}</option>
+                      {municipioOptions(newBudgetData.sre).map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Escola</label>
-                    <input
+
+                  {/* 4. Escola */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Escola *</label>
+                    <select
                       required
-                      type="text"
                       value={newBudgetData.school}
-                      onChange={(e) => setNewBudgetData({ ...newBudgetData, school: e.target.value })}
-                      placeholder="Nome da Escola Estadual"
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all"
-                    />
+                      onChange={(e) => {
+                        const found = escolasVisiveis.find(es => es.escola === e.target.value);
+                        setNewBudgetData({ ...newBudgetData, school: e.target.value, codesc: found?.codesc || newBudgetData.codesc, municipality: found?.municipio || newBudgetData.municipality });
+                      }}
+                      disabled={!newBudgetData.sre}
+                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">{newBudgetData.sre ? 'Selecione a escola...' : 'Selecione a SRE primeiro'}</option>
+                      {escolaOptions(newBudgetData.sre, newBudgetData.municipality).map(e => (
+                        <option key={e.codesc} value={e.escola}>{e.escola}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">Endereço</label>
-                    <input
-                      type="text"
-                      value={newBudgetData.schoolAddress}
-                      onChange={(e) => setNewBudgetData({ ...newBudgetData, schoolAddress: e.target.value })}
-                      placeholder="Rua, Número, Bairro"
-                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all"
-                    />
-                  </div>
+
                 </div>
 
                 <div className="flex gap-4 pt-6 border-t border-gray-100">
