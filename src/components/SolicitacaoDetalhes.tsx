@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao, Aditivo, AjustePlanilha } from '../types';
+import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao, Aditivo, AjustePlanilha, UsuarioSistema } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { gerarParecerIA } from './GeradorParecerIA';
 import ProcessAnalysisPanel from './ProcessAnalysisPanel';
@@ -116,20 +116,25 @@ interface SolicitacaoDetalhesProps {
   hideTransitionButtons?: boolean;
   hideTabs?: boolean;
   activeSubTask?: string;
+  usuariosSeguranca?: UsuarioSistema[];
 }
 
-export default function SolicitacaoDetalhes({ 
-  solicitacao, 
-  perfilUsuario, 
-  onVoltar, 
+export default function SolicitacaoDetalhes({
+  solicitacao,
+  perfilUsuario,
+  onVoltar,
   onUpdate,
   forcedTab,
   hideVoltar = false,
   hideStepper = false,
   hideTransitionButtons = false,
   hideTabs = false,
-  activeSubTask
+  activeSubTask,
+  usuariosSeguranca = []
 }: SolicitacaoDetalhesProps) {
+  const analistas = usuariosSeguranca.filter(u => u.perfil === 'analista_dore');
+  const fiscais = usuariosSeguranca.filter(u => u.perfil === 'fiscal_obra' || u.perfil === 'tecnico_infra');
+  const currentUserNome = usuariosSeguranca.find(u => u.perfil === perfilUsuario)?.nome || '';
   // Navigation internal view
   const [activeTab, setActiveTab ] = useState<'checklist' | 'paf' | 'ordem_inicio' | 'execucao' | 'ajustes' | 'aditivos' | 'conclusao'>('checklist');
 
@@ -138,10 +143,9 @@ export default function SolicitacaoDetalhes({
       setActiveTab(forcedTab as any);
     }
   }, [forcedTab, solicitacao.id]);
-  const isMyAssignment = perfilUsuario === 'analista_dore' && (
-    solicitacao.analistaAtribuido === 'Eng. André Silva' || 
-    solicitacao.analistaAtribuido === 'Flavia Borges'
-  );
+  const isMyAssignment = perfilUsuario === 'analista_dore' &&
+    !!solicitacao.analistaAtribuido &&
+    (currentUserNome ? solicitacao.analistaAtribuido === currentUserNome : true);
 
   const handleDownloadDocument = (fileName: string, label: string) => {
     const textContent = `--- Governo do Estado de Minas Gerais ---
@@ -228,7 +232,7 @@ Plataforma e-SGO - SEE-MG`;
   // Ajustes de Planilha states
   const [ajusteTipo, setAjusteTipo] = useState<'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto'>('sem_alteracao_meta');
   const [ajusteValor, setAjusteValor] = useState('12422.94');
-  const [ajusteResponsavel, setAjusteResponsavel] = useState('Guilherme Pereira e Silva');
+  const [ajusteResponsavel, setAjusteResponsavel] = useState('');
   const [ajusteRegistro, setAjusteRegistro] = useState('242488/D');
   const [ajusteReferenteOpt, setAjusteReferenteOpt] = useState<'atendimento_inicial' | 'saldo_nova_cotacao'>('atendimento_inicial');
   const [ajusteValorContrato, setAjusteValorContrato] = useState(solicitacao.valorHomologadoContratacao?.toString() || '400498.42');
@@ -241,7 +245,7 @@ Plataforma e-SGO - SEE-MG`;
   const [ajustePlanilhaUploadedAt, setAjustePlanilhaUploadedAt] = useState('');
   const [selectedAjusteId, setSelectedAjusteId] = useState<string | null>(null);
   const [ajusteParecerDoreInput, setAjusteParecerDoreInput] = useState('');
-  const [ajusteAnalistaAtribuidoInput, setAjusteAnalistaAtribuidoInput] = useState('Eng. André Silva');
+  const [ajusteAnalistaAtribuidoInput, setAjusteAnalistaAtribuidoInput] = useState('');
 
   const planilhaAjusteFormInputRef = useRef<HTMLInputElement>(null);
 
@@ -487,6 +491,31 @@ ${totalPendencias > 0
       });
       setActiveTab('paf');
     }
+  };
+
+  // APROVAÇÃO / REPROVAÇÃO FINAL DO PROCESSO (botões globais da tela de atribuição técnica)
+  const enviarAprovacaoFinal = () => {
+    const parecerTudo = gerarParecerConsolidadoTudo(solicitacao.documentos, solicitacao.contadorAnalises || 1);
+    onUpdate({
+      ...solicitacao,
+      etapaAtual: 'paf_autorizacao',
+      parecerConsolidado: parecerTudo,
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { etapa: 'paf_autorizacao', data: new Date().toISOString().split('T')[0], responsavel: `${currentUserNome || perfilUsuario} (Aprovação Final)` }
+      ]
+    });
+  };
+
+  const enviarReprovacaoFinal = () => {
+    onUpdate({
+      ...solicitacao,
+      etapaAtual: 'correcao',
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { etapa: 'correcao', data: new Date().toISOString().split('T')[0], responsavel: `${currentUserNome || perfilUsuario} (Reprovação)` }
+      ]
+    });
   };
 
   // PAF PROCESSORS
@@ -1303,7 +1332,7 @@ ${totalPendencias > 0
           {!hideVoltar && (
             <button 
               onClick={onVoltar}
-              className="mt-1 p-2 rounded-lg border border-slate-200 text-slate-650 hover:text-slate-850 hover:bg-slate-100 transition-colors bg-white shadow-xs cursor-pointer"
+              className="mt-1 p-2 rounded-lg border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-colors bg-white shadow-xs cursor-pointer"
               title="Voltar ao Painel"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -1402,7 +1431,7 @@ ${totalPendencias > 0
                     </div>
                     <div className="ml-3">
                       <span className={`block text-xs font-bold uppercase tracking-wider ${
-                        isActive || isCompleted ? 'text-blue-600' : 'text-slate-450'
+                        isActive || isCompleted ? 'text-blue-600' : 'text-slate-500'
                       }`}>
                         {step.label.split(' & ')[0].split(' ')[0]} {/* simplified like Solicitor list */}
                       </span>
@@ -1453,12 +1482,12 @@ ${totalPendencias > 0
                 const updated = { ...solicitacao, analistaAtribuido: val || undefined };
                 onUpdate(updated);
               }}
-              className="px-3 py-2 text-xs border border-indigo-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white text-slate-750 font-sans min-w-[200px] cursor-pointer"
+              className="px-3 py-2 text-xs border border-indigo-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500 bg-white text-slate-700 font-sans min-w-[200px] cursor-pointer"
             >
               <option value="">-- Selecione o Analista --</option>
-              <option value="Eng. André Silva">Eng. André Silva</option>
-              <option value="Engª. Paula Rezende">Engª. Paula Rezende</option>
-              <option value="Eng. Marcus Vinícius">Eng. Marcus Vinícius</option>
+              {(analistas.length > 0 ? analistas : usuariosSeguranca).map(u => (
+                <option key={u.id} value={u.nome}>{u.nome}</option>
+              ))}
             </select>
             {solicitacao.analistaAtribuido && (
               <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg font-bold">
@@ -1473,8 +1502,8 @@ ${totalPendencias > 0
       {activeSubTask !== 'analise' && (
         <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs space-y-5">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-wrap gap-2">
-          <h2 className="text-xs font-semibold text-slate-450 uppercase tracking-wider flex items-center gap-2">
-            <Info className="w-4 h-4 text-slate-450" />
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+            <Info className="w-4 h-4 text-slate-500" />
             Ficha de Informações da Solicitação
           </h2>
           <span className="text-[10px] font-mono font-semibold text-neutral-400">
@@ -1593,7 +1622,7 @@ ${totalPendencias > 0
 
           <div>
             <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Responsável Técnico</span>
-            <span className="text-slate-850 text-sm font-semibold block">{solicitacao.responsavel || 'Não cadastrado'}</span>
+            <span className="text-slate-800 text-sm font-semibold block">{solicitacao.responsavel || 'Não cadastrado'}</span>
           </div>
         </div>
 
@@ -1601,7 +1630,7 @@ ${totalPendencias > 0
         {solicitacao.descricaoFolhaRosto && (
           <div className="pt-4 border-t border-slate-100">
             <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1.5">Descrição Técnica do Escopo</span>
-            <p className="text-slate-650 text-xs leading-relaxed font-sans max-w-5xl bg-slate-50 p-3 rounded-lg border border-slate-100">{solicitacao.descricaoFolhaRosto}</p>
+            <p className="text-slate-600 text-xs leading-relaxed font-sans max-w-5xl bg-slate-50 p-3 rounded-lg border border-slate-100">{solicitacao.descricaoFolhaRosto}</p>
           </div>
         )}
 
@@ -1653,7 +1682,7 @@ ${totalPendencias > 0
           ) : solicitacao.fichaVerificada === false ? (
             <div className="bg-red-50 border border-red-250 text-red-800 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-3xs">
               <div className="flex items-start gap-2.5">
-                <span className="text-red-650 text-[18px] select-none">❌</span>
+                <span className="text-red-600 text-[18px] select-none">❌</span>
                 <div className="space-y-1">
                   <p className="font-extrabold text-red-950 text-xs text-left">
                     Inconsistências Identificadas na Ficha da Solicitação!
@@ -1694,7 +1723,7 @@ ${totalPendencias > 0
                 <span className="text-[16px]">⏳</span>
                 <div>
                   <p className="font-semibold text-slate-800">Conformidade Cadastral Pendente de Confirmação</p>
-                  <p className="text-[11px] text-slate-450 mt-0.5">Nenhum engenheiro avaliou a integridade destas informações cadastrais da escola cooperadora ainda.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Nenhum engenheiro avaliou a integridade destas informações cadastrais da escola cooperadora ainda.</p>
                 </div>
               </div>
 
@@ -1702,7 +1731,7 @@ ${totalPendencias > 0
               {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
                 <div className="bg-white border border-indigo-150 p-4 rounded-xl space-y-3/2 text-left">
                   <div className="flex items-center gap-1.5 text-indigo-900 font-bold">
-                    <UserCheck className="w-4 h-4 text-indigo-650" />
+                    <UserCheck className="w-4 h-4 text-indigo-600" />
                     <span>Painel de Avaliação Cadastral (Engenheiro DORE)</span>
                   </div>
                   <p className="text-[11px] text-neutral-500">
@@ -1710,7 +1739,7 @@ ${totalPendencias > 0
                   </p>
 
                   <div className="space-y-1.5">
-                    <label className="block text-[10px] uppercase font-bold text-slate-450">Parecer Técnico da Ficha (Exigido em caso de inconsistência)</label>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500">Parecer Técnico da Ficha (Exigido em caso de inconsistência)</label>
                     <textarea
                       id="obs-ficha-input"
                       placeholder="Ex: Dados checados. Valor estimado está condizente com as medições iniciais."
@@ -1729,7 +1758,7 @@ ${totalPendencias > 0
                           alert('Justificativa técnica detalhada sobre a inconsistência é obrigatória para recusar a ficha.');
                           return;
                         }
-                        const name = perfilUsuario === 'analista_dore' ? 'Eng. André Silva' : 'Dra. Helena Rocha';
+                        const name = currentUserNome || perfilUsuario;
                         onUpdate({
                           ...solicitacao,
                           fichaVerificada: false,
@@ -1739,7 +1768,7 @@ ${totalPendencias > 0
                         });
                         alert('Inconsistência registrada na ficha!');
                       }}
-                      className="px-3.5 py-1.5 bg-red-650 hover:bg-red-700 text-white font-bold rounded-lg cursor-pointer"
+                      className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg cursor-pointer"
                     >
                       Apontar Inconsistência
                     </button>
@@ -1748,7 +1777,7 @@ ${totalPendencias > 0
                       onClick={() => {
                         const input = document.getElementById('obs-ficha-input') as HTMLTextAreaElement | null;
                         const msg = input?.value || '';
-                        const name = perfilUsuario === 'analista_dore' ? 'Eng. André Silva' : 'Dra. Helena Rocha';
+                        const name = currentUserNome || perfilUsuario;
                         onUpdate({
                           ...solicitacao,
                           fichaVerificada: true,
@@ -1779,7 +1808,7 @@ ${totalPendencias > 0
               onClick={() => setActiveTab('checklist')}
               className={`px-5 py-3.5 border-b-2 text-xs font-bold tracking-wider uppercase shrink-0 transition-all cursor-pointer ${
                 activeTab === 'checklist' 
-                  ? 'border-blue-600 text-blue-650 bg-white' 
+                  ? 'border-blue-600 text-blue-600 bg-white' 
                   : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
               }`}
             >
@@ -1793,7 +1822,7 @@ ${totalPendencias > 0
                 solicitacao.etapaAtual === 'cadastro' || solicitacao.etapaAtual === 'analise'
                   ? 'opacity-40 cursor-not-allowed text-slate-400'
                   : activeTab === 'paf'
-                    ? 'border-blue-600 text-blue-650 bg-white'
+                    ? 'border-blue-600 text-blue-600 bg-white'
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
               }`}
             >
@@ -1807,7 +1836,7 @@ ${totalPendencias > 0
                 solicitacao.etapaAtual === 'cadastro' || solicitacao.etapaAtual === 'analise' || solicitacao.etapaAtual === 'paf_autorizacao' || solicitacao.etapaAtual === 'paf'
                   ? 'opacity-40 cursor-not-allowed text-slate-400'
                   : activeTab === 'execucao'
-                    ? 'border-blue-600 text-blue-650 bg-white'
+                    ? 'border-blue-600 text-blue-600 bg-white'
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
               }`}
             >
@@ -1821,7 +1850,7 @@ ${totalPendencias > 0
                 solicitacao.etapaAtual !== 'execucao'
                   ? 'opacity-40 cursor-not-allowed text-slate-400'
                   : activeTab === 'ajustes'
-                    ? 'border-blue-600 text-blue-650 bg-white'
+                    ? 'border-blue-600 text-blue-600 bg-white'
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
               }`}
             >
@@ -1835,7 +1864,7 @@ ${totalPendencias > 0
                 solicitacao.etapaAtual !== 'execucao'
                   ? 'opacity-40 cursor-not-allowed text-slate-400'
                   : activeTab === 'aditivos'
-                    ? 'border-blue-600 text-blue-650 bg-white'
+                    ? 'border-blue-600 text-blue-600 bg-white'
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
               }`}
             >
@@ -1849,7 +1878,7 @@ ${totalPendencias > 0
                 solicitacao.etapaAtual !== 'execucao'
                   ? 'opacity-40 cursor-not-allowed text-slate-400'
                   : activeTab === 'conclusao'
-                    ? 'border-blue-600 text-blue-650 bg-white'
+                    ? 'border-blue-600 text-blue-600 bg-white'
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
               }`}
             >
@@ -1872,6 +1901,8 @@ ${totalPendencias > 0
             handleSimulatedUpload={handleSimulatedUpload}
             handleAISmartAnalysis={handleAISmartAnalysis}
             removerDocumento={removerDocumento}
+            enviarAprovacaoFinal={enviarAprovacaoFinal}
+            enviarReprovacaoFinal={enviarReprovacaoFinal}
           />
         )}
 
@@ -2117,7 +2148,7 @@ ${totalPendencias > 0
                               ? 'bg-red-50/50 border-red-200 text-red-850'
                               : doc.status === 'aprovado'
                                 ? 'bg-emerald-50/50 border-emerald-100 text-emerald-850'
-                                : 'bg-slate-50 border-slate-200 text-slate-750'
+                                : 'bg-slate-50 border-slate-200 text-slate-700'
                           }`}>
                             <span className="font-bold flex items-center gap-1 text-[9.5px] uppercase tracking-wider">
                               {doc.status === 'recusado' ? '❌ Pendência Técnica Identificada' : doc.status === 'aprovado' ? '✅ Nota de Validação do Analista' : 'ℹ️ Observação de Análise'}:
@@ -2608,7 +2639,7 @@ ${totalPendencias > 0
                       Instrua as informações do PAF para liberar as ações de engenharia de obra.
                     </span>
                   ) : (
-                    <span className="font-semibold text-emerald-650 flex items-center gap-1.5">
+                    <span className="font-semibold text-emerald-600 flex items-center gap-1.5">
                       <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       Status do PAF processado e homologado pelo Administrativo DORE!
                     </span>
@@ -2624,12 +2655,12 @@ ${totalPendencias > 0
                         disabled={perfilUsuario !== 'administrativo_dore' || !numPAFInput}
                         className={`px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 ${
                           perfilUsuario === 'administrativo_dore' && numPAFInput
-                            ? 'bg-blue-650 hover:bg-blue-700 text-white cursor-pointer hover:shadow-md'
-                            : 'bg-slate-100 text-slate-450 cursor-not-allowed border border-slate-200'
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:shadow-md'
+                            : 'bg-slate-100 text-slate-500 cursor-not-allowed border border-slate-200'
                         }`}
                         title="Envia para a etapa de Ordem de Início convencional da fiscalização"
                       >
-                        <Calendar className="w-3.5 h-3.5 text-slate-450 group-hover:text-white" />
+                        <Calendar className="w-3.5 h-3.5 text-slate-500 group-hover:text-white" />
                         Homologar e Liberar Ordem de Início
                       </button>
 
@@ -2640,16 +2671,16 @@ ${totalPendencias > 0
                         className={`px-4 py-2 rounded-lg text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 ${
                           perfilUsuario === 'administrativo_dore' && numPAFInput
                             ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer hover:shadow-md'
-                            : 'bg-slate-100 text-slate-450 cursor-not-allowed border border-slate-200'
+                            : 'bg-slate-100 text-slate-500 cursor-not-allowed border border-slate-200'
                         }`}
                         title="Atalho: Avança diretamente para a Execução Física de Obra (Em Andamento)"
                       >
-                        <Play className="w-3.5 h-3.5 text-slate-450 group-hover:text-white" />
+                        <Play className="w-3.5 h-3.5 text-slate-500 group-hover:text-white" />
                         Homologar e Iniciar Execução (Direto)
                       </button>
                     </>
                   ) : (
-                    <span className="text-xs text-blue-650 border border-blue-200 bg-blue-50/75 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 font-sans shadow-xs">
+                    <span className="text-xs text-blue-600 border border-blue-200 bg-blue-50/75 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 font-sans shadow-xs">
                       <CheckCircle className="w-4 h-4 animate-pulse text-blue-600" /> Recurso PAF homologado e liberado para execução física da obra!
                     </span>
                   )}
@@ -3432,7 +3463,7 @@ ${totalPendencias > 0
                   {statusContratoInput === 'Distratada' && (
                     <div className="p-4 bg-red-50/60 rounded-lg border border-red-200 space-y-4 text-xs font-sans">
                       <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-red-650" />
+                        <AlertTriangle className="w-4 h-4 text-red-600" />
                         <h4 className="font-bold text-xs uppercase tracking-wider text-red-800">
                           Informações Mandatórias do Distrato Contratual
                         </h4>
@@ -4077,7 +4108,7 @@ ${totalPendencias > 0
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] bg-slate-100/75 p-2.5 rounded border border-slate-200/60 text-slate-705">
                             <div>
                               <span className="font-semibold text-slate-500">Responsável pela Elaboração: </span>
-                              <strong>{aju.responsavelPlanilha}</strong> <span className="text-slate-450 text-[10px]">({aju.registroProfissional})</span>
+                              <strong>{aju.responsavelPlanilha}</strong> <span className="text-slate-500 text-[10px]">({aju.registroProfissional})</span>
                             </div>
                             <div>
                               <span className="font-semibold text-slate-500">Valor Contrato Atualizado: </span>
@@ -4086,7 +4117,7 @@ ${totalPendencias > 0
                           </div>
 
                           {aju.observacoes && (
-                            <div className="p-2.5 bg-yellow-50 text-slate-650 rounded border border-yellow-200 text-[11px] leading-relaxed">
+                            <div className="p-2.5 bg-yellow-50 text-slate-600 rounded border border-yellow-200 text-[11px] leading-relaxed">
                               <strong className="text-yellow-850 block mb-0.5 font-bold uppercase text-[9px]">Nova Meta Proposta:</strong>
                               <p className="italic">"{aju.observacoes}"</p>
                             </div>
@@ -4359,12 +4390,9 @@ ${totalPendencias > 0
                                 onChange={(e) => atribuirAnalistaAjuste(aju.id, e.target.value)}
                                 className="text-xs bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-neutral-800 font-bold focus:outline-hidden focus:ring-1 focus:ring-blue-500 cursor-pointer"
                               >
-                                <option value="Eng. André Silva (DORE)">Eng. André Silva (DORE)</option>
-                                <option value="Téc. João Paulo (SRE)">Téc. João Paulo (SRE)</option>
-                                <option value="Eng. Daniel Costa (SRE)">Eng. Daniel Costa (SRE)</option>
-                                <option value="Engª. Sofia Viana (CONTRATADA)">Engª. Sofia Viana (CONTRATADA)</option>
-                                <option value="Engª. Helena Rocha (DORE)">Engª. Helena Rocha (DORE)</option>
-                                <option value="Prof. Guilherme Pereira (TÉCNICO)">Prof. Guilherme Pereira (TÉCNICO)</option>
+                                {(usuariosSeguranca.length > 0 ? usuariosSeguranca : []).map(u => (
+                                  <option key={u.id} value={`${u.nome} (${u.departamento})`}>{u.nome} ({u.departamento})</option>
+                                ))}
                               </select>
                             </div>
                           </div>
@@ -4733,7 +4761,7 @@ ${totalPendencias > 0
 
                 {/* 5. MANDATORY SPREADSHEET PHOTO / EXCEL COMPONENT (CRITICAL REQUIREMENT) */}
                 <div className="space-y-3 pt-4 border-t border-red-100">
-                  <label className="block text-xs font-bold text-red-650 uppercase tracking-wider flex items-center gap-1.5">
+                  <label className="block text-xs font-bold text-red-600 uppercase tracking-wider flex items-center gap-1.5">
                     <UploadCloud className="w-4 h-4" />
                     V. Anexar Planilha de Ajuste Orçamentário (Obrigatório) *
                   </label>
@@ -4753,7 +4781,7 @@ ${totalPendencias > 0
                          onClick={() => planilhaAjusteFormInputRef.current?.click()}>
                       <UploadCloud className="w-8 h-8 text-red-400 mx-auto animate-bounce" />
                       <p className="text-xs text-red-800 font-extrabold uppercase">Planilha de Ajuste Não Selecionada *</p>
-                      <p className="text-[10px] text-slate-450">Clique aqui para selecionar e anexar documento Excel contendo tabelas DORE/SIN.</p>
+                      <p className="text-[10px] text-slate-500">Clique aqui para selecionar e anexar documento Excel contendo tabelas DORE/SIN.</p>
                     </div>
                   ) : (
                     <div className="border border-emerald-300 bg-emerald-50/50 rounded-xl p-4 flex items-center justify-between gap-3 shadow-3xs">
@@ -4761,7 +4789,7 @@ ${totalPendencias > 0
                         <FileCheck className="w-8 h-8 text-emerald-600 shrink-0" />
                         <div className="truncate text-left space-y-1">
                           <span className="font-bold text-emerald-950 text-xs block truncate">{ajustePlanilhaFileName}</span>
-                          <span className="text-[10px] text-emerald-650 font-mono block">Tamanho: {ajustePlanilhaFileSize} • Carregado com Sucesso</span>
+                          <span className="text-[10px] text-emerald-600 font-mono block">Tamanho: {ajustePlanilhaFileSize} • Carregado com Sucesso</span>
                         </div>
                       </div>
                       <button
@@ -4771,7 +4799,7 @@ ${totalPendencias > 0
                           setAjustePlanilhaFileSize('');
                           setAjustePlanilhaUploadedAt('');
                         }}
-                        className="text-red-650 hover:text-red-800 text-[11px] font-bold bg-white border border-red-200 px-3 py-1.5 rounded-lg hover:bg-neutral-50 shrink-0 transition shadow-2xs cursor-pointer"
+                        className="text-red-600 hover:text-red-800 text-[11px] font-bold bg-white border border-red-200 px-3 py-1.5 rounded-lg hover:bg-neutral-50 shrink-0 transition shadow-2xs cursor-pointer"
                       >
                         Substituir Planilha
                       </button>
@@ -4812,7 +4840,7 @@ ${totalPendencias > 0
             <div className="flex justify-between items-center bg-blue-50 border border-blue-100 p-4 rounded-xl">
               <div>
                 <h2 className="text-sm font-bold text-neutral-800 flex items-center gap-1.5">
-                  <Layers className="w-5 h-5 text-blue-650 animate-pulse" />
+                  <Layers className="w-5 h-5 text-blue-600 animate-pulse" />
                   Módulo Integrado de Solicitação de Termos Aditivos
                 </h2>
                 <p className="text-[11px] text-neutral-500 mt-1">
@@ -4985,7 +5013,7 @@ ${totalPendencias > 0
                                           <div className="flex items-center gap-1.5 flex-wrap">
                                             <span className="font-bold text-neutral-700">{doc.nome}</span>
                                             {doc.obrigatorio && (
-                                              <span className="text-[9px] font-bold text-red-650 bg-red-50/85 px-1.5 py-0.2 rounded">Obrigatório</span>
+                                              <span className="text-[9px] font-bold text-red-600 bg-red-50/85 px-1.5 py-0.2 rounded">Obrigatório</span>
                                             )}
                                           </div>
                                           {doc.fileName ? (
@@ -4994,7 +5022,7 @@ ${totalPendencias > 0
                                             <span className="text-[10px] text-slate-400 italic block mt-1">Nenhum documento carregado para este requisito</span>
                                           )}
                                           {doc.justificativa && (
-                                            <p className="text-[11px] text-red-650 bg-red-50 p-1.5 rounded-md border border-red-100 mt-2 font-medium">
+                                            <p className="text-[11px] text-red-600 bg-red-50 p-1.5 rounded-md border border-red-100 mt-2 font-medium">
                                               Motivo da Rejeição: {doc.justificativa}
                                             </p>
                                           )}
@@ -5084,7 +5112,7 @@ ${totalPendencias > 0
                                     alterarStatusAditivoCompleto(adt.id, 'Recusado', input?.value || 'Sem parecer');
                                     alert('Contrato Aditivo REJEITADO!');
                                   }}
-                                  className="px-3.5 py-1.5 bg-red-650 hover:bg-red-700 text-white rounded-lg font-bold cursor-pointer"
+                                  className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold cursor-pointer"
                                 >
                                   Recusar Aditivo
                                 </button>
@@ -5171,7 +5199,7 @@ ${totalPendencias > 0
             <div className="flex justify-between items-center bg-emerald-50 border border-emerald-100 p-5 rounded-xl">
               <div>
                 <h2 className="text-sm font-bold text-neutral-800 flex items-center gap-1.5">
-                  <CheckCircle className="w-5 h-5 text-emerald-650 animate-pulse" />
+                  <CheckCircle className="w-5 h-5 text-emerald-600 animate-pulse" />
                   Módulo de Conclusão e Encerramento de Obra
                 </h2>
                 <p className="text-[11px] text-neutral-500 mt-1 font-sans">
@@ -5181,7 +5209,7 @@ ${totalPendencias > 0
               <span className={`text-xs font-extrabold px-3 py-1 rounded-lg border ${
                 solicitacao.statusObra === 'Concluída'
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                  : 'bg-white text-slate-750 border-slate-200'
+                  : 'bg-white text-slate-700 border-slate-200'
               }`}>
                 Dossiê Final: {solicitacao.statusObra === 'Concluída' ? 'CONCLUÍDO' : 'EM EXECUÇÃO'}
               </span>
@@ -5265,7 +5293,7 @@ ${totalPendencias > 0
                                   setLaudoConclusivoFileSize('');
                                   setLaudoConclusivoUploadedAt('');
                                 }}
-                                className="text-red-500 hover:text-red-750 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                                className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
                               >
                                 Remover
                               </button>
@@ -5345,7 +5373,7 @@ ${totalPendencias > 0
                                   setRelatorioFotograficoFileSize('');
                                   setRelatorioFotograficoUploadedAt('');
                                 }}
-                                className="text-red-500 hover:text-red-750 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                                className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
                               >
                                 Remover
                               </button>
@@ -5425,7 +5453,7 @@ ${totalPendencias > 0
                                   setPlanilhaMedicaoFinalFileSize('');
                                   setPlanilhaMedicaoFinalUploadedAt('');
                                 }}
-                                className="text-red-500 hover:text-red-750 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                                className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
                               >
                                 Remover
                               </button>
@@ -5513,7 +5541,7 @@ ${totalPendencias > 0
                       <div className="flex items-center gap-2 mt-1">
                         <div className="flex-1 bg-neutral-100 h-2.5 rounded-full overflow-hidden border border-neutral-200">
                           <div 
-                            className="bg-emerald-650 h-full rounded-full transition-all duration-500" 
+                            className="bg-emerald-600 h-full rounded-full transition-all duration-500" 
                             style={{ width: `${Math.min(100, progressoTotalObra)}%` }}
                           />
                         </div>

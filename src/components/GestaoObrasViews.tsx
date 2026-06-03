@@ -619,7 +619,7 @@ export function NovoAtendimentoPanel({
                 <select
                   value={formaOcupacao}
                   onChange={(e) => setFormaOcupacao(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-850"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800"
                 >
                   <option value="PRÓPRIO">PRÓPRIO</option>
                   <option value="ALUGADO">ALUGADO</option>
@@ -635,7 +635,7 @@ export function NovoAtendimentoPanel({
                 <select
                   value={predio}
                   onChange={(e) => setPredio(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-850"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800"
                 >
                   <option value="PRINCIPAL">PRINCIPAL</option>
                   <option value="ANEXO">ANEXO</option>
@@ -656,7 +656,7 @@ export function NovoAtendimentoPanel({
                       setOrgaoTombador('MUNICIPAL');
                     }
                   }}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-850"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800"
                 >
                   <option value="NÃO É TOMBADO">NÃO É TOMBADO</option>
                   <option value="TOMBADO PARCIALMENTE">TOMBADO PARCIALMENTE</option>
@@ -672,7 +672,7 @@ export function NovoAtendimentoPanel({
                   value={orgaoTombador}
                   onChange={(e) => setOrgaoTombador(e.target.value)}
                   disabled={tombado === 'NÃO É TOMBADO'}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-850 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-150"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-150"
                 >
                   {tombado === 'NÃO É TOMBADO' && <option value="">NÃO APLICÁVEL</option>}
                   <option value="MUNICIPAL">MUNICIPAL</option>
@@ -696,7 +696,7 @@ export function NovoAtendimentoPanel({
                       setTipoCoabitado('Coabitado com outra escola Estadual');
                     }
                   }}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-850"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800"
                 >
                   <option value="NÃO">NÃO</option>
                   <option value="SIM">SIM</option>
@@ -711,13 +711,13 @@ export function NovoAtendimentoPanel({
                   value={tipoCoabitado}
                   onChange={(e) => setTipoCoabitado(e.target.value)}
                   disabled={coabitado === 'NÃO'}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-850 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-150"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-150"
                 >
                   {coabitado === 'NÃO' && <option value="">NÃO APLICÁVEL</option>}
                   <option value="Coabitado com outra escola Estadual">Coabitado com outra escola Estadual</option>
                   <option value="Coabitado com outra escola municipal">Coabitado com outra escola municipal</option>
                   <option value="Coabitado com outro órgão estadual">Coabitado com outro órgão estadual</option>
-                  <option value="Coabitado com outra municipal">Coabitado com outra municipal</option>
+                  <option value="Coabitado com outro órgão municipal">Coabitado com outro órgão municipal</option>
                   <option value="Coabitado com instituto federal">Coabitado com instituto federal</option>
                 </select>
               </div>
@@ -745,7 +745,7 @@ export function NovoAtendimentoPanel({
                 <select
                   value={notificacao || 'Não há notificação'}
                   onChange={(e) => setNotificacao(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-850"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800"
                 >
                   <option value="Não há notificação">Não há notificação</option>
                   <option value="Ministério Publico">Ministério Publico</option>
@@ -771,7 +771,7 @@ export function NovoAtendimentoPanel({
                 <select
                   value={tipoObra}
                   onChange={(e) => setTipoObra(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white text-slate-850 font-bold"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white text-slate-800 font-bold"
                 >
                   <option value="AMPLIAÇÃO">AMPLIAÇÃO</option>
                   <option value="REFORMA">REFORMA</option>
@@ -789,7 +789,7 @@ export function NovoAtendimentoPanel({
                 <select
                   value={tipoAtendimento}
                   onChange={(e) => setTipoAtendimento(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white text-slate-850 font-bold"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white text-slate-800 font-bold"
                 >
                   <option value="NORMAL">NORMAL</option>
                   <option value="EMERGENCIAL">EMERGENCIAL</option>
@@ -837,7 +837,7 @@ export function NovoAtendimentoPanel({
                 <select
                   value={formaAtendimento}
                   onChange={(e) => setFormaAtendimento(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white text-slate-850 font-bold"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white text-slate-800 font-bold"
                 >
                   <option value="VIA CAIXA ESCOLAR">VIA CAIXA ESCOLAR</option>
                   <option value="SEM ÔNUS">SEM ÔNUS</option>
@@ -1042,7 +1042,7 @@ export function NovoAtendimentoPanel({
                             <button
                               type="button"
                               onClick={() => handleSimularUploadDocChecklist(doc.id, `doc_analise_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`)}
-                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-105 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
+                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
                             >
                               Simular
                             </button>
@@ -1092,7 +1092,7 @@ export function NovoAtendimentoPanel({
                               <FileText className="w-4 h-4 text-blue-500 shrink-0" />
                               <div className="min-w-0 flex-1">
                                 <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
-                                <span className="text-[10px] text-slate-450">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
+                                <span className="text-[10px] text-slate-500">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
                               </div>
                               
                               <button
@@ -1131,7 +1131,7 @@ export function NovoAtendimentoPanel({
                             <button
                               type="button"
                               onClick={() => handleSimularUploadDocChecklist(doc.id, `doc_analise_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`)}
-                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-105 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
+                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
                             >
                               Simular
                             </button>
@@ -1207,7 +1207,7 @@ export function NovoAtendimentoPanel({
                                 <FileText className="w-4 h-4 text-blue-500 shrink-0" />
                                 <div className="min-w-0 flex-1">
                                   <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
-                                  <span className="text-[10px] text-slate-450 font-medium">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
+                                  <span className="text-[10px] text-slate-500 font-medium">Tamanho: {doc.fileSize} | Anexado em: {doc.uploadedAt}</span>
                                 </div>
                                 
                                 <button
@@ -1246,7 +1246,7 @@ export function NovoAtendimentoPanel({
                               <button
                                 type="button"
                                 onClick={() => handleSimularUploadCustomDocStep2(doc.id)}
-                                className="px-2 py-1.5 bg-blue-50 hover:bg-blue-105 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
+                                className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
                               >
                                 Simular
                               </button>
@@ -1324,7 +1324,7 @@ export function NovoAtendimentoPanel({
               <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-md tracking-wider uppercase font-mono">
                 Modo de Edição / Continuação de Preenchimento
               </span>
-              <h2 className="text-base font-extrabold text-slate-850 flex items-center gap-1.5 font-sans mt-1">
+              <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-1.5 font-sans mt-1">
                 <Sparkles className="w-5 h-5 text-amber-500" />
                 Configurar Processo Ativo: {selectedAtendimentoForEdit.id}
               </h2>
@@ -1545,7 +1545,7 @@ export function NovoAtendimentoPanel({
                   <option value="Coabitado com outra escola Estadual">Coabitado com outra escola Estadual</option>
                   <option value="Coabitado com outra escola municipal">Coabitado com outra escola municipal</option>
                   <option value="Coabitado com outro órgão estadual">Coabitado com outro órgão estadual</option>
-                  <option value="Coabitado com outra municipal">Coabitado com outra municipal</option>
+                  <option value="Coabitado com outro órgão municipal">Coabitado com outro órgão municipal</option>
                   <option value="Coabitado com instituto federal">Coabitado com instituto federal</option>
                 </select>
               </div>
@@ -1759,10 +1759,10 @@ export function NovoAtendimentoPanel({
                   <CheckCircle className="w-6 h-6 text-emerald-600" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black text-slate-850 font-sans">
+                  <h4 className="text-sm font-black text-slate-800 font-sans">
                     Atendimento de Infraestrutura Criado com Sucesso!
                   </h4>
-                  <p className="text-xs text-slate-650 mt-1">
+                  <p className="text-xs text-slate-600 mt-1">
                     O processo de código <strong className="font-mono text-emerald-700 bg-emerald-100 px-1 py-0.5 rounded text-[11px]">{recentCreatedId}</strong> foi estabelecido de forma auto-persistida no banco de dados local.
                   </p>
                   <p className="text-[11px] text-slate-500 mt-1">
@@ -2129,7 +2129,8 @@ export function AtribuicaoPanel({
 
     // 8. Atribuição focada
     if (perfilUsuario === 'analista_dore' && filtroAtribuicao === 'minhas') {
-      const isMyAssign = sol.analistaAtribuido === 'Eng. André Silva' || sol.analistaAtribuido === 'Flavia Borges' || sol.analistaAtribuido === 'Eng. André';
+      const myNome = usuariosSeguranca?.find((u: any) => u.perfil === perfilUsuario)?.nome || '';
+      const isMyAssign = !!sol.analistaAtribuido && (myNome ? sol.analistaAtribuido === myNome : !!sol.analistaAtribuido);
       if (!isMyAssign) return false;
     } else if (perfilUsuario === 'gestor_dore' && filtroAtribuicao === 'minhas') {
       const noAssign = !sol.analistaAtribuido;
@@ -2232,7 +2233,7 @@ export function AtribuicaoPanel({
             <div className="shrink-0 flex items-center gap-2.5">
               <div className="text-right hidden sm:flex flex-col items-end">
                 <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">Tipo de Exibição</span>
-                <span className="text-[9.5px] text-slate-450 font-bold leading-none mt-0.5">Mudar o modo de visualizar os processos</span>
+                <span className="text-[9.5px] text-slate-500 font-bold leading-none mt-0.5">Mudar o modo de visualizar os processos</span>
               </div>
               <select
                 value={viewMode}
@@ -2371,7 +2372,7 @@ export function AtribuicaoPanel({
             <button
               type="button"
               onClick={limparTodosFiltros}
-              className="px-3 py-1 text-xs font-bold text-red-650 bg-red-50 border border-red-250 rounded-md hover:bg-red-100 hover:text-red-750 transition flex items-center gap-1 cursor-pointer"
+              className="px-3 py-1 text-xs font-bold text-red-600 bg-red-50 border border-red-250 rounded-md hover:bg-red-100 hover:text-red-700 transition flex items-center gap-1 cursor-pointer"
             >
               <RefreshCw className="w-3 h-3 text-red-500" />
               <span>Limpar Filtros</span>
@@ -2381,10 +2382,10 @@ export function AtribuicaoPanel({
       </div>
 
       {/* VISÃO FOCADA POR ATRIBUIÇÃO DE ANALISTAS - MOVED AS REQUESTED */}
-      <div className="bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-650 font-medium mb-6">
+      <div className="bg-[#f8fafc] border border-slate-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 font-medium mb-6">
         <span className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-blue-600 shrink-0" />
-          <span className="font-extrabold text-slate-750 font-sans text-xs uppercase tracking-wide">Visão focada por atribuição de analistas:</span>
+          <span className="font-extrabold text-slate-700 font-sans text-xs uppercase tracking-wide">Visão focada por atribuição de analistas:</span>
         </span>
         {perfilUsuario === 'analista_dore' && (
           <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 select-none shrink-0">
@@ -2393,7 +2394,7 @@ export function AtribuicaoPanel({
               onClick={() => setFiltroAtribuicao('minhas')}
               className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
                 filtroAtribuicao === 'minhas'
-                  ? 'bg-blue-650 text-white shadow-3xs'
+                  ? 'bg-blue-600 text-white shadow-3xs'
                   : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
               }`}
             >
@@ -2404,7 +2405,7 @@ export function AtribuicaoPanel({
               onClick={() => setFiltroAtribuicao('todos')}
               className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
                 filtroAtribuicao === 'todos'
-                  ? 'bg-blue-650 text-white shadow-3xs'
+                  ? 'bg-blue-600 text-white shadow-3xs'
                   : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
               }`}
             >
@@ -2420,7 +2421,7 @@ export function AtribuicaoPanel({
               onClick={() => setFiltroAtribuicao('minhas')}
               className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
                 filtroAtribuicao === 'minhas'
-                  ? 'bg-indigo-650 text-white shadow-3xs'
+                  ? 'bg-indigo-600 text-white shadow-3xs'
                   : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
               }`}
             >
@@ -2431,7 +2432,7 @@ export function AtribuicaoPanel({
               onClick={() => setFiltroAtribuicao('todos')}
               className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
                 filtroAtribuicao === 'todos'
-                  ? 'bg-indigo-650 text-white shadow-3xs'
+                  ? 'bg-indigo-600 text-white shadow-3xs'
                   : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
               }`}
             >
@@ -2619,7 +2620,7 @@ export function AtribuicaoPanel({
                             : 'border-slate-300 text-slate-500 font-medium'
                         }`}
                       >
-                        <option value="" className="text-slate-450 font-bold bg-white text-center py-2">
+                        <option value="" className="text-slate-500 font-bold bg-white text-center py-2">
                           -- Não Atribuído --
                         </option>
                         {analistasSgo.map(usr => {
@@ -2732,7 +2733,7 @@ export function RelatoriosPanel({ activeReportType, solicitacoes }: RelatoriosPa
         <button
           onClick={handleSimulateExport}
           disabled={downloading}
-          className="flex items-center gap-1.5 bg-blue-50 text-blue-700 hover:bg-blue-105 px-3 py-1.5 rounded-lg border border-blue-150 text-xs font-bold leading-none cursor-pointer transition-colors"
+          className="flex items-center gap-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-150 text-xs font-bold leading-none cursor-pointer transition-colors"
         >
           <Download className="w-3.5 h-3.5" />
           {downloading ? 'Gerando Planilha...' : 'Exportar Relatório'}
@@ -2919,7 +2920,7 @@ export function RelatoriosPanel({ activeReportType, solicitacoes }: RelatoriosPa
                   <div className="text-[11px] text-slate-500 space-y-0.5 font-sans">
                     <p>SRE: {sol.sre} | Município: {sol.municipio}</p>
                     <p>Tipo de Obra: {sol.tipoObra || 'N/A'}</p>
-                    {sol.analistaAtribuido && <p className="text-slate-650 text-blue-600 font-medium">Responsável Técnico: {sol.analistaAtribuido}</p>}
+                    {sol.analistaAtribuido && <p className="text-slate-600 text-blue-600 font-medium">Responsável Técnico: {sol.analistaAtribuido}</p>}
                   </div>
                 </div>
 
@@ -2966,7 +2967,7 @@ export function RelatoriosPanel({ activeReportType, solicitacoes }: RelatoriosPa
                       </td>
                       <td className="py-3.5 px-4 font-mono text-slate-600">{med.data}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-800">
-                        <div className="flex items-center gap-1 font-mono text-blue-650 text-blue-700">
+                        <div className="flex items-center gap-1 font-mono text-blue-600 text-blue-700">
                           <Percent className="w-3.5 h-3.5 text-slate-400" />
                           {med.porcentagem}%
                         </div>

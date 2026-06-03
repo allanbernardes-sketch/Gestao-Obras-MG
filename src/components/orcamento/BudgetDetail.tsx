@@ -812,7 +812,7 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
                           saveBudget(v.data as unknown as EAPNode[]);
                           setIsVersionsModalOpen(false);
                         }}
-                        className="px-3 py-1.5 bg-blue-700 text-white text-[9px] font-black uppercase opacity-0 group-hover:opacity-100 transition-all"
+                        className="px-3 py-1.5 bg-blue-700 text-white text-[9px] font-black uppercase  transition-all"
                       >
                         Restaurar
                       </button>

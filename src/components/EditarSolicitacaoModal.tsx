@@ -422,7 +422,7 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
                     <option value="Coabitado com outra escola Estadual">Coabitado com outra escola Estadual</option>
                     <option value="Coabitado com outra escola municipal">Coabitado com outra escola municipal</option>
                     <option value="Coabitado com outro órgão estadual">Coabitado com outro órgão estadual</option>
-                    <option value="Coabitado com outra municipal">Coabitado com outra municipal</option>
+                    <option value="Coabitado com outro órgão municipal">Coabitado com outro órgão municipal</option>
                     <option value="Coabitado com instituto federal">Coabitado com instituto federal</option>
                   </select>
                 </div>
@@ -645,7 +645,7 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
                               <button
                                 type="button"
                                 onClick={() => handleRemoverDoc(doc.id)}
-                                className="text-red-500 hover:text-red-750 p-1 rounded-sm cursor-pointer"
+                                className="text-red-500 hover:text-red-700 p-1 rounded-sm cursor-pointer"
                                 title="Remover anexo"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />

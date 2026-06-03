@@ -210,7 +210,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-1">
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Código CODESC *
                 </label>
                 <input
@@ -224,7 +224,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Nome da Escola *
                 </label>
                 <input
@@ -240,7 +240,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Município *
                 </label>
                 <input
@@ -253,7 +253,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Superintendência SRE *
                 </label>
                 <input
@@ -277,7 +277,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 Forma de Ocupação *
               </label>
               <select
@@ -293,7 +293,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 Prédio *
               </label>
               <select
@@ -308,7 +308,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
 
             {formaOcupacao === 'OUTRO' && (
               <div className="sm:col-span-2 animate-in slide-in-from-top-2 duration-250">
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Explique a Outra Forma de Ocupação *
                 </label>
                 <input
@@ -323,7 +323,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             )}
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 O imóvel é tombado pelo patrimônio histórico? *
               </label>
               <select
@@ -345,7 +345,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 Órgão Tombador *
               </label>
               <select
@@ -362,7 +362,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 Imóvel Coabitado? *
               </label>
               <select
@@ -384,7 +384,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 Tipo de Coabitação *
               </label>
               <select
@@ -397,13 +397,13 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                 <option value="Coabitado com outra escola Estadual">Coabitado com outra escola Estadual</option>
                 <option value="Coabitado com outra escola municipal">Coabitado com outra escola municipal</option>
                 <option value="Coabitado com outro órgão estadual">Coabitado com outro órgão estadual</option>
-                <option value="Coabitado com outra municipal">Coabitado com outra municipal</option>
+                <option value="Coabitado com outro órgão municipal">Coabitado com outro órgão municipal</option>
                 <option value="Coabitado com instituto federal">Coabitado com instituto federal</option>
               </select>
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5 font-sans">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 font-sans">
                 Há alguma notificação? *
               </label>
               <select
@@ -427,7 +427,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             </h4>
 
             <div>
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-2">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                 TIPO DE OBRA *
               </label>
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -462,12 +462,12 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
               <div>
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                   TIPO DE ATENDIMENTO *
                 </label>
                 <div className="flex flex-col gap-1.5 border border-slate-200 rounded-lg p-3 bg-white">
                   {['NORMAL', 'EMERGENCIAL', 'EMENDA', 'SOE', 'PDDE'].map((item) => (
-                    <label key={item} className="flex items-center gap-2 text-xs text-slate-650 cursor-pointer">
+                    <label key={item} className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                       <input 
                         type="radio" 
                         name="tipoAtendimento"
@@ -482,12 +482,12 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                   FORMA DE ATENDIMENTO *
                 </label>
                 <div className="flex flex-col gap-1.5 border border-slate-200 rounded-lg p-3 bg-white">
                   {['VIA CAIXA ESCOLAR', 'SEM ÔNUS'].map((item) => (
-                    <label key={item} className="flex items-center gap-2 text-xs text-slate-650 cursor-pointer">
+                    <label key={item} className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                       <input 
                         type="radio" 
                         name="formaAtendimento"
@@ -510,7 +510,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                   </span>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Ano da Emenda *
                   </label>
                   <select
@@ -528,7 +528,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Número do PAF *
                   </label>
                   <input
@@ -544,7 +544,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             )}
 
             <div className="mt-4">
-              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                 DESCRIÇÃO DA FOLHA DE ROSTO *
               </label>
               <textarea
@@ -566,7 +566,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
 
              <div className="grid grid-cols-2 gap-3">
                <div>
-                 <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                    VALOR DA PLANILHA (R$) *
                  </label>
                  <input
@@ -580,7 +580,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                </div>
  
                <div>
-                 <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">
+                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                    ISS (%) *
                  </label>
                  <input
@@ -608,7 +608,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-slate-200 text-slate-650 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors cursor-pointer text-slate-700"
+            className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors cursor-pointer text-slate-700"
           >
             Cancelar
           </button>

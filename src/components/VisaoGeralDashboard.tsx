@@ -224,7 +224,7 @@ export default function VisaoGeralDashboard({
                 <h3 className="text-sm font-extrabold text-slate-800 font-sans">
                   Repartição das Obras por Etapa do Fluxo
                 </h3>
-                <p className="text-[11px] text-slate-450 mt-0.5">Quantidade de escolas paradas em cada portão regulatório</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Quantidade de escolas paradas em cada portão regulatório</p>
               </div>
               <span className="text-[10px] bg-indigo-50 text-indigo-705 px-2 py-0.5 rounded font-bold uppercase tracking-wider font-mono">
                 Portões SGO
@@ -278,7 +278,7 @@ export default function VisaoGeralDashboard({
                     className="bg-indigo-500 h-full absolute left-0 top-0 rounded-l-lg transition-all duration-300"
                     style={{ width: `${getPercentageOfTotal(stats.analiseCount)}%` }}
                   />
-                  <span className="text-[10px] text-slate-750 font-black z-10 block ml-0.5">
+                  <span className="text-[10px] text-slate-700 font-black z-10 block ml-0.5">
                     {getPercentageOfTotal(stats.analiseCount)}%
                   </span>
                 </div>
@@ -304,7 +304,7 @@ export default function VisaoGeralDashboard({
                     className="bg-cyan-500 h-full absolute left-0 top-0 rounded-l-lg transition-all duration-300"
                     style={{ width: `${getPercentageOfTotal(stats.pafAutorizacaoCount)}%` }}
                   />
-                  <span className="text-[10px] text-slate-750 font-black z-10 block ml-0.5">
+                  <span className="text-[10px] text-slate-700 font-black z-10 block ml-0.5">
                     {getPercentageOfTotal(stats.pafAutorizacaoCount)}%
                   </span>
                 </div>
@@ -380,7 +380,7 @@ export default function VisaoGeralDashboard({
               <h3 className="text-sm font-extrabold text-slate-800 font-sans">
                 Aportes Financeiros de Obras por Regional (SRE)
               </h3>
-              <p className="text-[11px] text-slate-450 mt-0.5">Análise financeira consolidada dos orçamentos planilhados por Superintendência Regional</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Análise financeira consolidada dos orçamentos planilhados por Superintendência Regional</p>
             </div>
 
             <div className="space-y-3 pt-1">
@@ -427,7 +427,7 @@ export default function VisaoGeralDashboard({
                 <Building2 className="w-4.5 h-4.5 text-blue-605 text-blue-605 text-blue-600 shrink-0" />
                 Explorador de Escolas das Regionais
               </h3>
-              <p className="text-[11px] text-slate-450 mt-0.5">Selecione escolas pelo filtro de listas abaixo para acompanhar os processos.</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">Selecione escolas pelo filtro de listas abaixo para acompanhar os processos.</p>
             </div>
 
             {/* SELETORES GERAIS - FILTRO DE LISTAS */}
@@ -470,7 +470,7 @@ export default function VisaoGeralDashboard({
                   placeholder="Escreva para buscar CODESC/Escola..."
                   value={searchSchoolQuery}
                   onChange={(e) => setSearchSchoolQuery(e.target.value)}
-                  className="w-full text-xs border border-slate-200 rounded-lg py-2 pl-8 pr-3 focus:ring-1 focus:ring-blue-500 bg-white text-slate-750 font-medium outline-hidden placeholder-slate-400"
+                  className="w-full text-xs border border-slate-200 rounded-lg py-2 pl-8 pr-3 focus:ring-1 focus:ring-blue-500 bg-white text-slate-700 font-medium outline-hidden placeholder-slate-400"
                 />
               </div>
             </div>
@@ -530,7 +530,7 @@ export default function VisaoGeralDashboard({
                             {formatBRL(s.valorPlanilha || 0)}
                           </span>
                         </div>
-                        <span className="text-[9.5px] text-blue-650 hover:underline font-extrabold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all leading-none">
+                        <span className="text-[9.5px] text-blue-600 hover:underline font-extrabold flex items-center gap-0.5  transition-all leading-none">
                           Abrir Pastas <ArrowUpRight className="w-3.5 h-3.5 inline" />
                         </span>
                       </div>

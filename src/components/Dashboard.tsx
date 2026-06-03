@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Solicitacao, PerfilUsuario } from '../types';
+import { Solicitacao, PerfilUsuario, UsuarioSistema } from '../types';
 import { 
   Plus, Layers, ClipboardCheck, DollarSign, Building, 
   MapPin, ChevronRight, User, ShieldCheck, AlertTriangle, Trash2, RefreshCw,
@@ -18,21 +18,24 @@ interface DashboardProps {
   viewMode: 'lista' | 'kanban_status' | 'kanban_analista';
   onMudarViewMode: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
   activeSubTask?: string;
+  usuariosSeguranca?: UsuarioSistema[];
 }
 
-export default function Dashboard({ 
-  solicitacoes, 
-  onSelect, 
-  onNovaSolicitacao, 
-  perfilUsuario, 
+export default function Dashboard({
+  solicitacoes,
+  onSelect,
+  onNovaSolicitacao,
+  perfilUsuario,
   onMudarPerfil,
   onDelete,
   onUpdate,
   onEdit,
   viewMode,
   onMudarViewMode,
-  activeSubTask
+  activeSubTask,
+  usuariosSeguranca = []
 }: DashboardProps) {
+  const currentUserNome = usuariosSeguranca.find(u => u.perfil === perfilUsuario)?.nome || '';
   const [filtroEtapa, setFiltroEtapa] = useState<string>('todos');
   const [filtroAtribuicao, setFiltroAtribuicao] = useState<'todos' | 'minhas'>('minhas');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -144,7 +147,7 @@ export default function Dashboard({
 
     // Se o usuário logado for Analista DORE e estiver focado nas tarefas dele
     if (perfilUsuario === 'analista_dore' && filtroAtribuicao === 'minhas') {
-      return s.etapaAtual === 'analise' && (s.analistaAtribuido === 'Eng. André Silva' || s.analistaAtribuido === 'Flavia Borges');
+      return s.etapaAtual === 'analise' && !!s.analistaAtribuido && (currentUserNome ? s.analistaAtribuido === currentUserNome : true);
     }
 
     return true;
@@ -238,7 +241,7 @@ export default function Dashboard({
           <div className="flex items-center gap-3.5 mt-2 md:mt-0 justify-end">
             <div className="text-right hidden sm:flex flex-col items-end shrink-0">
               <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none">Tipo de Exibição</span>
-              <span className="text-[9.5px] text-slate-450 font-bold leading-tight mt-0.5">Mudar o modo de visualizar os processos</span>
+              <span className="text-[9.5px] text-slate-500 font-bold leading-tight mt-0.5">Mudar o modo de visualizar os processos</span>
             </div>
             <select
               value={viewMode}
@@ -358,7 +361,7 @@ export default function Dashboard({
                   className="w-full min-w-0 flex-1 text-[10px] border border-slate-200 rounded-lg py-1 px-1.5 focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 bg-white text-slate-705 cursor-pointer text-center"
                   title="Data Inicial"
                 />
-                <span className="text-[10px] text-slate-450 font-bold px-0.5 shrink-0">à</span>
+                <span className="text-[10px] text-slate-500 font-bold px-0.5 shrink-0">à</span>
                 <input
                   type="date"
                   value={filtroDataFim}
@@ -378,7 +381,7 @@ export default function Dashboard({
                 <button
                   type="button"
                   onClick={limparTodosFiltros}
-                  className="px-3 py-1 text-xs font-bold text-red-650 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 hover:text-red-750 transition flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 hover:text-red-700 transition flex items-center gap-1 cursor-pointer"
                 >
                   <RefreshCw className="w-3 h-3 text-red-500" />
                   <span>Limpar Filtros</span>
@@ -399,7 +402,7 @@ export default function Dashboard({
                   className={`px-2.5 py-0.5 text-[11px] font-bold rounded-sm transition-all cursor-pointer ${
                     filtroAtribuicao === 'minhas'
                       ? 'bg-blue-600 text-white shadow-3xs'
-                      : 'text-slate-650 hover:text-slate-900 bg-transparent'
+                      : 'text-slate-600 hover:text-slate-900 bg-transparent'
                   }`}
                 >
                   Minhas Análises (Eng. André)
@@ -410,7 +413,7 @@ export default function Dashboard({
                   className={`px-2.5 py-0.5 text-[11px] font-bold rounded-sm transition-all cursor-pointer ${
                     filtroAtribuicao === 'todos'
                       ? 'bg-blue-600 text-white shadow-3xs'
-                      : 'text-slate-650 hover:text-slate-900 bg-transparent'
+                      : 'text-slate-600 hover:text-slate-900 bg-transparent'
                   }`}
                 >
                   Todas
@@ -426,7 +429,7 @@ export default function Dashboard({
                   className={`px-2.5 py-0.5 text-[11px] font-bold rounded-sm transition-all cursor-pointer ${
                     filtroAtribuicao === 'minhas'
                       ? 'bg-indigo-600 text-white shadow-3xs'
-                      : 'text-slate-650 hover:text-slate-900 bg-transparent'
+                      : 'text-slate-600 hover:text-slate-900 bg-transparent'
                   }`}
                 >
                   Aguardando Atribuição
@@ -437,7 +440,7 @@ export default function Dashboard({
                   className={`px-2.5 py-0.5 text-[11px] font-bold rounded-sm transition-all cursor-pointer ${
                     filtroAtribuicao === 'todos'
                       ? 'bg-indigo-600 text-white shadow-3xs'
-                      : 'text-slate-650 hover:text-slate-900 bg-transparent'
+                      : 'text-slate-600 hover:text-slate-900 bg-transparent'
                   }`}
                 >
                   Todas
@@ -497,7 +500,7 @@ export default function Dashboard({
 
                       {/* ESCOLA / LOCALIZAÇÃO */}
                       <td className="py-4 px-4">
-                        <div className="font-bold text-slate-850 text-xs leading-snug font-sans text-left">
+                        <div className="font-bold text-slate-800 text-xs leading-snug font-sans text-left">
                           {sol.nomeEscola}
                         </div>
                         <div className="text-[10px] text-slate-400 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-left font-sans">
@@ -553,7 +556,7 @@ export default function Dashboard({
                       </td>
 
                       {/* ANALISTA DESIGNADO */}
-                      <td className="py-4 px-4 text-slate-650">
+                      <td className="py-4 px-4 text-slate-600">
                         {sol.analistaAtribuido ? (
                           <span className="font-semibold text-slate-705 bg-slate-100 border border-slate-205 px-2 py-0.5 rounded flex items-center gap-1.5 text-[10px] w-fit">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
@@ -569,12 +572,12 @@ export default function Dashboard({
 
                       {/* CHECKLIST DOCS */}
                       <td className="py-4 px-4 text-center whitespace-nowrap">
-                        <div className="font-bold text-slate-750 text-xs text-center">
+                        <div className="font-bold text-slate-700 text-xs text-center">
                           {numAnexados} / {numTotal}
                         </div>
                         <div className="text-[9px] text-slate-400 mt-0.5 text-center">
                           {temRecusas ? (
-                            <span className="text-red-650 font-bold">⚠️ Correções</span>
+                            <span className="text-red-600 font-bold">⚠️ Correções</span>
                           ) : numAnexados === numTotal ? (
                             <span className="text-emerald-700 font-bold">Completo</span>
                           ) : (
@@ -685,7 +688,7 @@ export default function Dashboard({
                                     onDelete(sol.id);
                                     setConfirmDeleteId(null);
                                   }}
-                                  className="bg-red-650 hover:bg-red-700 text-white font-bold px-1.5 py-0.5 rounded text-[9px] cursor-pointer"
+                                  className="bg-red-600 hover:bg-red-700 text-white font-bold px-1.5 py-0.5 rounded text-[9px] cursor-pointer"
                                 >
                                   Sim
                                 </button>
@@ -716,7 +719,7 @@ export default function Dashboard({
                                   type="button"
                                   title="Apagar solicitação"
                                   onClick={() => setConfirmDeleteId(sol.id)}
-                                  className="p-1.5 hover:bg-red-50 hover:text-red-750 text-slate-400 rounded-lg transition shrink-0 cursor-pointer"
+                                  className="p-1.5 hover:bg-red-50 hover:text-red-700 text-slate-400 rounded-lg transition shrink-0 cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5 text-red-500" />
                                 </button>

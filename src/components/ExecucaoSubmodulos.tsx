@@ -99,7 +99,7 @@ export default function ExecucaoSubmodulos({
     const schoolName = selectedSol?.nomeEscola || 'Obra Selecionada';
     return (
       <div id="contract-required-lock-gate" className="bg-white rounded-2xl border border-rose-200 p-8 shadow-sm text-center max-w-2xl mx-auto my-8 space-y-5">
-        <div className="w-16 h-16 bg-rose-50 border border-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-650 animate-pulse">
+        <div className="w-16 h-16 bg-rose-50 border border-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-600 animate-pulse">
           <Lock className="w-8 h-8 text-rose-600" />
         </div>
         <div className="space-y-2">
@@ -113,8 +113,8 @@ export default function ExecucaoSubmodulos({
           <p className="text-xs text-slate-500 font-sans leading-relaxed">
             As seções de <b>Medições Físico-Financeiras</b>, <b>Termos Aditivos</b> e <b>Ajustes de Planilha</b> estão bloqueadas para o atendimento abaixo até que o respectivo contrato seja registrado e salvo.
           </p>
-          <div className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-650 font-mono inline-block">
-            Obra sob Foco: <b className="text-slate-850">{schoolName}</b>
+          <div className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 font-mono inline-block">
+            Obra sob Foco: <b className="text-slate-800">{schoolName}</b>
           </div>
         </div>
         <div className="pt-2">
@@ -1438,7 +1438,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
 
                         {/* 5. Escola */}
                         <td className="py-3 px-4">
-                          <div className="font-extrabold text-slate-850 uppercase text-[11px] leading-tight line-clamp-1 max-w-[180px]">
+                          <div className="font-extrabold text-slate-800 uppercase text-[11px] leading-tight line-clamp-1 max-w-[180px]">
                             {sol.nomeEscola}
                           </div>
                         </td>
@@ -1476,7 +1476,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                             <button
                               type="button"
                               onClick={() => setFocoObra(sol.id)}
-                              className="px-2 py-1 text-[9.5px] font-extrabold text-blue-650 bg-blue-50 hover:bg-blue-105 rounded-lg cursor-pointer transition"
+                              className="px-2 py-1 text-[9.5px] font-extrabold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition"
                             >
                               Focalizar
                             </button>
@@ -1526,8 +1526,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
             {/* Col 1: Escola / Identificação */}
             <div className="space-y-3 pb-3 md:pb-0 md:border-r border-slate-100 pr-2">
               <div>
-                <span className="text-[9.5px] text-slate-450 uppercase font-extrabold block mb-0.5 font-sans">Unidade Escolar</span>
-                <p className="text-xs font-black text-slate-850 uppercase leading-snug">{currentSol.nomeEscola}</p>
+                <span className="text-[9.5px] text-slate-500 uppercase font-extrabold block mb-0.5 font-sans">Unidade Escolar</span>
+                <p className="text-xs font-black text-slate-800 uppercase leading-snug">{currentSol.nomeEscola}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -1555,7 +1555,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                 </div>
                 <div>
                   <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Duração</span>
-                  <p className="font-bold text-slate-750 text-[11px]">{currentSol.duracaoObraMeses || 6} Meses</p>
+                  <p className="font-bold text-slate-700 text-[11px]">{currentSol.duracaoObraMeses || 6} Meses</p>
                 </div>
                 <div>
                   <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Previsão Término</span>
@@ -1582,7 +1582,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-505 block truncate max-w-[100px]">Empresa:</span>
-                  <span className="font-bold text-slate-750 truncate max-w-[124px]" title={currentSol.empresaContratada || 'Construtora do Estado S.A.'}>{currentSol.empresaContratada || 'Construtora do Estado S.A.'}</span>
+                  <span className="font-bold text-slate-700 truncate max-w-[124px]" title={currentSol.empresaContratada || 'Construtora do Estado S.A.'}>{currentSol.empresaContratada || 'Construtora do Estado S.A.'}</span>
                 </div>
               </div>
             </div>
@@ -1610,8 +1610,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
       ) : (
         <div id="ficha-placeholder-card" className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-6 text-center text-slate-400 transition animate-fadeIn">
           <Building2 className="w-8 h-8 mx-auto text-slate-300 mb-1.5" />
-          <p className="text-xs font-bold text-slate-650 uppercase tracking-widest font-sans">Ficha do Cadastro Consolidado</p>
-          <p className="text-[10px] text-slate-450 mt-0.5">Selecione uma obra listada em nossa planilha acima clicando na linha correspondente para abrir o consolidado de prazos, finanças e responsabilidade técnica.</p>
+          <p className="text-xs font-bold text-slate-600 uppercase tracking-widest font-sans">Ficha do Cadastro Consolidado</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Selecione uma obra listada em nossa planilha acima clicando na linha correspondente para abrir o consolidado de prazos, finanças e responsabilidade técnica.</p>
         </div>
       )}
     </div>
@@ -2154,7 +2154,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                   </div>
                   <div className="text-right space-y-0.5">
                     <span className="text-[9px] font-bold text-slate-400 uppercase">Homologado PAF</span>
-                    <strong className="text-indigo-650 font-mono block">
+                    <strong className="text-indigo-600 font-mono block">
                       R$ {(currentSol.valorHomologado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </strong>
                   </div>
@@ -2207,18 +2207,18 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                     <div className="space-y-0.5">
                       <span className="text-[9px] font-bold text-slate-400 uppercase">Razão Social Contratada</span>
                       <strong className="text-slate-800 block text-[11.5px]">{currentSol.empresaContratada}</strong>
-                      <span className="text-[10px] text-slate-450 block font-mono">CNPJ: {currentSol.cnpjEmpresa || 'Não informado'}</span>
+                      <span className="text-[10px] text-slate-500 block font-mono">CNPJ: {currentSol.cnpjEmpresa || 'Não informado'}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sans">
                     <div className="border-r border-slate-100 pr-1">
                       <span className="text-[9px] font-bold text-slate-400 block uppercase">Data Assinatura</span>
-                      <strong className="text-slate-850 text-[11px] block">{currentSol.contratoDataAssinatura || 'N/A'}</strong>
+                      <strong className="text-slate-800 text-[11px] block">{currentSol.contratoDataAssinatura || 'N/A'}</strong>
                     </div>
                     <div>
                       <span className="text-[9px] font-bold text-slate-400 block uppercase">Período de Vigência</span>
-                      <strong className="text-slate-850 text-[10.5px] block font-mono">
+                      <strong className="text-slate-800 text-[10.5px] block font-mono">
                         {currentSol.contratoInicioVigencia || 'N/A'} — {currentSol.contratoFimVigencia || 'N/A'}
                       </strong>
                     </div>
@@ -2317,7 +2317,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                             {ad.tipo || 'Aditivo Misto'}
                           </span>
                         </div>
-                        <div className="flex justify-between text-[10px] text-slate-450 mt-1">
+                        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
                           <span>Assinado em: <strong className="text-slate-600 font-mono">{ad.data || 'N/A'}</strong></span>
                           <span>Prazo: <strong className="text-slate-600 font-mono">+{Math.round((ad.prazoExtraDias || 0) / 30) || 0} meses</strong></span>
                           <span>Valor: <strong className="text-slate-800 font-mono">R$ {(ad.valorAditivo || 0).toLocaleString('pt-BR')}</strong></span>
@@ -2362,7 +2362,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                         <p className="text-[10.5px] text-slate-500 italic leading-snug text-left truncate" title={aj.observacoes || 'Remanejamento de insumos e compensação de alvenaria.'}>
                           💡 {aj.observacoes || 'Remanejamento de insumos e compensação de alvenaria.'}
                         </p>
-                        <div className="flex justify-between items-center text-[10px] text-slate-450 mt-1 border-t border-slate-100 pt-1">
+                        <div className="flex justify-between items-center text-[10px] text-slate-500 mt-1 border-t border-slate-100 pt-1">
                           <span>Referência: <strong className="text-slate-600 font-sans">{aj.ajusteReferente === 'atendimento_inicial' ? 'Planilha Inicial' : 'Saldo Cotação'}</strong></span>
                           <span>Saldo do Ajuste: <strong className="text-slate-800 font-mono">R$ {(aj.valorAjuste || 0).toLocaleString('pt-BR')}</strong></span>
                         </div>
@@ -2943,7 +2943,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                           </div>
                         </div>
 
-                        <p className="text-xs font-semibold text-slate-750 font-sans leading-relaxed text-left w-full">
+                        <p className="text-xs font-semibold text-slate-700 font-sans leading-relaxed text-left w-full">
                           {r.descricao}
                         </p>
 
@@ -3280,13 +3280,13 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
             
             <div className="p-3 bg-slate-50/70 border border-slate-200/40 rounded-xl text-left">
               <span className="text-[9px] uppercase font-bold text-slate-500 block">Saldo Restante</span>
-              <span className="text-xs font-black text-slate-650 font-mono block mt-0.5 truncate">
+              <span className="text-xs font-black text-slate-600 font-mono block mt-0.5 truncate">
                 R$ {leftOver.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
 
             <div className="p-3 bg-blue-50/60 border border-blue-200/30 rounded-xl text-left">
-              <span className="text-[9px] uppercase font-extrabold text-blue-650 block flex items-center gap-1">
+              <span className="text-[9px] uppercase font-extrabold text-blue-600 block flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span> Físico Acumulado
               </span>
               <span className="text-base font-black text-blue-700 font-mono block mt-0.5">
@@ -3317,7 +3317,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
           </div>
 
           {/* Measurements List */}
-          <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-450 mb-3 block text-left">Histórico de Medições Homologadas</h4>
+          <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3 block text-left">Histórico de Medições Homologadas</h4>
           
           {currentSol.medicoes && currentSol.medicoes.length > 0 ? (
             <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-1">
@@ -3332,7 +3332,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                           <span className="bg-slate-200 text-slate-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider">
                             MED {m.numeroMedicao || '---'}
                           </span>
-                          <span className="font-extrabold text-slate-850 text-sm">{m.descricao}</span>
+                          <span className="font-extrabold text-slate-800 text-sm">{m.descricao}</span>
                         </div>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-1 gap-x-4 text-[10px] text-slate-500 font-medium">
@@ -3412,7 +3412,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
               })}
             </div>
           ) : (
-            <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl text-slate-450 text-[11px] font-medium bg-slate-50/50">
+            <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl text-slate-500 text-[11px] font-medium bg-slate-50/50">
               Nenhuma medição física homologada no momento. Registre a primeira medição no formulário ao lado.
             </div>
           )}
@@ -3595,7 +3595,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                     setRelatorioFileName(`Relatorio_Fiscalizacao_Med_${numeroM || '01'}.pdf`);
                     setErrorMessage(null);
                   }}
-                  className="text-[9px] font-black text-blue-650 hover:underline cursor-pointer"
+                  className="text-[9px] font-black text-blue-600 hover:underline cursor-pointer"
                 >
                   [Auto-Preencher Mock]
                 </button>
@@ -3618,7 +3618,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                       ✓ {relatorioFileName}
                     </span>
                   ) : (
-                    <span className="text-slate-450 font-semibold text-[9px] block">Arraste ou Clique para anexar o Relatório (PDF)</span>
+                    <span className="text-slate-500 font-semibold text-[9px] block">Arraste ou Clique para anexar o Relatório (PDF)</span>
                   )}
                 </span>
               </label>
@@ -3636,7 +3636,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                     setBoletimFileName(`Boletim_Medicao_Med_${numeroM || '01'}.xlsx`);
                     setErrorMessage(null);
                   }}
-                  className="text-[9px] font-black text-blue-650 hover:underline cursor-pointer"
+                  className="text-[9px] font-black text-blue-600 hover:underline cursor-pointer"
                 >
                   [Auto-Preencher Mock]
                 </button>
@@ -3659,7 +3659,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                       ✓ {boletimFileName}
                     </span>
                   ) : (
-                    <span className="text-slate-450 font-semibold text-[9px] block">Arraste ou Clique para anexar a Planilha (Excel/PDF)</span>
+                    <span className="text-slate-500 font-semibold text-[9px] block">Arraste ou Clique para anexar a Planilha (Excel/PDF)</span>
                   )}
                 </span>
               </label>
@@ -3670,10 +3670,10 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
           {/* Value warning simulator */}
           {valorM && !errorMessage && (
             <div className="bg-slate-50 p-3 rounded-xl text-[10.5px] font-mono shadow-inner text-slate-600 block space-y-1 border border-slate-200">
-              <span className="font-extrabold text-slate-750 block border-b border-slate-200 pb-1 uppercase text-[9px] tracking-wider">Detalhamento dos Limites</span>
+              <span className="font-extrabold text-slate-700 block border-b border-slate-200 pb-1 uppercase text-[9px] tracking-wider">Detalhamento dos Limites</span>
               <div className="flex justify-between">
                 <span>Contrato Total:</span>
-                <span className="font-bold text-slate-750">R$ {originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="font-bold text-slate-700">R$ {originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
                 <span>Acumulado Anterior:</span>
@@ -4065,15 +4065,15 @@ function SubContratos({
             <div className="space-y-3">
               <div className="flex justify-between items-center text-xs py-1.5 border-b border-slate-100">
                 <span className="text-slate-500 font-bold">Data Assinatura:</span>
-                <span className="font-bold text-slate-750">{dataAssinaturaInput ? new Date(dataAssinaturaInput).toLocaleDateString('pt-BR') : '---'}</span>
+                <span className="font-bold text-slate-700">{dataAssinaturaInput ? new Date(dataAssinaturaInput).toLocaleDateString('pt-BR') : '---'}</span>
               </div>
               <div className="flex justify-between items-center text-xs py-1.5 border-b border-slate-100">
                 <span className="text-slate-500 font-bold">Início da Vigência (Obra):</span>
-                <span className="font-bold text-slate-750">{inicioVigenciaInput ? new Date(inicioVigenciaInput).toLocaleDateString('pt-BR') : '---'}</span>
+                <span className="font-bold text-slate-700">{inicioVigenciaInput ? new Date(inicioVigenciaInput).toLocaleDateString('pt-BR') : '---'}</span>
               </div>
               <div className="flex justify-between items-center text-xs py-1.5 border-b border-slate-100">
                 <span className="text-slate-500 font-bold">Fim da Vigência (Obra):</span>
-                <span className="font-bold text-slate-750">{fimVigenciaInput ? new Date(fimVigenciaInput).toLocaleDateString('pt-BR') : '---'}</span>
+                <span className="font-bold text-slate-700">{fimVigenciaInput ? new Date(fimVigenciaInput).toLocaleDateString('pt-BR') : '---'}</span>
               </div>
               <div className="flex justify-between items-center text-xs py-1.5">
                 <span className="text-slate-500 font-bold">Vigência do PAF:</span>
@@ -4100,7 +4100,7 @@ function SubContratos({
                 }`}>
                   {diasRestantes !== null ? `${diasRestantes} dias` : 'Não Calculável'}
                 </div>
-                <div className="text-[10px] font-bold text-slate-450 mt-1 uppercase tracking-wide">
+                <div className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-wide">
                   {semaphoreLabel}
                 </div>
               </div>
@@ -4123,7 +4123,7 @@ function SubContratos({
                 }`}>
                   {pafSem.dias !== null ? `${pafSem.dias} dias` : 'Não Calculável'}
                 </div>
-                <div className="text-[10px] font-bold text-slate-450 mt-1 uppercase tracking-wide">
+                <div className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-wide">
                   {pafSem.label}
                 </div>
               </div>
@@ -4215,7 +4215,7 @@ function SubContratos({
               ))}
             </div>
           ) : (
-            <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl text-slate-450 text-[11px] font-medium">
+            <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl text-slate-500 text-[11px] font-medium">
               Sem ocorrências de distrato ou sanção administrativa com empresas anteriores neste projeto.
             </div>
           )}
@@ -4260,7 +4260,7 @@ function SubContratos({
                 required
                 value={selectedEmpresaId}
                 onChange={(e) => selectCompanyFromSeguranca(e.target.value)}
-                className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-850 font-bold focus:outline-hidden cursor-pointer"
+                className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer"
               >
                 <option value="">-- Escolher Empresa Cadastrada --</option>
                 {empresasSeguranca.map(emp => (
@@ -4319,7 +4319,7 @@ function SubContratos({
 
             {/* datas do contrato */}
             <div className="border-t border-slate-100 pt-3 space-y-3">
-              <h4 className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Vigência & Assinatura</h4>
+              <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Vigência & Assinatura</h4>
               
               <div>
                 <label className="text-[9px] font-bold text-slate-400 block mb-1">Data Assinatura*</label>
@@ -4359,7 +4359,7 @@ function SubContratos({
 
             {/* garantia exigida */}
             <div className="border-t border-slate-100 pt-3 space-y-3">
-              <h4 className="text-[10px] font-black uppercase text-slate-450 tracking-wider">Cadastro de Garantias</h4>
+              <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Cadastro de Garantias</h4>
               
               <div>
                 <label className="text-[9px] font-bold text-slate-400 block mb-1">Tipo de Garantia Exigida*</label>
@@ -4818,7 +4818,7 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => setActiveTab('historico')}
-          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'historico' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-850'}`}
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'historico' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
           <History className="w-4 h-4" /> Histórico de Aditivos ({currentSol.aditivos?.length || 0})
         </button>
@@ -4827,7 +4827,7 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
             setActiveTab('novo_atendimento');
             setStep(1);
           }}
-          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'novo_atendimento' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-850'}`}
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'novo_atendimento' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
           <Plus className="w-4 h-4" /> Iniciar Novo Atendimento (Aditivo)
         </button>
@@ -4897,7 +4897,7 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                           {adt.supressao !== undefined && (
                             <p className="text-[10px] text-red-500 font-mono">Supr.: -R$ {adt.supressao.toLocaleString('pt-BR')}</p>
                           )}
-                          <p className={`text-xs font-black font-mono ${adtLiq >= 0 ? 'text-emerald-600' : 'text-red-650'}`}>
+                          <p className={`text-xs font-black font-mono ${adtLiq >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                             Líq: R$ {adtLiq.toLocaleString('pt-BR')} ({adt.percentualContrato || 0}%)
                           </p>
                         </div>
@@ -5204,14 +5204,14 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                   <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 space-y-2 mt-4 text-xs">
                      <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-500 font-bold">Valor Líquido do Aditivo:</span>
-                      <strong className={`font-mono text-sm ${valorAditivoLiquido >= 0 ? 'text-emerald-650' : 'text-rose-500'}`}>
+                      <strong className={`font-mono text-sm ${valorAditivoLiquido >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                         R$ {valorAditivoLiquido.toLocaleString('pt-BR')}
                       </strong>
                     </div>
 
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-500 font-bold">Percentual do Contrato:</span>
-                      <strong className={`font-mono text-sm ${displayPercentual > 25 ? 'text-red-650' : 'text-slate-700'}`}>
+                      <strong className={`font-mono text-sm ${displayPercentual > 25 ? 'text-red-600' : 'text-slate-700'}`}>
                         {displayPercentual.toFixed(2)}%
                       </strong>
                     </div>
@@ -5245,22 +5245,22 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {checklist.map((c, idx) => (
                     <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 flex items-center justify-between gap-3 text-xs">
-                      <div className="text-left space-y-1">
-                        <span className="font-black text-slate-700 block">{c.item}</span>
+                      <div className="text-left space-y-1 flex-1 min-w-0">
+                        <span className="font-black text-slate-700 block truncate">{c.item}</span>
                         {c.fileName ? (
-                          <span className="text-[10px] text-blue-600 font-mono flex items-center gap-0.5">
+                          <span className="text-[10px] text-blue-600 font-mono flex items-center gap-0.5 truncate">
                             📎 {c.fileName}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-slate-400 font-mono italic">Pendente de anexo</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Pendente</span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => toggleChecklist(idx)}
-                          className={`p-1.5 rounded-lg border text-[10px] font-extrabold uppercase transition-all ${c.checked ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                          className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-extrabold uppercase transition-all whitespace-nowrap ${c.checked ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}
                         >
                           {c.checked ? '☑ OK' : '☐ Marcar'}
                         </button>
@@ -5268,7 +5268,7 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                         <button
                           type="button"
                           onClick={() => handleMockUpload(idx, '')}
-                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200"
+                          className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shrink-0"
                           title="Anexar arquivo"
                         >
                           <FileUp className="w-4 h-4" />
@@ -5282,7 +5282,7 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg uppercase"
+                    className="px-6 py-2.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-xl uppercase cursor-pointer shadow-xs"
                   >
                     Voltar aos Dados
                   </button>
@@ -5310,7 +5310,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form states - Step 1
-  const [tipoAjuste, setTipoAjuste] = useState<'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto'>('sem_alteracao_meta');
+  const [tipoAjuste, setTipoAjuste] = useState<'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto' | 'ajuste_sem_meta_com_projeto'>('sem_alteracao_meta');
   const [valorAjusteInp, setValorAjusteInp] = useState('');
   const [supressao, setSupressao] = useState('');
   const [prazoExtra, setPrazoExtra] = useState('');
@@ -5523,7 +5523,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => setActiveTab('historico')}
-          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'historico' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-850'}`}
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'historico' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
           <History className="w-4 h-4" /> Histórico de Ajustes ({currentSol.ajustes?.length || 0})
         </button>
@@ -5532,7 +5532,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
             setActiveTab('novo_atendimento');
             setStep(1);
           }}
-          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'novo_atendimento' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-850'}`}
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'novo_atendimento' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
         >
           <Plus className="w-4 h-4" /> Registrar Ajuste de Planilha
         </button>
@@ -5629,7 +5629,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                             <div className="grid grid-cols-1 gap-1.5 text-[11px] text-slate-600">
                               <p><b>Reprogramação Física de Metas:</b> <span className="text-slate-800">{aju.reprogramacao || 'Não'}</span></p>
                               <p><b>Necessitou Saldo Complementar:</b> <span className="text-slate-800">{aju.saldoComplementar || 'Não'}</span></p>
-                              <p><b>Classificação Técnica Adjunto:</b> <span className="text-slate-850 font-mono text-[10px]">{aju.tipoAjuste.toUpperCase()}</span></p>
+                              <p><b>Classificação Técnica Adjunto:</b> <span className="text-slate-800 font-mono text-[10px]">{aju.tipoAjuste.toUpperCase()}</span></p>
                             </div>
                             <div className="space-y-1 mt-2">
                               <span className="text-[10px] text-slate-400 block font-bold uppercase">Notas do Engenheiro Planilhador:</span>
@@ -5718,7 +5718,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                                 <button
                                   type="button"
                                   onClick={() => handleDoreAction(aju.id, 'validado')}
-                                  className="px-4 py-1.5 text-xs font-black text-white bg-purple-650 hover:bg-purple-700 rounded-lg uppercase cursor-pointer shadow-xs"
+                                  className="px-4 py-1.5 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 rounded-lg uppercase cursor-pointer shadow-xs"
                                 >
                                   Validar e Publicar
                                 </button>
@@ -5792,6 +5792,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                       <option value="com_alteracao_meta">Remanejamento com alteração de metas parciais</option>
                       <option value="com_alteracao_meta_projeto">Alteração substancial de metas e adequação de projetos</option>
                       <option value="sem_alteracao_meta_com_projeto">Adequação técnica de projeto sem impacto de metas</option>
+                      <option value="ajuste_sem_meta_com_projeto">Ajuste sem alteração de meta e com alteração de projeto</option>
                     </select>
                   </div>
 
@@ -5907,7 +5908,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                     <button
                       type="button"
                       onClick={handleNextStep}
-                      className="px-6 py-2.5 text-xs font-black uppercase text-white bg-indigo-650 hover:bg-indigo-700 rounded-xl cursor-pointer shadow-xs inline-flex items-center gap-1"
+                      className="px-6 py-2.5 text-xs font-black uppercase text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer shadow-xs inline-flex items-center gap-1"
                     >
                       Checklist de Evidências <ArrowRight className="w-4 h-4" />
                     </button>
@@ -5925,22 +5926,22 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {checklist.map((c, idx) => (
                     <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs">
-                      <div className="text-left space-y-1">
-                        <span className="font-black text-slate-700 block">{c.item}</span>
+                      <div className="text-left space-y-1 flex-1 min-w-0">
+                        <span className="font-black text-slate-700 block truncate">{c.item}</span>
                         {c.fileName ? (
-                          <span className="text-[10px] text-indigo-600 font-mono flex items-center gap-0.5">
+                          <span className="text-[10px] text-indigo-600 font-mono flex items-center gap-0.5 truncate">
                             📎 {c.fileName}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-slate-400 font-mono italic">Pendente</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Pendente</span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => toggleChecklist(idx)}
-                          className={`p-1.5 rounded-lg border text-[10px] font-extrabold uppercase transition-all ${c.checked ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                          className={`px-2.5 py-1.5 rounded-lg border text-[10px] font-extrabold uppercase transition-all whitespace-nowrap ${c.checked ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}
                         >
                           {c.checked ? '☑ OK' : '☐ Marcar'}
                         </button>
@@ -5948,7 +5949,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                         <button
                           type="button"
                           onClick={() => handleMockUpload(idx, '')}
-                          className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200"
+                          className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 shrink-0"
                           title="Anexar arquivo"
                         >
                           <FileUp className="w-4 h-4" />
@@ -5962,14 +5963,14 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg uppercase"
+                    className="px-6 py-2.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl uppercase cursor-pointer shadow-xs"
                   >
                     Voltar aos Dados
                   </button>
 
                   <button
                     type="submit"
-                    className="px-6 py-2.5 text-xs text-white bg-indigo-650 hover:bg-indigo-700 font-black rounded-xl uppercase cursor-pointer"
+                    className="px-6 py-2.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 font-black rounded-xl uppercase cursor-pointer"
                   >
                     Enviar Proposta para Validação da DORE
                   </button>
@@ -6032,7 +6033,7 @@ function SubFiscalizacao({
 
           <div className="space-y-3">
             {historicoDiarios.map((diario, index) => (
-              <div key={index} className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-750 font-sans relative pl-8">
+              <div key={index} className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700 font-sans relative pl-8">
                 <div className="absolute left-3 top-3.5 w-1.5 h-1.5 rounded-full bg-blue-500" />
                 <p className="leading-relaxed">{diario}</p>
               </div>
@@ -6053,7 +6054,7 @@ function SubFiscalizacao({
               id="fiscal-obra-input"
               value={fiscalInput}
               onChange={(e) => setFiscalInput(e.target.value)}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-850 font-bold focus:outline-hidden cursor-pointer"
+              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer"
             >
               <option value="">-- Atribuir Fiscal de Engenharia --</option>
               <option value="Eng. Roberto Mendes">Eng. Roberto Mendes (CREA 142.532/D)</option>

@@ -327,7 +327,7 @@ export default function AcompanhamentoPaf({
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs text-left">
         {filteredSolicitacoes.length === 0 ? (
           <div className="p-12 text-center text-slate-400 font-sans space-y-3 max-w-md mx-auto">
-            <div className="w-12 h-12 bg-slate-50 border border-slate-150 rounded-full flex items-center justify-center text-slate-450 mx-auto shadow-3xs">
+            <div className="w-12 h-12 bg-slate-50 border border-slate-150 rounded-full flex items-center justify-center text-slate-500 mx-auto shadow-3xs">
               <ClipboardList className="w-6 h-6 text-slate-400" />
             </div>
             <p className="text-sm font-bold text-slate-700">Nenhum registro encontrado.</p>

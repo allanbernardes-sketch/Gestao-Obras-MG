@@ -260,6 +260,14 @@ export interface Solicitacao {
 
 export type PerfilUsuario = 'tecnico_infra' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore';
 
+export interface UsuarioSistema {
+  id: string;
+  nome: string;
+  email: string;
+  perfil: PerfilUsuario | string;
+  departamento: string;
+}
+
 export type StatusObraComputado =
   | 'Em cadastramento da obra'
   | 'Em processo de contratação'

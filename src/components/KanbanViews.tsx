@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Solicitacao, EtapaProcesso, PerfilUsuario } from '../types';
+import { Solicitacao, EtapaProcesso, PerfilUsuario, UsuarioSistema } from '../types';
 import { 
   Building2, MapPin, User, ChevronRight, AlertCircle, Sparkles, CheckCircle2, 
   HelpCircle, Clock, Undo2, ArrowRightLeft, Shield, Check, Trash2, RefreshCw, Plus, Pencil, Filter
@@ -17,21 +17,24 @@ interface KanbanViewsProps {
   onMudarViewMode: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
   onNovaSolicitacao: () => void;
   activeSubTask?: string;
+  usuariosSeguranca?: UsuarioSistema[];
 }
 
-export default function KanbanViews({ 
-  solicitacoes, 
-  onSelect, 
-  perfilUsuario, 
-  onUpdate, 
+export default function KanbanViews({
+  solicitacoes,
+  onSelect,
+  perfilUsuario,
+  onUpdate,
   onDelete,
   onEdit,
   mode,
   viewMode,
   onMudarViewMode,
   onNovaSolicitacao,
-  activeSubTask
+  activeSubTask,
+  usuariosSeguranca = []
 }: KanbanViewsProps) {
+  const currentUserNome = usuariosSeguranca.find(u => u.perfil === perfilUsuario)?.nome || '';
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Filtros avançados e detalhados solicitados pelo usuário
@@ -74,17 +77,10 @@ export default function KanbanViews({
     setFiltroSre('todos');
   };
 
-  // Dynamic list of analysts from existing assignments and technical profiles
+  // Dynamic list of analysts from registered users + existing assignments
   const listaAnalistas = React.useMemo(() => {
     const list = new Set<string>();
-    const defaults = [
-      'Eng. André Silva',
-      'Engª. Paula Rezende',
-      'Eng. Marcus Vinícius',
-      'Flavia Borges',
-      'João Paulo Penfield',
-      'Insp. Mariana Souza'
-    ];
+    const defaults = usuariosSeguranca.map(u => u.nome);
     defaults.forEach(d => list.add(d));
     solicitacoes.forEach(s => {
       if (s.analistaAtribuido) {
@@ -190,11 +186,7 @@ export default function KanbanViews({
 
   // Action: Move status quickly from card
   const handleAvançarStatus = (sol: Solicitacao, proxima: EtapaProcesso) => {
-    const responsavelNome = 
-      perfilUsuario === 'tecnico_infra' ? 'Téc. Infraestrutura' :
-      perfilUsuario === 'gestor_dore' ? 'Dra. Helena Rocha' :
-      perfilUsuario === 'analista_dore' ? 'Eng. André Silva' :
-      perfilUsuario === 'gestor_paf' ? 'Dr. Fernando Costa' : 'Fiscal de Campo';
+    const responsavelNome = currentUserNome || perfilUsuario;
 
     onUpdate({
       ...sol,
@@ -241,7 +233,7 @@ export default function KanbanViews({
                       onDelete(sol.id);
                       setConfirmDeleteId(null);
                     }}
-                    className="bg-red-650 text-white font-bold px-1 rounded hover:bg-red-700 text-[8.5px] py-px cursor-pointer"
+                    className="bg-red-600 text-white font-bold px-1 rounded hover:bg-red-700 text-[8.5px] py-px cursor-pointer"
                   >
                     S
                   </button>
@@ -266,7 +258,7 @@ export default function KanbanViews({
                         e.stopPropagation();
                         onEdit(sol);
                       }}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-amber-100 hover:text-amber-750 text-slate-450 rounded transition cursor-pointer"
+                      className=" p-1 hover:bg-amber-100 hover:text-amber-750 text-slate-500 rounded transition cursor-pointer"
                     >
                       <Pencil className="w-3 h-3 text-amber-600 font-bold" />
                     </button>
@@ -278,7 +270,7 @@ export default function KanbanViews({
                       e.stopPropagation();
                       setConfirmDeleteId(sol.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 hover:text-red-650 text-slate-400 rounded transition cursor-pointer"
+                    className=" p-1 hover:bg-red-100 hover:text-red-600 text-slate-400 rounded transition cursor-pointer"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -317,7 +309,7 @@ export default function KanbanViews({
           )}
           {sol.fichaVerificada === false && (
             <div className="bg-red-50/70 border border-red-150 text-red-800 rounded px-1.5 py-0.5 text-[9px] flex items-center gap-1 font-semibold animate-pulse">
-              <span className="text-red-650 text-[11px]">⚠️</span> Ficha com Inconsistências
+              <span className="text-red-600 text-[11px]">⚠️</span> Ficha com Inconsistências
             </div>
           )}
         </div>
@@ -334,7 +326,7 @@ export default function KanbanViews({
               <select
                 value={sol.analistaAtribuido || ''}
                 onChange={(e) => handleMudarAnalista(sol, e.target.value)}
-                className="w-full text-[9.5px] p-1 border border-indigo-150 rounded bg-white text-slate-750 cursor-pointer outline-hidden"
+                className="w-full text-[9.5px] p-1 border border-indigo-150 rounded bg-white text-slate-700 cursor-pointer outline-hidden"
               >
                 <option value="">Sem Atribuição</option>
                 {listaAnalistas.filter(ana => ana !== 'Sem Atribuição').map(ana => (
@@ -410,7 +402,7 @@ export default function KanbanViews({
                           handleAvançarStatus(sol, 'cadastro');
                         }
                       }}
-                      className="px-1.5 py-0.5 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded text-[8.5px] text-slate-650 cursor-pointer transition flex items-center gap-0.5"
+                      className="px-1.5 py-0.5 border border-slate-200 bg-slate-50 hover:bg-slate-100 rounded text-[8.5px] text-slate-600 cursor-pointer transition flex items-center gap-0.5"
                     >
                       <Undo2 className="w-2.5 h-2.5" />
                       <span>Voltar</span>
@@ -449,7 +441,7 @@ export default function KanbanViews({
             </div>
           )}
           
-          <div className="flex justify-end text-[9.5px] text-blue-650 font-bold hover:underline select-none pt-1">
+          <div className="flex justify-end text-[9.5px] text-blue-600 font-bold hover:underline select-none pt-1">
             <span onClick={() => onSelect(sol)} className="cursor-pointer">Abrir Detalhes →</span>
           </div>
         </div>
@@ -646,19 +638,19 @@ export default function KanbanViews({
               >
                 {/* Column header */}
                 <div className={`p-2 rounded-lg border text-left ${col.bgHeader}`}>
-                  <div className="flex items-center justify-between font-bold text-slate-850">
+                  <div className="flex items-center justify-between font-bold text-slate-800">
                     <span className="text-xs tracking-tight font-display">{col.label}</span>
                     <span className="font-mono text-[9.5px] px-1.5 py-0.5 bg-white border rounded">
                       {itensNaColuna.length}
                     </span>
                   </div>
-                  <p className="text-[9.5px] text-slate-450 mt-0.5">{col.desc}</p>
+                  <p className="text-[9.5px] text-slate-500 mt-0.5">{col.desc}</p>
                 </div>
 
                 {/* Cards Container */}
                 <div className="space-y-2.5">
                   {itensNaColuna.length === 0 ? (
-                    <div className="border border-dashed border-slate-250 rounded-xl p-6 text-center text-[10px] text-slate-450">
+                    <div className="border border-dashed border-slate-250 rounded-xl p-6 text-center text-[10px] text-slate-500">
                       Nenhum processo nesta etapa
                     </div>
                   ) : (
@@ -687,7 +679,7 @@ export default function KanbanViews({
               >
                 {/* Column header */}
                 <div className={`p-2.5 rounded-lg border text-left bg-white border-slate-205 shadow-3xs`}>
-                  <div className="flex items-center justify-between font-bold text-slate-850">
+                  <div className="flex items-center justify-between font-bold text-slate-800">
                     <span className="text-xs font-display flex items-center gap-1.5">
                       <span className={`w-2 h-2 rounded-full ${nomeAna === 'Sem Atribuição' ? 'bg-amber-450 animate-pulse' : 'bg-indigo-500'}`} />
                       {nomeAna}
@@ -704,7 +696,7 @@ export default function KanbanViews({
                 {/* Cards Container */}
                 <div className="space-y-2.5">
                   {itensNaColuna.length === 0 ? (
-                    <div className="border border-dashed border-slate-250 rounded-xl p-6 text-center text-[10px] text-slate-450">
+                    <div className="border border-dashed border-slate-250 rounded-xl p-6 text-center text-[10px] text-slate-500">
                       Nenhum processo atribuído
                     </div>
                   ) : (

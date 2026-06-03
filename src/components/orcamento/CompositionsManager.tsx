@@ -139,7 +139,7 @@ export default function CompositionsManager(_props: Props) {
                 R$ {comp.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </div>
-            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+            <div className=" transition-opacity flex items-center gap-2">
               <button className="p-2 hover:bg-blue-700/10 rounded-full text-blue-700 transition-colors">
                 <Edit className="h-4 w-4" />
               </button>

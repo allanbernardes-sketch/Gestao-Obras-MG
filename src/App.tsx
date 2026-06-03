@@ -11,7 +11,7 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle } from 'lucide-react';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
@@ -1307,7 +1307,7 @@ export default function App() {
                               <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
                               <span className="text-xs font-sans font-bold leading-tight">{item.label}</span>
                             </div>
-                            <span className="text-[9px] font-mono font-medium text-slate-450 uppercase tracking-wider pl-4.5 block">
+                            <span className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-wider pl-4.5 block">
                               {item.func}
                             </span>
                           </button>
@@ -1827,7 +1827,7 @@ export default function App() {
                             setFilterMunicipio('');
                             setFilterEscola('');
                           }}
-                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-650 font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
                         >
                           Limpar Filtros e Restaurar
                         </button>
@@ -1859,7 +1859,7 @@ export default function App() {
 
                     {filteredSchoolsInAutorizacao.length === 0 ? (
                       <div className="p-10 text-center text-slate-400 font-sans space-y-3 max-w-md mx-auto">
-                        <div className="w-10 h-10 bg-slate-50 border border-slate-150 rounded-full flex items-center justify-center text-slate-450 mx-auto">
+                        <div className="w-10 h-10 bg-slate-50 border border-slate-150 rounded-full flex items-center justify-center text-slate-500 mx-auto">
                           <CheckCircle className="w-5 h-5 text-emerald-500" />
                         </div>
                         <p className="text-xs font-semibold text-slate-700">Nenhum registro pendente de autorização do PAF nesta seleção.</p>
@@ -1900,19 +1900,19 @@ export default function App() {
                                   <td className="py-4 px-4">
                                     <button 
                                       onClick={() => setIdSolicitacaoSelecionada(sol.id)}
-                                      className="font-bold text-slate-800 text-xs leading-snug hover:text-blue-650 transition-colors pointer-events-auto text-left cursor-pointer"
+                                      className="font-bold text-slate-800 text-xs leading-snug hover:text-blue-600 transition-colors pointer-events-auto text-left cursor-pointer"
                                     >
                                       {sol.nomeEscola}
                                     </button>
                                   </td>
 
                                   {/* SRE */}
-                                  <td className="py-4 px-4 text-slate-650">
+                                  <td className="py-4 px-4 text-slate-600">
                                     {sol.sre}
                                   </td>
 
                                   {/* Município */}
-                                  <td className="py-4 px-4 text-slate-650">
+                                  <td className="py-4 px-4 text-slate-600">
                                     {sol.municipio}
                                   </td>
 
@@ -1985,7 +1985,7 @@ export default function App() {
                           
                           <div className="p-4 space-y-4">
                             <div>
-                              <label className="block text-xs font-bold text-slate-650 mb-1">
+                              <label className="block text-xs font-bold text-slate-600 mb-1">
                                 Escreva a justificativa para o retorno / rejeição do processo *
                               </label>
                               <textarea
@@ -2043,7 +2043,7 @@ export default function App() {
                           </div>
                           
                           <div className="p-4 space-y-4">
-                            <p className="text-xs text-slate-650 leading-relaxed">
+                            <p className="text-xs text-slate-600 leading-relaxed">
                               Deseja aprovar e autorizar oficialmente o PAF desta demanda no valor de:
                             </p>
                             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
@@ -2175,11 +2175,11 @@ export default function App() {
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                         {/* ID DE OBRA */}
                         <div className="flex flex-col space-y-1">
-                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">ID DE OBRA</label>
+                          <label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">ID DE OBRA</label>
                           <select
                             value={filterAnaliseIdText}
                             onChange={(e) => setFilterAnaliseIdText(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
                             <option value="">Todos os IDs</option>
                             {idsDisponiveis.map(val => (
@@ -2190,11 +2190,11 @@ export default function App() {
 
                         {/* CODESC */}
                         <div className="flex flex-col space-y-1">
-                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">CODESC</label>
+                          <label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">CODESC</label>
                           <select
                             value={filterAnaliseCodescText}
                             onChange={(e) => setFilterAnaliseCodescText(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
                             <option value="">Todos os CODESC</option>
                             {codescsDisponiveis.map(val => (
@@ -2205,11 +2205,11 @@ export default function App() {
 
                         {/* MUNICÍPIO */}
                         <div className="flex flex-col space-y-1">
-                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">MUNICÍPIO</label>
+                          <label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">MUNICÍPIO</label>
                           <select
                             value={filterAnaliseMunicipioText}
                             onChange={(e) => setFilterAnaliseMunicipioText(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
                             <option value="">Todos os Municípios</option>
                             {municipiosDisponiveis.map(val => (
@@ -2220,11 +2220,11 @@ export default function App() {
 
                         {/* REGIONAL (SRE) */}
                         <div className="flex flex-col space-y-1">
-                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">REGIONAL (SRE)</label>
+                          <label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">REGIONAL (SRE)</label>
                           <select
                             value={filterAnaliseSreText}
                             onChange={(e) => setFilterAnaliseSreText(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
                             <option value="">Todas as Regionais</option>
                             {regionaisDisponiveis.map(val => (
@@ -2235,11 +2235,11 @@ export default function App() {
 
                         {/* ESCOLA */}
                         <div className="flex flex-col space-y-1 flex-1">
-                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">ESCOLA</label>
+                          <label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">ESCOLA</label>
                           <select
                             value={filterAnaliseEscolaText}
                             onChange={(e) => setFilterAnaliseEscolaText(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
                             <option value="">Todas as Escolas</option>
                             {escolasDisponiveis.map(val => (
@@ -2250,11 +2250,11 @@ export default function App() {
 
                         {/* RESPONSÁVEL */}
                         <div className="flex flex-col space-y-1">
-                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">RESPONSÁVEL</label>
+                          <label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">RESPONSÁVEL</label>
                           <select
                             value={filterAnaliseResponsavelText}
                             onChange={(e) => setFilterAnaliseResponsavelText(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-750 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            className="bg-white border border-slate-200 rounded-lg p-2 text-xs font-sans font-bold text-slate-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
                           >
                             <option value="">Todos os Responsáveis</option>
                             {responsaveisDisponiveis.map(val => (
@@ -2265,20 +2265,20 @@ export default function App() {
 
                         {/* DATA DE CRIAÇÃO (Custom style input picker) */}
                         <div className="flex flex-col space-y-1 col-span-2 sm:col-span-1">
-                          <label className="text-[10px] uppercase font-black text-slate-450 tracking-wider">DATA DE CRIAÇÃO</label>
+                          <label className="text-[10px] uppercase font-black text-slate-500 tracking-wider">DATA DE CRIAÇÃO</label>
                           <div className="flex items-center gap-1">
                             <input
                               type="date"
                               value={filterAnaliseDataInicio}
                               onChange={(e) => setFilterAnaliseDataInicio(e.target.value)}
-                              className="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-bold text-slate-750 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                             <span className="text-slate-400 text-xs">à</span>
                             <input
                               type="date"
                               value={filterAnaliseDataFim}
                               onChange={(e) => setFilterAnaliseDataFim(e.target.value)}
-                              className="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-bold text-slate-750 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              className="w-full bg-white border border-slate-200 rounded-lg p-1.5 text-[10px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
                             />
                           </div>
                         </div>
@@ -2286,7 +2286,7 @@ export default function App() {
 
                       {/* Row with Select for Atendimento pills */}
                       <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3">
-                        <span className="text-[10px] font-black text-slate-450 tracking-wider uppercase font-mono">
+                        <span className="text-[10px] font-black text-slate-500 tracking-wider uppercase font-mono">
                           SELECIONE PARA ATENDIMENTO:
                         </span>
                         
@@ -2366,7 +2366,7 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => setIsSelectorOpen(!isSelectorOpen)}
-                              className="w-full px-3 py-2 text-xs bg-white border border-slate-250 text-slate-750 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans cursor-pointer font-bold shadow-xs text-left pr-8 flex items-center justify-between"
+                              className="w-full px-3 py-2 text-xs bg-white border border-slate-250 text-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans cursor-pointer font-bold shadow-xs text-left pr-8 flex items-center justify-between"
                             >
                               <span className="truncate">
                                 {activeSchool 
@@ -2394,7 +2394,7 @@ export default function App() {
                                       value={schoolSearchQuery}
                                       onChange={(e) => setSchoolSearchQuery(e.target.value)}
                                       autoFocus
-                                      className="w-full bg-transparent border-none text-xs text-slate-750 focus:outline-none focus:ring-0 font-sans font-semibold placeholder-slate-400"
+                                      className="w-full bg-transparent border-none text-xs text-slate-700 focus:outline-none focus:ring-0 font-sans font-semibold placeholder-slate-400"
                                     />
                                     {schoolSearchQuery && (
                                       <button
@@ -2484,9 +2484,10 @@ export default function App() {
                         forcedTab={getForcedTab(activeSubTask, activeSchool)}
                         hideVoltar={true}
                         hideStepper={true}
-                        hideTransitionButtons={activeSubTask !== 'continuar_preenchimento'}
+                        hideTransitionButtons={activeSubTask !== 'continuar_preenchimento' && activeSubTask !== 'analise'}
                         hideTabs={true}
                         activeSubTask={activeSubTask}
+                        usuariosSeguranca={usuariosSeguranca}
                       />
                     </div>
                   ) : (
@@ -2523,6 +2524,7 @@ export default function App() {
               onVoltar={() => setIdSolicitacaoSelecionada(null)}
               onUpdate={handleUpdateSolicitacao}
               activeSubTask={activeSubTask}
+              usuariosSeguranca={usuariosSeguranca}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col">
@@ -2573,6 +2575,7 @@ export default function App() {
                         onMudarViewMode={(mode) => setViewMode(mode)}
                         onNovaSolicitacao={() => setAbrirModalCadastro(true)}
                         activeSubTask={activeSubTask}
+                        usuariosSeguranca={usuariosSeguranca}
                       />
                     )
                   ) : activeSubTask === 'execucao_central' ? (
@@ -2640,9 +2643,11 @@ export default function App() {
                       viewMode={viewMode}
                       onMudarViewMode={(mode) => setViewMode(mode)}
                       activeSubTask={activeSubTask}
+                      usuariosSeguranca={usuariosSeguranca}
                     />
                   ) : (
                     <KanbanViews
+                      usuariosSeguranca={usuariosSeguranca}
                       solicitacoes={solicitacoes.filter(s => {
                         if (activeSubTask === 'cadastro') return true;
                         if (activeSubTask === 'analise') return s.etapaAtual === 'analise';
@@ -2684,7 +2689,7 @@ export default function App() {
                     <div className="space-y-6 animate-in fade-in duration-200">
                       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-3xs text-left">
                         <h2 className="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
-                          <UserPlus className="w-5 h-5 text-rose-650 text-rose-600 shrink-0" />
+                          <UserPlus className="w-5 h-5 text-rose-600 text-rose-600 shrink-0" />
                           Cadastro de Usuário Simulado (Níveis de Acesso)
                         </h2>
                         <p className="text-xs text-slate-500 mb-6">
@@ -2753,7 +2758,7 @@ export default function App() {
                               />
                               <button
                                 type="submit"
-                                className="px-4 py-2 bg-rose-650 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer inline-flex items-center whitespace-nowrap"
+                                className="px-4 py-2 bg-rose-600 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer inline-flex items-center whitespace-nowrap"
                               >
                                 Cadastrar
                               </button>
@@ -2831,7 +2836,7 @@ export default function App() {
                     <div className="space-y-6 animate-in fade-in duration-200">
                       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-3xs text-left">
                         <h2 className="text-base font-bold text-slate-800 mb-1 flex items-center gap-2">
-                          <Building className="w-5 h-5 text-rose-650 text-rose-650 shrink-0" />
+                          <Building className="w-5 h-5 text-rose-600 text-rose-600 shrink-0" />
                           Cadastro de Empresas Contratadas Pré-Homologadas (Segurança)
                         </h2>
                         <p className="text-xs text-slate-500 mb-6">

@@ -17,6 +17,8 @@ interface ProcessAnalysisPanelProps {
   handleSimulatedUpload: (docId: string, event: any) => void;
   handleAISmartAnalysis: (docId: string) => void;
   removerDocumento: (docId: string) => void;
+  enviarAprovacaoFinal?: () => void;
+  enviarReprovacaoFinal?: () => void;
 }
 
 export default function ProcessAnalysisPanel({
@@ -30,7 +32,9 @@ export default function ProcessAnalysisPanel({
   solicitarDevolucaoProcesso,
   handleSimulatedUpload,
   handleAISmartAnalysis,
-  removerDocumento
+  removerDocumento,
+  enviarAprovacaoFinal,
+  enviarReprovacaoFinal
 }: ProcessAnalysisPanelProps) {
   const [subTab, setSubTab] = useState<'dados_gerais' | 'checklist'>('dados_gerais');
   const [novoCustomDocNome, setNovoCustomDocNome] = useState('');
@@ -509,19 +513,19 @@ export default function ProcessAnalysisPanel({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 bg-slate-50/50 rounded-lg text-xs font-sans">
                       <div>
                         <span className="text-slate-400 block text-[9px] uppercase font-bold">Tipo de Impacto</span>
-                        <strong className="text-slate-750">{adt.tipo}</strong>
+                        <strong className="text-slate-700">{adt.tipo}</strong>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[9px] uppercase font-bold">Acréscimo Financeiro</span>
-                        <strong className="text-slate-750">R$ {(adt.valorExtra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                        <strong className="text-slate-700">R$ {(adt.valorExtra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[9px] uppercase font-bold">Supressão Financeira</span>
-                        <strong className="text-slate-750">R$ {(adt.supressao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                        <strong className="text-slate-700">R$ {(adt.supressao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[9px] uppercase font-bold">Prazo Extra</span>
-                        <strong className="text-slate-750">{adt.prazoExtraDias ? `${adt.prazoExtraDias} dias` : 'Não se aplica'}</strong>
+                        <strong className="text-slate-700">{adt.prazoExtraDias ? `${adt.prazoExtraDias} dias` : 'Não se aplica'}</strong>
                       </div>
                     </div>
 
@@ -545,7 +549,7 @@ export default function ProcessAnalysisPanel({
                     </div>
 
                     <div>
-                      <span className="text-slate-450 block text-[9.5px] uppercase font-bold mb-1">Justificativa e Análise de Ocorrência:</span>
+                      <span className="text-slate-500 block text-[9.5px] uppercase font-bold mb-1">Justificativa e Análise de Ocorrência:</span>
                       <p className="text-xs text-slate-705 italic bg-amber-50/25 border border-amber-100 p-3 rounded-lg leading-relaxed">
                         "{adt.justificativa}"
                       </p>
@@ -553,7 +557,7 @@ export default function ProcessAnalysisPanel({
 
                     {/* Checklist Documental Obrigatório */}
                     <div className="space-y-1.5">
-                      <span className="text-slate-450 block text-[9.5px] uppercase font-bold font-sans">Checklist Documental Obrigatório (Pleito de Aditivo):</span>
+                      <span className="text-slate-500 block text-[9.5px] uppercase font-bold font-sans">Checklist Documental Obrigatório (Pleito de Aditivo):</span>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                         {(adt.checklistDocs || [
                           { item: 'Planilha de Serviços (Excel)', checked: true },
@@ -566,7 +570,7 @@ export default function ProcessAnalysisPanel({
                             <span className={chk.checked ? 'text-emerald-500' : 'text-slate-300'}>
                               {chk.checked ? '☑' : '☐'}
                             </span>
-                            <span className="text-slate-650 truncate" title={chk.item}>{chk.item}</span>
+                            <span className="text-slate-600 truncate" title={chk.item}>{chk.item}</span>
                           </div>
                         ))}
                       </div>
@@ -598,14 +602,14 @@ export default function ProcessAnalysisPanel({
                           <button
                             type="button"
                             onClick={() => homologarAditivo(adt.id)}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-650 hover:bg-emerald-700 text-white shadow-3xs text-xs font-bold rounded-lg transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-3xs text-xs font-bold rounded-lg transition-all cursor-pointer"
                           >
                             <Check className="w-4 h-4 text-white" />
                             Homologar e Aprovar Termo Aditivo
                           </button>
                         </div>
                       ) : (
-                        <p className="text-[10px] text-slate-450 italic mt-1 leading-normal">
+                        <p className="text-[10px] text-slate-500 italic mt-1 leading-normal">
                           🔒 Apenas o analista designado para esta obra ({solicitacao.analistaAtribuido || 'Aguardando atribuição'}) pode homologar este aditivo.
                         </p>
                       )}
@@ -668,7 +672,7 @@ export default function ProcessAnalysisPanel({
                     </div>
 
                     <div>
-                      <span className="text-slate-450 block text-[9.5px] uppercase font-bold mb-1">Notas Técnicas do Autor do Pleito:</span>
+                      <span className="text-slate-500 block text-[9.5px] uppercase font-bold mb-1">Notas Técnicas do Autor do Pleito:</span>
                       <p className="text-xs text-slate-705 italic bg-amber-50/25 border border-amber-100 p-3 rounded-lg leading-relaxed">
                         "{aju.observacoes}"
                       </p>
@@ -676,7 +680,7 @@ export default function ProcessAnalysisPanel({
 
                     {/* Checklist Documental Obrigatório */}
                     <div className="space-y-1.5">
-                      <span className="text-slate-450 block text-[9.5px] uppercase font-bold font-sans">Checklist Documental Obrigatório (Pleito de Ajuste):</span>
+                      <span className="text-slate-500 block text-[9.5px] uppercase font-bold font-sans">Checklist Documental Obrigatório (Pleito de Ajuste):</span>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                         {(aju.checklistDocs || [
                           { item: 'Planilha de Serviços (Excel)', checked: true },
@@ -689,7 +693,7 @@ export default function ProcessAnalysisPanel({
                             <span className={chk.checked ? 'text-emerald-500' : 'text-slate-300'}>
                               {chk.checked ? '☑' : '☐'}
                             </span>
-                            <span className="text-slate-650 truncate" title={chk.item}>{chk.item}</span>
+                            <span className="text-slate-600 truncate" title={chk.item}>{chk.item}</span>
                           </div>
                         ))}
                       </div>
@@ -721,14 +725,14 @@ export default function ProcessAnalysisPanel({
                           <button
                             type="button"
                             onClick={() => homologarAjuste(aju.id)}
-                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-650 hover:bg-emerald-700 text-white shadow-3xs text-xs font-bold rounded-lg transition-all cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-3xs text-xs font-bold rounded-lg transition-all cursor-pointer"
                           >
                             <Check className="w-4 h-4 text-white" />
                             Homologar e Aprovar Ajuste de Planilha
                           </button>
                         </div>
                       ) : (
-                        <p className="text-[10px] text-slate-450 italic mt-1 leading-normal">
+                        <p className="text-[10px] text-slate-500 italic mt-1 leading-normal">
                           🔒 Apenas o analista designado para esta obra ({solicitacao.analistaAtribuido || 'Aguardando atribuição'}) pode homologar este ajuste.
                         </p>
                       )}
@@ -767,7 +771,7 @@ export default function ProcessAnalysisPanel({
                   value={solicitacao.codesc || ''}
                   onChange={(e) => handleUpdateEscolar('codesc', e.target.value)}
                   disabled={!isMyAssignment}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-850 font-bold"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-800 font-bold"
                 />
               </div>
 
@@ -780,7 +784,7 @@ export default function ProcessAnalysisPanel({
                   value={solicitacao.nomeEscola || ''}
                   onChange={(e) => handleUpdateEscolar('nomeEscola', e.target.value)}
                   disabled={!isMyAssignment}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-850 font-bold"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-800 font-bold"
                 />
               </div>
 
@@ -793,7 +797,7 @@ export default function ProcessAnalysisPanel({
                   value={solicitacao.sre || ''}
                   onChange={(e) => handleUpdateEscolar('sre', e.target.value)}
                   disabled={!isMyAssignment}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-850 font-bold"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-800 font-bold"
                 />
               </div>
 
@@ -806,7 +810,7 @@ export default function ProcessAnalysisPanel({
                   value={solicitacao.municipio || ''}
                   onChange={(e) => handleUpdateEscolar('municipio', e.target.value)}
                   disabled={!isMyAssignment}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-850 font-bold"
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-800 font-bold"
                 />
               </div>
             </div>
@@ -958,7 +962,7 @@ export default function ProcessAnalysisPanel({
                         <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoFormaOcupacao === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
                           {solicitacao.validacaoFormaOcupacao === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                         </span>
-                        <span>Invalidar</span>
+                        <span>Não Validado</span>
                       </button>
 
                       <button
@@ -1040,7 +1044,7 @@ export default function ProcessAnalysisPanel({
                         <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPredioEscola === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
                           {solicitacao.validacaoPredioEscola === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                         </span>
-                        <span>Invalidar</span>
+                        <span>Não Validado</span>
                       </button>
 
                       <button
@@ -1142,7 +1146,7 @@ export default function ProcessAnalysisPanel({
                         <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTombamento === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
                           {solicitacao.validacaoTombamento === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                         </span>
-                        <span>Invalidar</span>
+                        <span>Não Validado</span>
                       </button>
 
                       <button
@@ -1243,7 +1247,7 @@ export default function ProcessAnalysisPanel({
                         <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoCoabitado === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
                           {solicitacao.validacaoCoabitado === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                         </span>
-                        <span>Invalidar</span>
+                        <span>Não Validado</span>
                       </button>
 
                       <button
@@ -1637,7 +1641,7 @@ export default function ProcessAnalysisPanel({
               placeholder="Digite aqui um consolidado ou notas adicionais sobre a regularidade do atendimento de infraestrutura..."
               className="w-full text-xs p-3 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 bg-white leading-relaxed font-sans text-slate-800"
             />
-            <p className="text-[10px] text-slate-450">
+            <p className="text-[10px] text-slate-500">
               💡 As considerações consolidadas acima fazem parte do dossiê final de homologação do atendimento técnico da SRE junto à DORE.
             </p>
           </div>
@@ -1652,7 +1656,7 @@ export default function ProcessAnalysisPanel({
           {perfilUsuario === 'analista_dore' && isMyAssignment && (
             <div className="flex items-center justify-between p-3.5 bg-indigo-50/70 border border-indigo-150 rounded-xl mb-4 font-sans text-xs">
               <div className="flex items-start gap-2.5">
-                <Sparkles className="w-5 h-5 text-indigo-650 shrink-0 mt-0.5 animate-pulse" />
+                <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5 animate-pulse" />
                 <div className="space-y-1">
                   <span className="font-extrabold text-indigo-900 text-xs block">Processamento Sincronizado de Auditoria</span>
                   <span>O analista pode rodar a inteligência artificial para validar documentos anexados pelo Técnico da SRE de acordo com regras de engenharia padrão.</span>
@@ -1703,7 +1707,7 @@ export default function ProcessAnalysisPanel({
                             <FileText className="w-4 h-4 text-blue-500 shrink-0" />
                             <div className="min-w-0 flex-1">
                               <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
-                              <span className="text-[10px] text-slate-450 block">Anexado em: {doc.uploadedAt} | {doc.fileSize}</span>
+                              <span className="text-[10px] text-slate-500 block">Anexado em: {doc.uploadedAt} | {doc.fileSize}</span>
                             </div>
                             <button
                               type="button"
@@ -1714,7 +1718,7 @@ export default function ProcessAnalysisPanel({
                             </button>
                           </div>
                         ) : (
-                          <span className="text-[10px] font-mono text-slate-450 block mt-2 italic">
+                          <span className="text-[10px] font-mono text-slate-500 block mt-2 italic">
                             ⚠️ Aguardando anexo do memorial descritivo ou laudo correspondente.
                           </span>
                         )}
@@ -1723,7 +1727,7 @@ export default function ProcessAnalysisPanel({
                         {doc.status === 'recusado' && (
                           <div className="mt-2.5 p-3 bg-red-50/75 border border-red-200/60 rounded-lg text-xs space-y-1">
                             <span className="font-bold text-red-800 block text-[9.5px] uppercase tracking-wide">Motivo da Recusa (Técnico SRE Deve Corrigir)</span>
-                            <p className="text-slate-750">{doc.justificativa || 'Nenhum parecer digitado.'}</p>
+                            <p className="text-slate-700">{doc.justificativa || 'Nenhum parecer digitado.'}</p>
                           </div>
                         )}
                       </div>
@@ -1822,7 +1826,7 @@ export default function ProcessAnalysisPanel({
                             <FileText className="w-4 h-4 text-blue-500 shrink-0" />
                             <div className="min-w-0 flex-1">
                               <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
-                              <span className="text-[10px] text-slate-450 block">Anexado em: {doc.uploadedAt} | {doc.fileSize}</span>
+                              <span className="text-[10px] text-slate-500 block">Anexado em: {doc.uploadedAt} | {doc.fileSize}</span>
                             </div>
                             <button
                               type="button"
@@ -1833,7 +1837,7 @@ export default function ProcessAnalysisPanel({
                             </button>
                           </div>
                         ) : (
-                          <span className="text-[10px] font-mono text-slate-450 block mt-2 italic">
+                          <span className="text-[10px] font-mono text-slate-500 block mt-2 italic">
                             ⚠️ Nenhum anexo complementar enviado para este item facultativo.
                           </span>
                         )}
@@ -1842,7 +1846,7 @@ export default function ProcessAnalysisPanel({
                         {doc.status === 'recusado' && (
                           <div className="mt-2.5 p-3 bg-red-50/75 border border-red-200/60 rounded-lg text-xs space-y-1">
                             <span className="font-bold text-red-800 block text-[9.5px] uppercase tracking-wide">Motivo da Recusa</span>
-                            <p className="text-slate-750">{doc.justificativa || 'Nenhum parecer digitado.'}</p>
+                            <p className="text-slate-700">{doc.justificativa || 'Nenhum parecer digitado.'}</p>
                           </div>
                         )}
                       </div>
@@ -1955,7 +1959,7 @@ export default function ProcessAnalysisPanel({
                               <FileText className="w-4 h-4 text-blue-500 shrink-0" />
                               <div className="min-w-0 flex-1">
                                 <span className="font-bold text-slate-805 block truncate">{doc.fileName}</span>
-                                <span className="text-[10px] text-slate-450 block">Anexado em: {doc.uploadedAt} | {doc.fileSize}</span>
+                                <span className="text-[10px] text-slate-500 block">Anexado em: {doc.uploadedAt} | {doc.fileSize}</span>
                               </div>
                               <button
                                 type="button"
@@ -1974,7 +1978,7 @@ export default function ProcessAnalysisPanel({
                             </div>
                           ) : (
                             <div className="flex items-center gap-3 mt-2">
-                              <span className="text-[10px] font-mono text-slate-450 italic">
+                              <span className="text-[10px] font-mono text-slate-500 italic">
                                 ⏳ Aguardando anexo físico...
                               </span>
                               <button
@@ -1998,7 +2002,7 @@ export default function ProcessAnalysisPanel({
                           {doc.status === 'recusado' && (
                             <div className="mt-2.5 p-3 bg-red-50/75 border border-red-200/60 rounded-lg text-xs space-y-1">
                               <span className="font-bold text-red-0 block text-[9.5px] uppercase tracking-wide">Motivo da Recusa</span>
-                              <p className="text-slate-750">{doc.justificativa || 'Nenhum parecer digitado.'}</p>
+                              <p className="text-slate-700">{doc.justificativa || 'Nenhum parecer digitado.'}</p>
                             </div>
                           )}
                         </div>
@@ -2068,75 +2072,40 @@ export default function ProcessAnalysisPanel({
               placeholder="Digite aqui considerações consolidadas sobre os laudos técnicos, divergências no DWG do projeto ou orçamento..."
               className="w-full text-xs p-3 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 bg-white leading-relaxed font-sans text-slate-800"
             />
-            <p className="text-[10px] text-slate-450">
+            <p className="text-[10px] text-slate-500">
               💡 Qualquer apontamento feito de forma individual nos documentos reflete na conformidade total que é cobrada antes da geração oficial do PAF.
             </p>
           </div>
+
         </div>
       )}
 
-      {/* RODAPÉ DE TRANSIÇÃO E CONTROLE DORE UNIFICADO */}
-      <div className="border-t border-slate-250 pt-6 mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50 p-5 rounded-xl border">
-        <div className="text-xs text-slate-500 font-sans max-w-lg leading-relaxed">
-          <span className="font-extrabold text-slate-700 block uppercase font-mono text-[10px] tracking-wide mb-0.5">ESTADO DA AVALIAÇÃO TÉCNICA DORE</span>
-          {docPendentes > 0 ? (
-            <span className="text-amber-700 font-extrabold text-[11px] block">
-              ⚠️ Existem {docPendentes} arquivos do checklist aguardando auditoria ou tomada de decisão do engenheiro responsável.
-            </span>
-          ) : (
-            <span className="text-emerald-700 font-extrabold text-[11px] block">
-              ✓ Todos os {docCount} itens instruídos possuem tomada de parecer do engenheiro atribuído.
-            </span>
-          )}
-          Técnico SRE monta o dossiê básico em conformidade com as diretrizes governamentais → DORE realiza triagem analítica profunda finalizando o PAF.
+      {/* BOTÕES FINAIS DO PROCESSO — sempre visíveis na tela de análise */}
+      {!hideTransitionButtons && solicitacao.etapaAtual === 'analise' && (
+        <div className="flex items-center justify-between gap-3 pt-5 mt-4 border-t-2 border-slate-200">
+          <p className="text-[11px] text-slate-500 font-sans max-w-sm leading-relaxed">
+            Ação final para o processo <strong className="text-slate-700">{solicitacao.id}</strong> — {solicitacao.nomeEscola}.
+          </p>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={enviarReprovacaoFinal || solicitarDevolucaoProcesso}
+              className="flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition cursor-pointer"
+            >
+              <XCircle className="w-4 h-4" />
+              Enviar Reprovação
+            </button>
+            <button
+              type="button"
+              onClick={enviarAprovacaoFinal || finalizarAnaliseDore}
+              className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition cursor-pointer"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Enviar Aprovação
+            </button>
+          </div>
         </div>
-
-        <div className="sm:text-right shrink-0">
-          {/* Botões de Transição em Análise Técnica */}
-          {perfilUsuario === 'analista_dore' && isMyAssignment && solicitacao.etapaAtual === 'analise' && !hideTransitionButtons && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <button
-                type="button"
-                onClick={finalizarAnaliseDore}
-                className={`px-5 py-2.5 rounded-lg text-xs font-black shadow-md hover:shadow-lg transition flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer border ${
-                  hasRejections
-                    ? 'bg-red-600 border-red-600 hover:bg-red-700 text-white'
-                    : 'bg-emerald-600 border-emerald-600 hover:bg-emerald-700 text-white'
-                }`}
-              >
-                {hasRejections ? (
-                  <>
-                    <XCircle className="w-4 h-4 text-white animate-pulse" />
-                    Retornar com Pendências
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 text-white" />
-                    Aprovar Processo (Avançar para PAF)
-                  </>
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* Técnico solicitar devolução se aguardando atribuição */}
-          {perfilUsuario === 'tecnico_infra' && solicitacao.etapaAtual === 'analise' && !solicitacao.analistaAtribuido && !hideTransitionButtons && (
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={solicitarDevolucaoProcesso}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ml-auto"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-white animate-spin-reverse" />
-                Resgatar Atendimento (Devolver)
-              </button>
-              <p className="text-[9.5px] text-slate-450 max-w-xs font-sans">
-                Como nenhum auditor DORE está analisando, você pode puxar de volta para ajustar dados escolares ou reanexar laudos.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }

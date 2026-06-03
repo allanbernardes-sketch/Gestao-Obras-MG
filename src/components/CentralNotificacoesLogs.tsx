@@ -187,7 +187,7 @@ export default function CentralNotificacoesLogs({
             onClick={() => setActiveTab('notifications')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer border ${
               activeTab === 'notifications'
-                ? 'bg-blue-650 hover:bg-blue-700 text-white border-blue-650 shadow-sm'
+                ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm'
                 : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
             }`}
           >
@@ -199,7 +199,7 @@ export default function CentralNotificacoesLogs({
             onClick={() => setActiveTab('logs')}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer border ${
               activeTab === 'logs'
-                ? 'bg-blue-650 hover:bg-blue-700 text-white border-blue-650 shadow-sm'
+                ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm'
                 : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
             }`}
           >
@@ -254,7 +254,7 @@ export default function CentralNotificacoesLogs({
                 <div className="flex items-center gap-3">
                   <button 
                     onClick={onMarkAllAsRead}
-                    className="text-blue-650 hover:text-blue-800 font-bold transition flex items-center gap-1 cursor-pointer"
+                    className="text-blue-600 hover:text-blue-800 font-bold transition flex items-center gap-1 cursor-pointer"
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
                     Marcar todas lidas
@@ -262,7 +262,7 @@ export default function CentralNotificacoesLogs({
                   <span className="text-slate-300">|</span>
                   <button 
                     onClick={onClearNotifications}
-                    className="text-slate-450 hover:text-rose-600 font-bold transition flex items-center gap-1 cursor-pointer"
+                    className="text-slate-500 hover:text-rose-600 font-bold transition flex items-center gap-1 cursor-pointer"
                   >
                     <Trash className="w-3.5 h-3.5" />
                     Limpar lidas
@@ -304,7 +304,7 @@ export default function CentralNotificacoesLogs({
                         <p className="text-xs text-slate-500 leading-relaxed font-sans">{notif.mensagem}</p>
                         
                         {notif.escola && (
-                          <div className="flex items-center gap-1 text-[10px] text-slate-450 font-mono">
+                          <div className="flex items-center gap-1 text-[10px] text-slate-500 font-mono">
                             <span>Escola afetada:</span>
                             <span className="text-slate-700 font-bold bg-slate-50 border border-slate-150 px-1 rounded">{notif.escola}</span>
                           </div>
@@ -315,7 +315,7 @@ export default function CentralNotificacoesLogs({
                           {!notif.lida && (
                             <button
                               onClick={() => onMarkAsRead(notif.id)}
-                              className="text-[10px] font-black text-emerald-650 hover:text-emerald-800 transition flex items-center gap-1 cursor-pointer hover:underline"
+                              className="text-[10px] font-black text-emerald-600 hover:text-emerald-800 transition flex items-center gap-1 cursor-pointer hover:underline"
                             >
                               <Check className="w-3.5 h-3.5" />
                               Marcar como lida
@@ -443,7 +443,7 @@ export default function CentralNotificacoesLogs({
               <div className="overflow-x-auto">
                 <table className="w-full text-left font-sans border-collapse text-xs">
                   <thead>
-                    <tr className="bg-slate-50 text-[10px] font-extrabold text-slate-450 uppercase border-b border-slate-150 tracking-wider">
+                    <tr className="bg-slate-50 text-[10px] font-extrabold text-slate-500 uppercase border-b border-slate-150 tracking-wider">
                       <th className="py-3 px-4">Timestamp</th>
                       <th className="py-3 px-4">Operador SGO</th>
                       <th className="py-3 px-4">Ação Sistêmica</th>
@@ -481,7 +481,7 @@ export default function CentralNotificacoesLogs({
                           </td>
                           {/* Ação */}
                           <td className="py-3.5 px-4">
-                            <span className="font-semibold text-slate-750 text-[11.5px] block">{log.acao}</span>
+                            <span className="font-semibold text-slate-700 text-[11.5px] block">{log.acao}</span>
                           </td>
                           {/* Obra */}
                           <td className="py-3.5 px-4 whitespace-nowrap">
@@ -552,7 +552,7 @@ export default function CentralNotificacoesLogs({
                   <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
                     Operador Contextual
                   </label>
-                  <div className="bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs text-slate-650 font-medium font-sans">
+                  <div className="bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-xs text-slate-600 font-medium font-sans">
                     {getPerfilNome(perfilUsuario)}
                   </div>
                 </div>
