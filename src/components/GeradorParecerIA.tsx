@@ -14,32 +14,47 @@ export function gerarParecerIA(documento: DocumentoChecklist, escola: string): A
         statusRecomendado: 'recusado',
         justificativa: `Identificada divergência na alíquota do BDI (24.1%) em descompasso com as diretrizes do Decreto Estadual de Obras para a localidade de ${escolaClean}. Favor reajustar os encargos sociais conforme novas tabelas SINAPI vigentes para o presente quadrimestre.`
       };
-    case 'doc_2': // Ata de Reunião do Colegiado
+    case 'doc_2': // Registro do imóvel
       return {
         statusRecomendado: 'aprovado',
-        justificativa: 'Documento formalizado de forma impecável. Constam assinaturas de mais de 2/3 dos membros do colegiado da escola, além da anuência da diretoria regional. Sem ressalvas.'
+        justificativa: `Título de propriedade da ${escolaClean} verificado junto ao cartório de registro de imóveis. Matrícula atualizada e sem ônus ou gravames pendentes. Apto para intervenção física.`
       };
-    case 'doc_3': // Projeto de Engenharia / Arquitetura (DWG)
+    case 'doc_3_pdf': // Projeto de Engenharia (PDF)
+      return {
+        statusRecomendado: 'aprovado',
+        justificativa: 'Arquivo PDF do projeto técnico analisado. Plantas, cortes e fachadas apresentam legibilidade satisfatória, memorial descritivo completo e especificações técnicas coerentes com o escopo da intervenção.'
+      };
+    case 'doc_3_dwg': // Projeto de Engenharia (DWG)
       return {
         statusRecomendado: 'recusado',
         justificativa: 'O arquivo DWG está sem as hachuras de demolição (vermelho) e construção (amarelo) exigidas no manual de reformas. Além disso, as coordenadas georreferenciadas da poligonal do terreno da escola não constam nas notas gerais do desenho.'
       };
-    case 'doc_4': // Relatório Fotográfico
+    case 'doc_4': // Parecer técnico
       return {
         statusRecomendado: 'aprovado',
-        justificativa: 'O relatório apresenta bom detalhamento visual da patologia de infiltração na cobertura. As fotos estão georreferenciadas, datadas e com setas indicativas de falha nas calhas.'
+        justificativa: `Parecer técnico emitido por profissional habilitado (CREA/CAU ativo) referente à intervenção na ${escolaClean}. Diagnóstico consistente, metodologia adequada e conclusões alinhadas ao escopo proposto. Sem ressalvas.`
       };
-    case 'doc_5': // Cronograma Físico-Financeiro
+    case 'doc_ata': // Ata do Colegiado
       return {
         statusRecomendado: 'aprovado',
-        justificativa: 'O fluxo financeiro está coerente com os prazos físicos estipulados (120 dias). A curva S demonstra aderência aos marcos de medição.'
+        justificativa: 'Ata do colegiado formalizada corretamente. Constam assinaturas de mais de 2/3 dos membros do colegiado da escola, além da anuência da diretoria regional. Aprovação da demanda registrada em livro de atas devidamente autenticado. Sem ressalvas.'
       };
-    case 'doc_6': // Memorial Descritivo
+    case 'doc_foto': // Relatório fotográfico
+      return {
+        statusRecomendado: 'aprovado',
+        justificativa: 'O relatório apresenta bom detalhamento visual da patologia identificada. As fotos estão georreferenciadas, datadas e com setas indicativas das falhas apontadas, atendendo ao padrão exigido pelo checklist da DORE.'
+      };
+    case 'doc_5': // Imposto ISS
+      return {
+        statusRecomendado: 'aprovado',
+        justificativa: 'Guia de recolhimento do ISS verificada e validada junto à Receita Municipal. Alíquota aplicada corretamente conforme legislação tributária local vigente.'
+      };
+    case 'doc_6': // Memorial Descritivo (legado)
       return {
         statusRecomendado: 'nao_se_aplica',
         justificativa: 'Para este tipo de manutenção pontual de telhado, as especificações técnicas já inseridas na Planilha de Preços e memorial simplificado anexo à ata são suficientes.'
       };
-    case 'doc_7': // Laudo Técnico de Vistoria / ART
+    case 'doc_7': // Laudo Técnico de Vistoria / ART (legado)
       return {
         statusRecomendado: 'aprovado',
         justificativa: 'Anotação de Responsabilidade Técnica (ART) emitida corretamente pela autarquia reguladora e com taxa devidamente quitada pelo profissional responsável.'

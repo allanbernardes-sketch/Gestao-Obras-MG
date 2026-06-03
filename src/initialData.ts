@@ -16,10 +16,17 @@ export const CHECKLIST_PADRAO: DocumentoChecklist[] = [
     status: 'pendente'
   },
   {
-    id: 'doc_3',
-    nome: 'Projeto de Engenharia',
+    id: 'doc_3_pdf',
+    nome: 'Projeto de Engenharia (PDF)',
     obrigatorio: true,
-    desc: 'Projetos técnicos estruturais e arquitetônicos nos formatos .pdf e .dwg.',
+    desc: 'Projeto técnico estrutural e arquitetônico no formato .pdf.',
+    status: 'pendente'
+  },
+  {
+    id: 'doc_3_dwg',
+    nome: 'Projeto de Engenharia (DWG)',
+    obrigatorio: true,
+    desc: 'Projeto técnico estrutural e arquitetônico no formato .dwg (AutoCAD).',
     status: 'pendente'
   },
   {
@@ -27,6 +34,20 @@ export const CHECKLIST_PADRAO: DocumentoChecklist[] = [
     nome: 'Parecer técnico',
     obrigatorio: true,
     desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada.',
+    status: 'pendente'
+  },
+  {
+    id: 'doc_ata',
+    nome: 'Ata do Colegiado',
+    obrigatorio: true,
+    desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.',
+    status: 'pendente'
+  },
+  {
+    id: 'doc_foto',
+    nome: 'Relatório fotográfico',
+    obrigatorio: true,
+    desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.',
     status: 'pendente'
   },
   {

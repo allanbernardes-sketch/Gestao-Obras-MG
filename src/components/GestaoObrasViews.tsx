@@ -526,22 +526,7 @@ export function NovoAtendimentoPanel({
                   <Database className="w-4 h-4 text-blue-500" />
                   1. Identificação Escolar
                 </h4>
-                <div className="text-[10px] text-slate-400 font-sans">Preencha um código CODESC válido abaixo para auto-instruir</div>
-              </div>
-
-              {/* CODESC Suggestions shortcuts */}
-              <div className="flex flex-wrap items-center gap-1.5 py-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1">Sugestões Rápidas:</span>
-                {baseDados.map((item, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => preencherDados(item)}
-                    className="text-[10px] px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium rounded-md transition-colors cursor-pointer shrink-0 shadow-3xs"
-                  >
-                    {item.codesc} - {item.escola.replace('EE PROFESSORA ', 'EE PROF. ').substring(0, 22)}...
-                  </button>
-                ))}
+                <div className="text-[10px] text-slate-400 font-sans">Selecione o CODESC ou a escola para preencher automaticamente</div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -549,28 +534,52 @@ export function NovoAtendimentoPanel({
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Código CODESC *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
-                    placeholder="Digite ex: 1902..."
                     value={codesc}
-                    onChange={(e) => handleCodescChange(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans font-medium"
-                  />
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCodesc(val);
+                      const match = baseDados.find(item => item.codesc === val);
+                      if (match) {
+                        setNomeEscola(match.escola);
+                        setMunicipio(match.municipio);
+                        setSre(match.sre);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans font-medium bg-white cursor-pointer text-slate-800"
+                  >
+                    <option value="">Selecione o CODESC...</option>
+                    {baseDados.map(item => (
+                      <option key={item.codesc} value={item.codesc}>{item.codesc}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="sm:col-span-2">
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Nome da Escola Estadual *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
-                    placeholder="Nome completo da unidade escolar"
                     value={nomeEscola}
-                    onChange={(e) => setNomeEscola(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans text-slate-800"
-                  />
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNomeEscola(val);
+                      const match = baseDados.find(item => item.escola === val);
+                      if (match) {
+                        setCodesc(match.codesc);
+                        setMunicipio(match.municipio);
+                        setSre(match.sre);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
+                  >
+                    <option value="">Selecione a escola...</option>
+                    {baseDados.map(item => (
+                      <option key={item.codesc} value={item.escola}>{item.escola}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -579,27 +588,33 @@ export function NovoAtendimentoPanel({
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Município *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
-                    placeholder="Município da Escola"
                     value={municipio}
                     onChange={(e) => setMunicipio(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans text-slate-800"
-                  />
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
+                  >
+                    <option value="">Selecione o município...</option>
+                    {[...new Set(baseDados.map(item => item.municipio))].sort().map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Superintendência Regional (SRE) *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     required
-                    placeholder="Digite ex: SRE METROPOLITANA A"
                     value={sre}
                     onChange={(e) => setSre(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans text-slate-800"
-                  />
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
+                  >
+                    <option value="">Selecione a SRE...</option>
+                    {[...new Set(baseDados.map(item => item.sre))].sort().map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -1352,48 +1367,80 @@ export function NovoAtendimentoPanel({
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Código CODESC
                 </label>
-                <input
-                  type="text"
+                <select
                   value={selectedAtendimentoForEdit.codesc || ''}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, codesc: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800"
-                />
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const match = baseDados.find(item => item.codesc === val);
+                    setSelectedAtendimentoForEdit({
+                      ...selectedAtendimentoForEdit,
+                      codesc: val,
+                      ...(match ? { nomeEscola: match.escola, municipio: match.municipio, sre: match.sre } : {})
+                    });
+                  }}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
+                >
+                  <option value="">Selecione o CODESC...</option>
+                  {baseDados.map(item => (
+                    <option key={item.codesc} value={item.codesc}>{item.codesc}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="sm:col-span-2">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Escola Estadual
                 </label>
-                <input
-                  type="text"
+                <select
                   value={selectedAtendimentoForEdit.nomeEscola || ''}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, nomeEscola: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800"
-                />
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const match = baseDados.find(item => item.escola === val);
+                    setSelectedAtendimentoForEdit({
+                      ...selectedAtendimentoForEdit,
+                      nomeEscola: val,
+                      ...(match ? { codesc: match.codesc, municipio: match.municipio, sre: match.sre } : {})
+                    });
+                  }}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
+                >
+                  <option value="">Selecione a escola...</option>
+                  {baseDados.map(item => (
+                    <option key={item.codesc} value={item.escola}>{item.escola}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Município
                 </label>
-                <input
-                  type="text"
+                <select
                   value={selectedAtendimentoForEdit.municipio || ''}
                   onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, municipio: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800"
-                />
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
+                >
+                  <option value="">Selecione o município...</option>
+                  {[...new Set(baseDados.map(item => item.municipio))].sort().map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Superintendência SRE
                 </label>
-                <input
-                  type="text"
+                <select
                   value={selectedAtendimentoForEdit.sre || ''}
                   onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, sre: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800"
-                />
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
+                >
+                  <option value="">Selecione a SRE...</option>
+                  {[...new Set(baseDados.map(item => item.sre))].sort().map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -2209,7 +2256,7 @@ export function AtribuicaoPanel({
       <div className="border-b border-slate-100 pb-4 mb-5">
         <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2 font-sans">
           <Users className="w-5 h-5 text-blue-600" />
-          Atribuição Técnica
+          Validação Técnica
         </h2>
         <p className="text-xs text-slate-500 mt-1 font-sans">
           Distribua as demandas por analistas técnicos, fiscais de campo ou engenheiros DORE credenciados para vistorias físicas e pareceres normativos de engenharia.

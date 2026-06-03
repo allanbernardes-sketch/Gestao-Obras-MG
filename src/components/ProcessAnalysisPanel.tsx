@@ -757,7 +757,7 @@ export default function ProcessAnalysisPanel({
                     ? 'bg-red-50 text-red-700 border-red-200'
                     : 'bg-amber-50 text-amber-700 border-amber-200'
               }`}>
-                {solicitacao.validacaoEscolar || 'NÃO AVALIADO'}
+                {(solicitacao.validacaoEscolar || 'NÃO AVALIADO').replace(/_/g, ' ')}
               </span>
             </div>
 
@@ -913,7 +913,7 @@ export default function ProcessAnalysisPanel({
                           ? 'bg-red-50 text-red-700 border-red-200'
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}>
-                      {solicitacao.validacaoFormaOcupacao || 'PENDENTE'}
+                      {(solicitacao.validacaoFormaOcupacao || 'PENDENTE').replace(/_/g, ' ')}
                     </span>
                   )}
                 </div>
@@ -997,7 +997,7 @@ export default function ProcessAnalysisPanel({
                           ? 'bg-red-50 text-red-700 border-red-200'
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}>
-                      {solicitacao.validacaoPredioEscola || 'PENDENTE'}
+                      {(solicitacao.validacaoPredioEscola || 'PENDENTE').replace(/_/g, ' ')}
                     </span>
                   )}
                 </div>
@@ -1079,7 +1079,7 @@ export default function ProcessAnalysisPanel({
                           ? 'bg-red-50 text-red-700 border-red-200'
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}>
-                      {solicitacao.validacaoTombamento || 'PENDENTE'}
+                      {(solicitacao.validacaoTombamento || 'PENDENTE').replace(/_/g, ' ')}
                     </span>
                   )}
                 </div>
@@ -1181,7 +1181,7 @@ export default function ProcessAnalysisPanel({
                           ? 'bg-red-50 text-red-700 border-red-200'
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}>
-                      {solicitacao.validacaoCoabitado || 'PENDENTE'}
+                      {(solicitacao.validacaoCoabitado || 'PENDENTE').replace(/_/g, ' ')}
                     </span>
                   )}
                 </div>
@@ -1319,7 +1319,7 @@ export default function ProcessAnalysisPanel({
                     ? 'bg-red-50 text-red-700 border-red-200'
                     : 'bg-amber-50 text-amber-700 border-amber-200'
               }`}>
-                {solicitacao.validacaoTecnica || 'NÃO AVALIADO'}
+                {(solicitacao.validacaoTecnica || 'NÃO AVALIADO').replace(/_/g, ' ')}
               </span>
             </div>
 
@@ -1505,7 +1505,7 @@ export default function ProcessAnalysisPanel({
                     ? 'bg-red-50 text-red-700 border-red-200'
                     : 'bg-amber-50 text-amber-700 border-amber-200'
               }`}>
-                {solicitacao.validacaoReferenciaDotacao || 'NÃO AVALIADO'}
+                {(solicitacao.validacaoReferenciaDotacao || 'NÃO AVALIADO').replace(/_/g, ' ')}
               </span>
             </div>
 

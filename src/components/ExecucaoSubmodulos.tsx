@@ -537,6 +537,10 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
   const [filtroResponsavelObra, setFiltroResponsavelObra] = useState('todos');
   const [filtroStatusObra, setFiltroStatusObra] = useState('todos');
 
+  // Reatribuir Fiscal
+  const [reatribuirFiscalSolId, setReatribuirFiscalSolId] = useState<string | null>(null);
+  const [novoFiscalSelecionado, setNovoFiscalSelecionado] = useState('');
+
   // Filtragem inicial: somente processos que passaram do status de geração de PAF
   const listProcessosObra = useMemo(() => {
     return todasSolicitacoes.filter(s => 
@@ -768,9 +772,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           statusContratoEmpresa: 'Ativa',
           valorHomologadoContratacao: finalVal,
           valorPlanilha: baseVal,
-          dataOrdemInicio: dataInicioInput,
           duracaoObraMeses: parseInt(duracaoMeses) || 6,
-          previsaoTerminoObra: dataTerminoInput,
           historicoEtapas: [
             ...(original.historicoEtapas || []),
             { 
@@ -804,9 +806,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
         classeObra,
         pontuacaoComplexidade,
         fiscalObraAtribuido,
-        dataOrdemInicio: dataInicioInput,
         duracaoObraMeses: parseInt(duracaoMeses) || 6,
-        previsaoTerminoObra: dataTerminoInput,
         statusObra: 'Não Iniciada',
         documentos: [],
         medicoes: [],
@@ -832,7 +832,78 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      
+
+      {/* Modal Reatribuir Fiscal */}
+      {reatribuirFiscalSolId && (() => {
+        const targetSol = todasSolicitacoes.find(s => s.id === reatribuirFiscalSolId);
+        return (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                  <User className="w-4 h-4 text-indigo-500" /> Reatribuir Fiscal de Obra
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setReatribuirFiscalSolId(null)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="text-xs text-slate-600 space-y-1.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <p><span className="font-bold text-slate-700">Obra:</span> {targetSol?.nomeEscola}</p>
+                <p><span className="font-bold text-slate-700">ID:</span> <span className="font-mono text-blue-700">{reatribuirFiscalSolId}</span></p>
+                <p>
+                  <span className="font-bold text-slate-700">Fiscal Atual: </span>
+                  <span className={targetSol?.fiscalObraAtribuido ? 'text-slate-700' : 'text-amber-600 italic'}>
+                    {targetSol?.fiscalObraAtribuido || 'Não Definido'}
+                  </span>
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 block uppercase tracking-wider">
+                  Novo Fiscal Responsável *
+                </label>
+                <select
+                  value={novoFiscalSelecionado}
+                  onChange={(e) => setNovoFiscalSelecionado(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer"
+                >
+                  <option value="Eng. Roberto Mendes">Eng. Roberto Mendes (CREA 142.532/D)</option>
+                  <option value="Arq. Patrícia Silveira">Arq. Patrícia Silveira (CAU A44.120-3)</option>
+                  <option value="Eng. Marcos Pontes">Eng. Marcos Pontes (CREA 95.841/D)</option>
+                  <option value="Enga. Luciana Duarte">Enga. Luciana Duarte (CREA 168.990/D)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReatribuirFiscalSolId(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!targetSol || !novoFiscalSelecionado) return;
+                    onUpdate({ ...targetSol, fiscalObraAtribuido: novoFiscalSelecionado });
+                    setReatribuirFiscalSolId(null);
+                  }}
+                  className="px-5 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer transition shadow-xs flex items-center gap-1.5"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" /> Confirmar Reatribuição
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Header toolbar for listing */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-5 rounded-2xl border border-slate-200 gap-3 shadow-3xs">
         <div>
@@ -1163,48 +1234,24 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
             <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
               <h4 className="text-[10px] font-black uppercase text-slate-600 flex items-center gap-1 pb-1 border-b border-slate-100">
                 <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                Registrar Prazos da Ordem de Serviço
+                Registrar Prazo Previsto
               </h4>
 
               <p className="text-[10.5px] text-slate-600 leading-relaxed bg-slate-50 border-l-2 border-slate-400 p-2.5 rounded-r-lg">
                 ℹ️ <strong>Nota Técnica:</strong> O registro do prazo estimado para a ordem de serviço constitui uma estimativa de prazos a ser calculada e analisada, servindo para determinar e validar a classe de complexidade técnica da obra e estruturar o repasse adequado das diretrizes para a devida contratação da mesma.
               </p>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Data da Ordem de Início*</label>
-                  <input
-                    type="date"
-                    required
-                    value={dataInicioInput}
-                    onChange={(e) => handleDateOrDurationCalc(e.target.value, duracaoMeses)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-hidden font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Duração Planejada (Meses)*</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    max="120"
-                    value={duracaoMeses}
-                    onChange={(e) => handleDateOrDurationCalc(dataInicioInput, e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-hidden font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Previsão Término da Obra</label>
-                  <input
-                    type="date"
-                    required
-                    value={dataTerminoInput}
-                    onChange={(e) => setDataTerminoInput(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-800 focus:outline-hidden font-bold"
-                  />
-                </div>
+              <div className="max-w-xs">
+                <label className="text-[10px] font-bold text-slate-500 block mb-1">Duração Planejada (Meses)*</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  max="120"
+                  value={duracaoMeses}
+                  onChange={(e) => setDuracaoMeses(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-hidden font-bold"
+                />
               </div>
             </div>
 
@@ -1479,6 +1526,16 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                               className="px-2 py-1 text-[9.5px] font-extrabold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition"
                             >
                               Focalizar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReatribuirFiscalSolId(sol.id);
+                                setNovoFiscalSelecionado(sol.fiscalObraAtribuido || 'Eng. Roberto Mendes');
+                              }}
+                              className="px-2 py-1 text-[9.5px] font-extrabold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg cursor-pointer transition"
+                            >
+                              Reatribuir Fiscal
                             </button>
                             <button
                               type="button"
@@ -3122,6 +3179,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
   // Validation feedback
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [activeTab, setActiveTab] = useState<'historico' | 'nova_medicao'>('historico');
 
   if (!currentSol) return <NoObraSelected />;
 
@@ -3252,10 +3310,28 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-      
-      {/* Visual representation gauges */}
-      <div className="lg:col-span-2 space-y-4">
+    <div className="animate-fadeIn">
+
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab('historico')}
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'historico' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          <History className="w-4 h-4" /> Histórico de Medições ({currentSol.medicoes?.length || 0})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('nova_medicao')}
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'nova_medicao' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+        >
+          <Plus className="w-4 h-4" /> Registrar Nova Medição
+        </button>
+      </div>
+
+      {activeTab === 'historico' ? (
+      <div className="space-y-4">
         
         {/* Progress bar visual cards */}
         <div className="bg-white rounded-2xl border border-slate-200/85 p-5 shadow-xs">
@@ -3419,9 +3495,8 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
         </div>
 
       </div>
-
-      {/* Register / update medicao */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs text-left h-fit">
+      ) : (
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs text-left max-w-2xl mx-auto">
         <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2.5 mb-4">
           <Plus className="w-4 h-4 text-emerald-500" /> Nova Medição
         </h3>
@@ -3701,6 +3776,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
           </button>
         </form>
       </div>
+      )}
 
     </div>
   );

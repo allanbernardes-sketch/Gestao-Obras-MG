@@ -266,8 +266,11 @@ export default function App() {
       documentos: [
         { id: 'doc_1', nome: 'Planilha Orçamentária', obrigatorio: true, desc: 'Anexar nos formatos .pdf e .xlsx.', status: 'pendente' },
         { id: 'doc_2', nome: 'Registro do imóvel', obrigatorio: true, desc: 'Título de propriedade ou certidão de registro correspondente.', status: 'pendente' },
-        { id: 'doc_3', nome: 'Projeto de Engenharia', obrigatorio: true, desc: 'Projetos técnicos estruturais e arquitetônicos nos formatos .pdf e .dwg.', status: 'pendente' },
+        { id: 'doc_3_pdf', nome: 'Projeto de Engenharia (PDF)', obrigatorio: true, desc: 'Projeto técnico estrutural e arquitetônico no formato .pdf.', status: 'pendente' },
+        { id: 'doc_3_dwg', nome: 'Projeto de Engenharia (DWG)', obrigatorio: true, desc: 'Projeto técnico estrutural e arquitetônico no formato .dwg (AutoCAD).', status: 'pendente' },
         { id: 'doc_4', nome: 'Parecer técnico', obrigatorio: true, desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada.', status: 'pendente' },
+        { id: 'doc_ata', nome: 'Ata do Colegiado', obrigatorio: true, desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.', status: 'pendente' },
+        { id: 'doc_foto', nome: 'Relatório fotográfico', obrigatorio: true, desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.', status: 'pendente' },
         { id: 'doc_5', nome: 'Imposto ISS', obrigatorio: false, desc: 'Guia ou comprovante de recolhimento tributário aplicável.', status: 'pendente' }
       ],
       medicoes: [],
@@ -326,11 +329,14 @@ export default function App() {
         // Dynamic clean migration of checklists to use current structural constraints
         // preserving user-uploaded filenames, sizes, and statuses
         const migrado = parsed.map(s => {
-          const doc1 = s.documentos?.find(d => d.id === 'doc_1');
-          const doc2 = s.documentos?.find(d => d.id === 'doc_2' || d.id === 'doc_3'); // migrate or merge
-          const doc3 = s.documentos?.find(d => d.id === 'doc_3');
-          const doc4 = s.documentos?.find(d => d.id === 'doc_4' || d.id === 'doc_7'); 
-          const doc5 = s.documentos?.find(d => d.id === 'doc_5' || d.id === 'doc_6');
+          const doc1    = s.documentos?.find(d => d.id === 'doc_1');
+          const doc2    = s.documentos?.find(d => d.id === 'doc_2');
+          const doc3pdf = s.documentos?.find(d => d.id === 'doc_3_pdf' || d.id === 'doc_3');
+          const doc3dwg = s.documentos?.find(d => d.id === 'doc_3_dwg');
+          const doc4    = s.documentos?.find(d => d.id === 'doc_4' || d.id === 'doc_7');
+          const docAta  = s.documentos?.find(d => d.id === 'doc_ata');
+          const docFoto = s.documentos?.find(d => d.id === 'doc_foto');
+          const doc5    = s.documentos?.find(d => d.id === 'doc_5' || d.id === 'doc_6');
 
           return {
             ...s,
@@ -351,22 +357,33 @@ export default function App() {
                 nome: 'Registro do imóvel',
                 obrigatorio: true,
                 desc: 'Título de propriedade ou certidão de registro correspondente.',
-                fileName: doc2?.id === 'doc_2' ? doc2?.fileName : undefined,
-                fileSize: doc2?.id === 'doc_2' ? doc2?.fileSize : undefined,
-                uploadedAt: doc2?.id === 'doc_2' ? doc2?.uploadedAt : undefined,
-                status: doc2?.id === 'doc_2' ? (doc2?.status || 'pendente') : 'pendente',
-                justificativa: doc2?.id === 'doc_2' ? doc2?.justificativa : undefined
+                fileName: doc2?.fileName,
+                fileSize: doc2?.fileSize,
+                uploadedAt: doc2?.uploadedAt,
+                status: doc2?.status || 'pendente',
+                justificativa: doc2?.justificativa
               },
               {
-                id: 'doc_3',
-                nome: 'Projeto de Engenharia',
+                id: 'doc_3_pdf',
+                nome: 'Projeto de Engenharia (PDF)',
                 obrigatorio: true,
-                desc: 'Projetos técnicos estruturais e arquitetônicos nos formatos .pdf e .dwg.',
-                fileName: doc3?.fileName,
-                fileSize: doc3?.fileSize,
-                uploadedAt: doc3?.uploadedAt,
-                status: doc3?.status || 'pendente',
-                justificativa: doc3?.justificativa
+                desc: 'Projeto técnico estrutural e arquitetônico no formato .pdf.',
+                fileName: doc3pdf?.fileName,
+                fileSize: doc3pdf?.fileSize,
+                uploadedAt: doc3pdf?.uploadedAt,
+                status: doc3pdf?.status || 'pendente',
+                justificativa: doc3pdf?.justificativa
+              },
+              {
+                id: 'doc_3_dwg',
+                nome: 'Projeto de Engenharia (DWG)',
+                obrigatorio: true,
+                desc: 'Projeto técnico estrutural e arquitetônico no formato .dwg (AutoCAD).',
+                fileName: doc3dwg?.fileName,
+                fileSize: doc3dwg?.fileSize,
+                uploadedAt: doc3dwg?.uploadedAt,
+                status: doc3dwg?.status || 'pendente',
+                justificativa: doc3dwg?.justificativa
               },
               {
                 id: 'doc_4',
@@ -378,6 +395,28 @@ export default function App() {
                 uploadedAt: doc4?.id === 'doc_4' ? doc4?.uploadedAt : undefined,
                 status: doc4?.id === 'doc_4' ? (doc4?.status || 'pendente') : 'pendente',
                 justificativa: doc4?.id === 'doc_4' ? doc4?.justificativa : undefined
+              },
+              {
+                id: 'doc_ata',
+                nome: 'Ata do Colegiado',
+                obrigatorio: true,
+                desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.',
+                fileName: docAta?.fileName,
+                fileSize: docAta?.fileSize,
+                uploadedAt: docAta?.uploadedAt,
+                status: docAta?.status || 'pendente',
+                justificativa: docAta?.justificativa
+              },
+              {
+                id: 'doc_foto',
+                nome: 'Relatório fotográfico',
+                obrigatorio: true,
+                desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.',
+                fileName: docFoto?.fileName,
+                fileSize: docFoto?.fileSize,
+                uploadedAt: docFoto?.uploadedAt,
+                status: docFoto?.status || 'pendente',
+                justificativa: docFoto?.justificativa
               },
               {
                 id: 'doc_5',
@@ -1189,7 +1228,7 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
                       {[
                         { id: 'analise_atribuicao', label: 'Atribuição', icon: Users },
-                        { id: 'analise', label: 'Atribuição Técnica', icon: FileText }
+                        { id: 'analise', label: 'Validação Técnica', icon: FileText }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
@@ -2125,7 +2164,7 @@ export default function App() {
 
               const subTaskLabels: { [key: string]: string } = {
                 cadastro: 'Lista de Atendimentos',
-                analise: 'Atribuição Técnica',
+                analise: 'Validação Técnica',
                 paf_acompanhamento: 'Acompanhamento de PAF',
                 paf_autorizacao: 'Autorizações',
                 paf: 'Geração do PAF',
