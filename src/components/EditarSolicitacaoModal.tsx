@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Solicitacao, DocumentoChecklist, EtapaProcesso, syncChecklistDocs } from '../types';
+import { enderecosDados } from './GestaoObrasViews';
 import { X, AlertCircle, FileText, UploadCloud, Trash2, Check, Sparkles, Building, Settings, Landmark, FileSpreadsheet, Layers } from 'lucide-react';
 
 interface EditarSolicitacaoModalProps {
@@ -16,13 +17,19 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
   const [nomeEscola, setNomeEscola] = useState(solicitacao.nomeEscola || '');
   const [municipio, setMunicipio] = useState(solicitacao.municipio || '');
   const [sre, setSre] = useState(solicitacao.sre || '');
+  const [codigoEndereco, setCodigoEndereco] = useState(solicitacao.codigoEndereco || '');
   const [formaOcupacao, setFormaOcupacao] = useState(solicitacao.formaOcupacao || 'PRÓPRIO');
   const [predio, setPredio] = useState(solicitacao.predio || 'PRINCIPAL');
   const [tombado, setTombado] = useState(solicitacao.tombado || 'NÃO É TOMBADO');
   const [orgaoTombador, setOrgaoTombador] = useState(solicitacao.orgaoTombador || '');
   const [coabitado, setCoabitado] = useState(solicitacao.coabitado || 'NÃO');
   const [tipoCoabitado, setTipoCoabitado] = useState(solicitacao.tipoCoabitado || '');
-  const [notificacao, setNotificacao] = useState(solicitacao.notificacao || 'Não há notificação');
+  const [origemDemanda, setOrigemDemanda] = useState(solicitacao.origemDemanda || '');
+  const [orgaoEmissorNotificacao, setOrgaoEmissorNotificacao] = useState(solicitacao.orgaoEmissorNotificacao || '');
+  const [numeroNotificacao, setNumeroNotificacao] = useState(solicitacao.numeroNotificacao || '');
+  const [dataNotificacao, setDataNotificacao] = useState(solicitacao.dataNotificacao || '');
+  const [prazoAtendimentoNotificacao, setPrazoAtendimentoNotificacao] = useState(solicitacao.prazoAtendimentoNotificacao || '');
+  const [grauPrioridade, setGrauPrioridade] = useState(solicitacao.grauPrioridade || '');
   
   const [tipoObra, setTipoObra] = useState(solicitacao.tipoObra || 'REFORMA');
   const [tipoAtendimento, setTipoAtendimento] = useState(solicitacao.tipoAtendimento || 'NORMAL');
@@ -41,10 +48,10 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
 
   const [erro, setErro] = useState('');
 
-  // Sync documents list with changes in notificacao and formaAtendimento when editing
+  // Sync documents list with changes in origemDemanda and formaAtendimento when editing
   React.useEffect(() => {
     setDocumentos(prev => {
-      const syncedDocs = syncChecklistDocs(prev, notificacao, formaAtendimento);
+      const syncedDocs = syncChecklistDocs(prev, origemDemanda, formaAtendimento);
       const lengthChanged = syncedDocs.length !== prev.length;
       const idsChanged = syncedDocs.some((d, idx) => d.id !== prev[idx]?.id);
       if (lengthChanged || idsChanged) {
@@ -52,7 +59,7 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
       }
       return prev;
     });
-  }, [notificacao, formaAtendimento]);
+  }, [origemDemanda, formaAtendimento]);
 
   // Currency helper formatting
   const formatBRL = (value: string): string => {
@@ -168,6 +175,7 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
       nomeEscola,
       municipio,
       sre,
+      codigoEndereco: codigoEndereco.trim() || undefined,
       formaOcupacao,
       predio,
       tombado,
@@ -183,7 +191,12 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
       descricaoFolhaRosto,
       observacoesFicha,
       etapaAtual,
-      notificacao,
+      origemDemanda: origemDemanda || undefined,
+      orgaoEmissorNotificacao: origemDemanda === 'Notificação' ? orgaoEmissorNotificacao || undefined : undefined,
+      numeroNotificacao: origemDemanda === 'Notificação' ? numeroNotificacao || undefined : undefined,
+      dataNotificacao: origemDemanda === 'Notificação' ? dataNotificacao || undefined : undefined,
+      prazoAtendimentoNotificacao: origemDemanda === 'Notificação' ? prazoAtendimentoNotificacao || undefined : undefined,
+      grauPrioridade: grauPrioridade as any || undefined,
       documentos
     };
 
@@ -320,6 +333,27 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Código do Endereço
+                  </label>
+                  <select
+                    value={codigoEndereco}
+                    onChange={(e) => setCodigoEndereco(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-250 bg-white text-slate-800 rounded-lg focus:ring-2 focus:ring-blue-550/15 focus:outline-hidden font-mono cursor-pointer"
+                  >
+                    <option value="">Selecione o endereço...</option>
+                    {enderecosDados
+                      .filter(e => !codesc || e.codesc === codesc)
+                      .map(e => (
+                        <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                          {e.codigoEndereco} — {e.descricao}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-[9px] text-slate-400 mt-0.5">Identifica unicamente cada edificação (principal ou anexo)</p>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Forma de Ocupação
                   </label>
                   <select
@@ -427,22 +461,54 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
                   </select>
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Há alguma notificação?
-                  </label>
-                  <select
-                    value={notificacao || 'Não há notificação'}
-                    onChange={(e) => setNotificacao(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-slate-250 bg-white text-slate-800 rounded-lg focus:ring-2 focus:ring-blue-550/15 focus:outline-hidden cursor-pointer"
-                  >
-                    <option value="Não há notificação">Não há notificação</option>
-                    <option value="Ministério Publico">Ministério Publico</option>
-                    <option value="Prefeitura">Prefeitura</option>
-                    <option value="Defesa Civil">Defesa Civil</option>
-                    <option value="TCE">TCE</option>
+                {/* Classificação da Demanda */}
+                <div className="sm:col-span-3 space-y-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Origem da Demanda</label>
+                  <select value={origemDemanda} onChange={(e) => setOrigemDemanda(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-250 bg-white text-slate-800 rounded-lg focus:ring-2 focus:ring-blue-550/15 focus:outline-hidden cursor-pointer font-medium">
+                    <option value="">Selecione a origem...</option>
+                    {['Solicitação da Escola', 'Solicitação da SRE', 'Programa Governamental', 'Fiscalização', 'Notificação', 'Determinação Judicial', 'Atendimento Político'].map(op => (
+                      <option key={op} value={op}>{op}</option>
+                    ))}
                   </select>
                 </div>
+
+                {origemDemanda === 'Notificação' && (
+                  <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                    <div className="sm:col-span-2 text-[10px] font-black text-amber-800 uppercase tracking-wider">Detalhes da Notificação</div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Órgão Emissor *</label>
+                      <select value={orgaoEmissorNotificacao} onChange={(e) => setOrgaoEmissorNotificacao(e.target.value)}
+                        className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded bg-white cursor-pointer">
+                        <option value="">Selecione...</option>
+                        {['Ministério Público', 'Defesa Civil', 'Corpo de Bombeiros', 'Prefeitura', 'TCE', 'CGE', 'Vigilância Sanitária', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Grau de Prioridade</label>
+                      <select value={grauPrioridade} onChange={(e) => setGrauPrioridade(e.target.value)}
+                        className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded bg-white cursor-pointer">
+                        <option value="">Selecione...</option>
+                        {['Crítico', 'Alto', 'Médio', 'Baixo'].map(g => <option key={g} value={g}>{g}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Número da Notificação</label>
+                      <input type="text" value={numeroNotificacao} onChange={(e) => setNumeroNotificacao(e.target.value)}
+                        className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded bg-white" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Data da Notificação</label>
+                      <input type="date" value={dataNotificacao} onChange={(e) => setDataNotificacao(e.target.value)}
+                        className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded bg-white" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Prazo para Atendimento</label>
+                      <input type="date" value={prazoAtendimentoNotificacao} onChange={(e) => setPrazoAtendimentoNotificacao(e.target.value)}
+                        className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded bg-white" />
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
@@ -501,6 +567,7 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
                     <option value="EMENDA">EMENDA</option>
                     <option value="SOE">SOE</option>
                     <option value="PDDE">PDDE</option>
+                    <option value="ESPECIAL">ESPECIAL</option>
                   </select>
                 </div>
 
@@ -557,10 +624,11 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
 
                 <div className="sm:col-span-3">
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Descrição Técnica Geral (Folha de Rosto)
+                    Descrição Técnica Geral (Folha de Rosto) *
                   </label>
                   <textarea
                     rows={2}
+                    required
                     value={descricaoFolhaRosto}
                     onChange={(e) => setDescricaoFolhaRosto(e.target.value)}
                     className="w-full px-3 py-2 text-xs border border-slate-250 bg-white text-slate-800 rounded-lg focus:ring-2 focus:ring-blue-550/15 focus:shadow-xs focus:outline-hidden font-medium"

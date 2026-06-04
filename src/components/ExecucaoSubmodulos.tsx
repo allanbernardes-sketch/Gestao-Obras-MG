@@ -1690,7 +1690,6 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
 
   // Dashboard states
   const [novoStatus, setNovoStatus] = useState<'Não Iniciada' | 'Em Andamento' | 'Paralisada' | 'Concluída'>('Não Iniciada');
-  const [descricaoProgresso, setDescricaoProgresso] = useState('');
   const [mostrarParalisacao, setMostrarParalisacao] = useState(false);
   const [justificativaParalisacao, setJustificativaParalisacao] = useState('');
   const [dataParalisacao, setDataParalisacao] = useState('');
@@ -1758,9 +1757,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
     const isParalisando = mostrarParalisacao && justificativaParalisacao;
     const updated: typeof currentSol = {
       ...currentSol,
-      observacoesFicha: descricaoProgresso
-        ? `${descricaoProgresso}${currentSol.observacoesFicha ? ' | ' + currentSol.observacoesFicha : ''}`
-        : currentSol.observacoesFicha,
+      observacoesFicha: currentSol.observacoesFicha,
       ...(isParalisando && {
         statusObra: 'Paralisada',
         justificativaParalizacao: justificativaParalisacao,
@@ -2040,16 +2037,6 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                             {statusInfo.label}
                           </div>
                           <p className="text-[10px] text-slate-500 font-sans mt-1.5 leading-relaxed">{statusInfo.descricao}</p>
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">Nota Pública / Justificativa</label>
-                          <input
-                            type="text"
-                            placeholder="Ex. Fundações finalizadas, iniciando alvenaria estrutural..."
-                            value={descricaoProgresso}
-                            onChange={(e) => setDescricaoProgresso(e.target.value)}
-                            className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
-                          />
                         </div>
                       </div>
 
@@ -3168,7 +3155,8 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
 
   // New detailed measurement fields
   const [numeroM, setNumeroM] = useState('');
-  const [periodoM, setPeriodoM] = useState('');
+  const [periodoMInicio, setPeriodoMInicio] = useState('');
+  const [periodoMFim, setPeriodoMFim] = useState('');
   const [dataM, setDataM] = useState('');
   const [responsavelM, setResponsavelM] = useState('');
   const [observacoesM, setObservacoesM] = useState('');
@@ -3183,16 +3171,33 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
 
   if (!currentSol) return <NoObraSelected />;
 
-  const sumMedicoes = currentSol.medicoes?.reduce((sum, m) => sum + m.valor, 0) || 0;
-  const originalBudget = currentSol.valorPlanilha || currentSol.valorHomologadoContratacao || 1;
-  const leftOver = originalBudget - sumMedicoes;
+  const isDistratada = currentSol.statusContratoEmpresa === 'Distratada';
+  const isEmExecucao = computeStatusObra(currentSol).label === 'Em execução';
+  const podeRegistrarMedicao = isEmExecucao && !isDistratada;
+  const currentCnpj = currentSol.cnpjEmpresa || '';
 
-  // Calculo dos acumulados (Com tratamentos de fallback para registros anteriores)
+  // Financial: soma todas as medições de todas as empresas
+  const sumMedicoes = (currentSol.medicoes || []).reduce((sum, m) => sum + m.valor, 0);
+  const originalBudget = currentSol.valorPlanilha || currentSol.valorHomologadoContratacao || 1;
+  const leftOver = Math.max(0, originalBudget - sumMedicoes);
   const percentualFinanceiroAcumulado = (sumMedicoes / originalBudget) * 100;
-  const percentualFisicoAcumulado = currentSol.medicoes?.reduce((sum, m) => {
-    const val = m.porcentagemFisica !== undefined ? m.porcentagemFisica : m.porcentagem;
-    return sum + val;
-  }, 0) || 0;
+
+  // Physical: separado por empresa
+  const frozenFisico = (currentSol.empresasAnteriores || []).reduce(
+    (sum, e) => sum + (e.avancoFisicoOriginal || 0), 0
+  );
+  const allCnpjsAnteriores = new Set(
+    (currentSol.empresasAnteriores || []).map(e => e.cnpj).filter(Boolean)
+  );
+  const medicoesDaEmpresaAtual = (currentSol.medicoes || []).filter(m =>
+    currentCnpj ? m.empresaCnpj === currentCnpj : !allCnpjsAnteriores.has(m.empresaCnpj || '')
+  );
+  const fisicoEmpresaAtual = medicoesDaEmpresaAtual.reduce((sum, m) =>
+    sum + (m.porcentagemFisica !== undefined ? m.porcentagemFisica : m.porcentagem), 0
+  );
+  // Total acumulado da obra (congelado + empresa atual), cap em 100%
+  const percentualFisicoAcumulado = Math.min(100, frozenFisico + fisicoEmpresaAtual);
+  const fisicoDisponivel = Math.max(0, 100 - percentualFisicoAcumulado);
 
   // Sync state on school/project change or when measurements list size changes
   useEffect(() => {
@@ -3201,7 +3206,8 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
       setNumeroM(nextNum);
       setDataM(new Date().toISOString().split('T')[0]);
       setResponsavelM(currentSol.fiscalObraAtribuido || '');
-      setPeriodoM('');
+      setPeriodoMInicio('');
+      setPeriodoMFim('');
       setObservacoesM('');
       setPorcentagemFisicaM('');
       setValorM('');
@@ -3222,7 +3228,9 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
     if (!isNaN(val) && val > 0 && originalBudget > 0) {
       const calcPercent = ((val / originalBudget) * 100).toFixed(2);
       setPorcentagemM(calcPercent);
-      setPorcentagemFisicaM(calcPercent);
+      // Sugerir físico limitado ao disponível
+      const sugerido = Math.min(parseFloat(calcPercent), fisicoDisponivel).toFixed(2);
+      setPorcentagemFisicaM(sugerido);
     } else {
       setPorcentagemM('');
       setPorcentagemFisicaM('');
@@ -3234,7 +3242,16 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
     setAttemptedSubmit(true);
     setErrorMessage(null);
 
-    if (!valorM || !descricaoM || !numeroM || !periodoM || !dataM || !responsavelM) {
+    if (isDistratada) {
+      setErrorMessage('Obras com contrato distratado não permitem novas medições. Cadastre um novo contrato primeiro.');
+      return;
+    }
+    if (!isEmExecucao) {
+      setErrorMessage(`Medições só são permitidas quando a obra está Em execução. Status atual: "${computeStatusObra(currentSol).label}".`);
+      return;
+    }
+
+    if (!valorM || !descricaoM || !numeroM || !periodoMInicio || !periodoMFim || !dataM || !responsavelM) {
       setErrorMessage('Por favor, preencha todos os campos obrigatórios (*).');
       return;
     }
@@ -3245,22 +3262,28 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
       return;
     }
 
-    // MANDATORY ACCURACY RULE: "não posso ter um valor medido maior que o total do contrato"
     if (v + sumMedicoes > originalBudget) {
       setErrorMessage(
-        `Impossível Registrar: O valor desta medição (R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) somado ao total medido acumulado até o momento (R$ ${sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) é de R$ ${(v + sumMedicoes).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, o que excede o Valor Limite Total do Contrato de R$ ${originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+        `Impossível Registrar: O valor desta medição (R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) somado ao total medido acumulado (R$ ${sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o limite contratual de R$ ${originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
       );
-      return;
-    }
-
-    // MANDATORY ATTACHMENTS RULE: "coloque anexos de forma obrigatória: Relatório de fiscalização e Boletim de medição"
-    if (!relatorioFileName || !boletimFileName) {
-      setErrorMessage('Atenção: Os documentos "Relatório de Fiscalização" e "Boletim de Medição" são obrigatórios para aprovar a medição.');
       return;
     }
 
     const pFinanceira = porcentagemM ? parseFloat(porcentagemM) : (v / originalBudget) * 100;
     const pFisica = porcentagemFisicaM ? parseFloat(porcentagemFisicaM) : pFinanceira;
+
+    // Validação do cap físico de 100% considerando empresas anteriores
+    if (frozenFisico + fisicoEmpresaAtual + pFisica > 100) {
+      setErrorMessage(
+        `O percentual físico desta medição (${pFisica.toFixed(2)}%) somado ao avanço acumulado da obra (${percentualFisicoAcumulado.toFixed(2)}%) ultrapassaria 100%. Disponível para esta empresa: ${fisicoDisponivel.toFixed(2)}%.`
+      );
+      return;
+    }
+
+    if (!relatorioFileName || !boletimFileName) {
+      setErrorMessage('Atenção: Os documentos "Relatório de Fiscalização" e "Boletim de Medição" são obrigatórios para aprovar a medição.');
+      return;
+    }
 
     const novaM: Medicao = {
       id: `med_${Date.now()}`,
@@ -3271,7 +3294,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
       empresaNome: currentSol.empresaContratada || 'Construtora Convencionada',
       empresaCnpj: currentSol.cnpjEmpresa || '01.242.000/0001-33',
       numeroMedicao: numeroM,
-      periodoMedicao: periodoM,
+      periodoMedicao: `${new Date(periodoMInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(periodoMFim + 'T12:00:00').toLocaleDateString('pt-BR')}`,
       responsavelMedicao: responsavelM,
       observacoes: observacoesM,
       porcentagemFisica: pFisica,
@@ -3323,10 +3346,22 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab('nova_medicao')}
-          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'nova_medicao' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          onClick={() => podeRegistrarMedicao && setActiveTab('nova_medicao')}
+          title={
+            isDistratada ? 'Contrato distratado — cadastre um novo contrato para retomar medições' :
+            !isEmExecucao ? `Medições só são permitidas quando a obra está Em execução. Status atual: "${computeStatusObra(currentSol).label}"` : ''
+          }
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${
+            !podeRegistrarMedicao
+              ? 'border-transparent text-slate-300 cursor-not-allowed'
+              : activeTab === 'nova_medicao'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
         >
-          <Plus className="w-4 h-4" /> Registrar Nova Medição
+          {!podeRegistrarMedicao ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          Registrar Nova Medição
+          {!podeRegistrarMedicao && <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded font-black uppercase ml-1">Bloqueado</span>}
         </button>
       </div>
 
@@ -3339,6 +3374,21 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
             <Layers className="w-4 h-4 text-emerald-500 animate-pulse" /> Relatório Físico-Financeiro Executivo
           </h3>
 
+          {/* Alerta de distrato */}
+          {isDistratada && (
+            <div className="flex items-start gap-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl mb-4 text-xs">
+              <Lock className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-black text-rose-800 uppercase text-[10px] tracking-wide">Contrato Distratado — Execução Congelada</p>
+                <p className="text-rose-700 mt-0.5 font-medium leading-relaxed">
+                  O avanço físico desta empresa foi congelado em <strong>{fisicoEmpresaAtual.toFixed(2)}%</strong>.
+                  {fisicoDisponivel > 0 && ` Há ${fisicoDisponivel.toFixed(2)}% de avanço físico disponível para a próxima empresa contratada.`}
+                  {!currentSol.empresaContratada && ' Cadastre um novo contrato para retomar as medições.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5 mb-5">
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-left">
               <span className="text-[9px] uppercase font-bold text-slate-400 block">Total do Contrato</span>
@@ -3346,14 +3396,14 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                 R$ {originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            
+
             <div className="p-3 bg-emerald-50/50 border border-emerald-200/40 rounded-xl text-left">
               <span className="text-[9px] uppercase font-bold text-emerald-600 block">Total Medido</span>
               <span className="text-xs font-black text-emerald-700 font-mono block mt-0.5 truncate">
                 R$ {sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
-            
+
             <div className="p-3 bg-slate-50/70 border border-slate-200/40 rounded-xl text-left">
               <span className="text-[9px] uppercase font-bold text-slate-500 block">Saldo Restante</span>
               <span className="text-xs font-black text-slate-600 font-mono block mt-0.5 truncate">
@@ -3363,17 +3413,25 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
 
             <div className="p-3 bg-blue-50/60 border border-blue-200/30 rounded-xl text-left">
               <span className="text-[9px] uppercase font-extrabold text-blue-600 block flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span> Físico Acumulado
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
+                {frozenFisico > 0 ? 'Físico Total da Obra' : 'Físico Acumulado'}
               </span>
               <span className="text-base font-black text-blue-700 font-mono block mt-0.5">
                 {percentualFisicoAcumulado.toFixed(2)}%
               </span>
               <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                <div 
-                  className="bg-blue-600 h-full rounded-full transition-all duration-500" 
-                  style={{ width: `${Math.min(100, percentualFisicoAcumulado)}%` }}
-                ></div>
+                {frozenFisico > 0 && (
+                  <div className="bg-slate-400 h-full rounded-l-full transition-all duration-500 float-left"
+                    style={{ width: `${Math.min(100, frozenFisico)}%` }} title={`Congelado: ${frozenFisico.toFixed(1)}%`} />
+                )}
+                <div className="bg-blue-600 h-full transition-all duration-500 float-left"
+                  style={{ width: `${Math.min(100 - frozenFisico, fisicoEmpresaAtual)}%` }} />
               </div>
+              {frozenFisico > 0 && (
+                <p className="text-[9px] text-slate-500 mt-1 font-medium">
+                  Congelado: {frozenFisico.toFixed(1)}% | Atual: {fisicoEmpresaAtual.toFixed(1)}%
+                </p>
+              )}
             </div>
 
             <div className="p-3 bg-teal-50/60 border border-teal-200/30 rounded-xl text-left">
@@ -3384,110 +3442,128 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                 {percentualFinanceiroAcumulado.toFixed(2)}%
               </span>
               <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                <div 
-                  className="bg-teal-600 h-full rounded-full transition-all duration-500" 
+                <div
+                  className="bg-teal-600 h-full rounded-full transition-all duration-500"
                   style={{ width: `${Math.min(100, percentualFinanceiroAcumulado)}%` }}
                 ></div>
               </div>
             </div>
           </div>
 
-          {/* Measurements List */}
-          <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3 block text-left">Histórico de Medições Homologadas</h4>
-          
-          {currentSol.medicoes && currentSol.medicoes.length > 0 ? (
-            <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-1">
-              {currentSol.medicoes.map(m => {
-                const mPhysPercent = m.porcentagemFisica !== undefined ? m.porcentagemFisica : m.porcentagem;
-                return (
-                  <div key={m.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs shadow-3xs hover:border-slate-300 transition-all text-left">
-                    <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                      
-                      <div className="space-y-1.5 font-sans flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="bg-slate-200 text-slate-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider">
-                            MED {m.numeroMedicao || '---'}
-                          </span>
-                          <span className="font-extrabold text-slate-800 text-sm">{m.descricao}</span>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-1 gap-x-4 text-[10px] text-slate-500 font-medium">
-                          <div className="flex items-center gap-1">
-                            <span>📅</span> <strong>Medido em:</strong> {m.data}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span>⏳</span> <strong>Período:</strong> {m.periodoMedicao || '---'}
-                          </div>
-                          <div className="flex items-center gap-1 col-span-1 sm:col-span-1">
-                            <span>👤</span> <strong>Responsável:</strong> {m.responsavelMedicao || '---'}
-                          </div>
-                        </div>
+          {/* Measurements List — separado por empresa */}
+          <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3 block text-left">Histórico de Medições por Empresa</h4>
 
-                        {m.observacoes && (
-                          <div className="text-[10px] text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200 font-medium leading-relaxed">
-                            <span className="font-bold text-slate-700 block text-[9.5px] uppercase mb-0.5">Observações:</span>
-                            {m.observacoes}
-                          </div>
-                        )}
+          {(currentSol.medicoes || []).length > 0 ? (() => {
+            const renderMedicaoCard = (m: typeof currentSol.medicoes[0], isHistorica: boolean) => {
+              const mPhysPercent = m.porcentagemFisica !== undefined ? m.porcentagemFisica : m.porcentagem;
+              return (
+                <div key={m.id} className={`p-4 rounded-xl border text-xs shadow-3xs transition-all text-left ${isHistorica ? 'bg-slate-100/60 border-slate-300/60' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div className="space-y-1.5 font-sans flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="bg-slate-200 text-slate-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider">
+                          MED {m.numeroMedicao || '---'}
+                        </span>
+                        <span className="font-extrabold text-slate-800 text-sm">{m.descricao}</span>
+                        {isHistorica && <span className="text-[9px] bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase">Congelada</span>}
                       </div>
-
-                      <div className="flex sm:flex-col items-end gap-3 self-stretch sm:self-auto justify-between shrink-0 border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
-                        <div className="text-right">
-                          <p className="font-black text-emerald-600 font-mono text-sm leading-none">R$ {m.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                          <div className="flex items-center gap-2 text-[10px] mt-1.5 font-bold justify-end">
-                            <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100/50">Físico: {mPhysPercent.toFixed(1)}%</span>
-                            <span className="bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded border border-teal-100/50">Financ: {m.porcentagem.toFixed(1)}%</span>
-                          </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-1 gap-x-4 text-[10px] text-slate-500 font-medium">
+                        <div className="flex items-center gap-1"><span>📅</span> <strong>Medido em:</strong> {m.data}</div>
+                        <div className="flex items-center gap-1"><span>⏳</span> <strong>Período:</strong> {m.periodoMedicao || '---'}</div>
+                        <div className="flex items-center gap-1"><span>👤</span> <strong>Responsável:</strong> {m.responsavelMedicao || '---'}</div>
+                      </div>
+                      {m.observacoes && (
+                        <div className="text-[10px] text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200 font-medium leading-relaxed">
+                          <span className="font-bold text-slate-700 block text-[9.5px] uppercase mb-0.5">Observações:</span>
+                          {m.observacoes}
                         </div>
-                        
-                        <button
-                          type="button"
-                          onClick={() => deletarMedicao(m.id)}
+                      )}
+                    </div>
+                    <div className="flex sm:flex-col items-end gap-3 self-stretch sm:self-auto justify-between shrink-0 border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
+                      <div className="text-right">
+                        <p className="font-black text-emerald-600 font-mono text-sm leading-none">R$ {m.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <div className="flex items-center gap-2 text-[10px] mt-1.5 font-bold justify-end">
+                          <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100/50">Físico: {mPhysPercent.toFixed(1)}%</span>
+                          <span className="bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded border border-teal-100/50">Financ: {m.porcentagem.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                      {!isHistorica && (
+                        <button type="button" onClick={() => deletarMedicao(m.id)}
                           className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-all cursor-pointer inline-flex items-center self-end"
-                          title="Excluir medição"
-                        >
+                          title="Excluir medição">
                           <Trash className="w-3.5 h-3.5" />
                         </button>
-                      </div>
-
-                    </div>
-
-                    {/* Files Attached Display */}
-                    <div className="flex flex-wrap gap-2 pt-2.5 mt-3 border-t border-slate-150">
-                      {m.relatorioFiscalizacaoFileName ? (
-                        <div className="flex items-center gap-1.5 bg-blue-50/65 px-2.5 py-1 rounded-lg border border-blue-105 text-[10px] text-blue-700">
-                          <FileText className="w-3.5 h-3.5 shrink-0 text-blue-550" />
-                          <span className="font-semibold block truncate max-w-[170px]" title={m.relatorioFiscalizacaoFileName}>
-                            {m.relatorioFiscalizacaoFileName}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100 text-[10px] text-amber-700">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                          <span>Relatório não localizado</span>
-                        </div>
-                      )}
-
-                      {m.boletimMedicaoFileName ? (
-                        <div className="flex items-center gap-1.5 bg-teal-50/65 px-2.5 py-1 rounded-lg border border-teal-105 text-[10px] text-teal-700">
-                          <FileCheck className="w-3.5 h-3.5 shrink-0 text-teal-550" />
-                          <span className="font-semibold block truncate max-w-[170px]" title={m.boletimMedicaoFileName}>
-                            {m.boletimMedicaoFileName}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-105 text-[10px] text-amber-750">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                          <span>Boletim de medição ausente</span>
-                        </div>
                       )}
                     </div>
-
                   </div>
-                );
-              })}
-            </div>
-          ) : (
+                  <div className="flex flex-wrap gap-2 pt-2.5 mt-3 border-t border-slate-150">
+                    {m.relatorioFiscalizacaoFileName ? (
+                      <div className="flex items-center gap-1.5 bg-blue-50/65 px-2.5 py-1 rounded-lg border border-blue-105 text-[10px] text-blue-700">
+                        <FileText className="w-3.5 h-3.5 shrink-0 text-blue-550" />
+                        <span className="font-semibold block truncate max-w-[170px]" title={m.relatorioFiscalizacaoFileName}>{m.relatorioFiscalizacaoFileName}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-100 text-[10px] text-amber-700">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" /><span>Relatório não localizado</span>
+                      </div>
+                    )}
+                    {m.boletimMedicaoFileName ? (
+                      <div className="flex items-center gap-1.5 bg-teal-50/65 px-2.5 py-1 rounded-lg border border-teal-105 text-[10px] text-teal-700">
+                        <FileCheck className="w-3.5 h-3.5 shrink-0 text-teal-550" />
+                        <span className="font-semibold block truncate max-w-[170px]" title={m.boletimMedicaoFileName}>{m.boletimMedicaoFileName}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-105 text-[10px] text-amber-750">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" /><span>Boletim de medição ausente</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            };
+
+            return (
+              <div className="space-y-5 max-h-[560px] overflow-y-auto pr-1">
+                {/* Empresa atual */}
+                {(currentSol.empresaContratada || medicoesDaEmpresaAtual.length > 0) && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                        Empresa Atual {currentSol.empresaContratada ? `— ${currentSol.empresaContratada}` : ''}
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-medium">Físico: {fisicoEmpresaAtual.toFixed(2)}%</span>
+                    </div>
+                    {medicoesDaEmpresaAtual.length > 0
+                      ? <div className="space-y-3">{medicoesDaEmpresaAtual.map(m => renderMedicaoCard(m, false))}</div>
+                      : <div className="text-center py-4 border border-dashed border-emerald-200 rounded-xl text-slate-400 text-[11px] font-medium">Nenhuma medição desta empresa ainda.</div>
+                    }
+                  </div>
+                )}
+
+                {/* Empresas anteriores distratadas */}
+                {(currentSol.empresasAnteriores || []).map(emp => {
+                  const medsEmpresa = (currentSol.medicoes || []).filter(m => m.empresaCnpj === emp.cnpj);
+                  return (
+                    <div key={emp.id}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                          Distratada — {emp.nome}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-medium">Físico congelado: {(emp.avancoFisicoOriginal || 0).toFixed(2)}%</span>
+                        {emp.dataDistrato && <span className="text-[9px] text-slate-400">• Distrato: {new Date(emp.dataDistrato).toLocaleDateString('pt-BR')}</span>}
+                      </div>
+                      {medsEmpresa.length > 0
+                        ? <div className="space-y-3">{medsEmpresa.map(m => renderMedicaoCard(m, true))}</div>
+                        : <div className="text-center py-4 border border-dashed border-rose-200 rounded-xl text-slate-400 text-[11px] font-medium">
+                            Avanço físico de {(emp.avancoFisicoOriginal || 0).toFixed(2)}% congelado no histórico.
+                          </div>
+                      }
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })() : (
             <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl text-slate-500 text-[11px] font-medium bg-slate-50/50">
               Nenhuma medição física homologada no momento. Registre a primeira medição no formulário ao lado.
             </div>
@@ -3562,31 +3638,47 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
 
           <div>
             <label className="text-[10px] font-bold text-slate-500 block mb-1">Período de Medição*</label>
-            <input
-              type="text"
-              required
-              placeholder="Ex: 01/05/2026 a 31/05/2026"
-              value={periodoM}
-              onChange={(e) => {
-                setPeriodoM(e.target.value);
-                setErrorMessage(null);
-              }}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Data Início</label>
+                <input
+                  type="date"
+                  required
+                  value={periodoMInicio}
+                  onChange={(e) => {
+                    setPeriodoMInicio(e.target.value);
+                    setErrorMessage(null);
+                  }}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Data Fim</label>
+                <input
+                  type="date"
+                  required
+                  min={periodoMInicio}
+                  value={periodoMFim}
+                  onChange={(e) => {
+                    setPeriodoMFim(e.target.value);
+                    setErrorMessage(null);
+                  }}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-mono"
+                />
+              </div>
+            </div>
           </div>
 
           <div>
-            <label className="text-[10px] font-bold text-slate-500 block mb-1">Responsável pela Medição*</label>
+            <label className="text-[10px] font-bold text-slate-500 block mb-1">
+              Responsável pela Medição
+              <span className="ml-1 text-[9px] text-blue-500 font-medium normal-case">(Fiscal da Obra atribuído)</span>
+            </label>
             <input
               type="text"
-              required
-              placeholder="Ex: Engª Helena Rocha (Fiscal)"
-              value={responsavelM}
-              onChange={(e) => {
-                setResponsavelM(e.target.value);
-                setErrorMessage(null);
-              }}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-medium"
+              readOnly
+              value={responsavelM || currentSol.fiscalObraAtribuido || 'Fiscal não atribuído'}
+              className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-700 font-semibold cursor-not-allowed"
             />
           </div>
 
@@ -3843,6 +3935,7 @@ function SubContratos({
 
   const [selectedEmpresaId, setSelectedEmpresaId] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [modalCadastroAberto, setModalCadastroAberto] = useState(false);
   const [modalAlteracaoAberto, setModalAlteracaoAberto] = useState(false);
   const [modalDistratoAberto, setModalDistratoAberto] = useState(false);
   const [distratoJustificativa, setDistratoJustificativa] = useState('');
@@ -3854,7 +3947,7 @@ function SubContratos({
   const [duracaoInput, setDuracaoInput] = useState('6');
 
   // New states for extended fields
-  const [valorInicialInput, setValorInicialInput] = useState('1350000');
+  const [valorInicialInput, setValorInicialInput] = useState('0');
   const [dataAssinaturaInput, setDataAssinaturaInput] = useState('2026-01-01');
   const [inicioVigenciaInput, setInicioVigenciaInput] = useState('2026-01-15');
   const [fimVigenciaInput, setFimVigenciaInput] = useState('2026-07-15');
@@ -3874,9 +3967,8 @@ function SubContratos({
       setTipoAcaoInput(currentSol.statusContratoEmpresa === 'Distratada' ? 'distrato' : 'alteracao');
       setDuracaoInput(currentSol.duracaoObraMeses?.toString() || '6');
       
-      const valInitial = currentSol.contratoValorInicial !== undefined 
-        ? currentSol.contratoValorInicial 
-        : (currentSol.valorPlanilha || 1350000);
+      // Valor homologado (certame) — nunca substituir pelo valor autorizado do atendimento
+      const valInitial = currentSol.contratoValorInicial ?? 0;
       setValorInicialInput(valInitial.toString());
       
       setDataAssinaturaInput(currentSol.contratoDataAssinatura || '');
@@ -3892,7 +3984,7 @@ function SubContratos({
       setCnpjInput('');
       setTipoAcaoInput('alteracao');
       setDuracaoInput('6');
-      setValorInicialInput('1350000');
+      setValorInicialInput('0');
       setDataAssinaturaInput('');
       setInicioVigenciaInput('');
       setFimVigenciaInput('');
@@ -4036,6 +4128,31 @@ function SubContratos({
     }
   };
 
+  const handleCadastrarContrato = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentSol) return;
+
+    const updated = {
+      ...currentSol,
+      empresaContratada: empresaInput,
+      cnpjEmpresa: cnpjInput,
+      statusContratoEmpresa: 'Ativa' as 'Ativa' | 'Distratada',
+      duracaoObraMeses: parseInt(duracaoInput) || 6,
+      contratoValorInicial: valorInicial,
+      contratoDataAssinatura: dataAssinaturaInput,
+      contratoInicioVigencia: inicioVigenciaInput,
+      contratoFimVigencia: fimVigenciaInput,
+      garantiaExigida: garantiaExigidaInput,
+      garantiaValor: parseFloat(garantiaValorInput) || 0,
+      garantiaTipo: garantiaTipoInput,
+      garantiaValidade: garantiaValidadeInput,
+    };
+
+    onUpdate(updated);
+    setModalCadastroAberto(false);
+    alert('Contrato cadastrado com sucesso!');
+  };
+
   const selectCompanyFromSeguranca = (empId: string) => {
     setSelectedEmpresaId(empId);
     if (!empId) {
@@ -4068,24 +4185,53 @@ function SubContratos({
             </span>
           </div>
 
-          {/* Grid de 5 informações solicitadas */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5 mb-6">
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <span className="text-[9px] uppercase font-bold text-slate-400 block">Valor Inicial</span>
-              <span className="text-[12.5px] font-black text-slate-800 block mt-1">
-                R$ {valorInicial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          {/* Grid financeiro — Valor Autorizado separado do Valor Homologado */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
+            <div className="bg-violet-50 p-3 rounded-xl border border-violet-200">
+              <span className="text-[9px] uppercase font-bold text-violet-500 block">Valor Autorizado (PAF)</span>
+              <span className="text-[12.5px] font-black text-violet-800 block mt-1">
+                R$ {(currentSol.valorPlanilha || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
+              <span className="text-[8.5px] text-violet-400 font-medium mt-0.5 block">Orçamento aprovado no atendimento</span>
             </div>
 
+            <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
+              <span className="text-[9px] uppercase font-bold text-blue-500 block">Valor Homologado (Certame)</span>
+              <span className={`text-[12.5px] font-black block mt-1 ${valorInicial > 0 ? 'text-blue-800' : 'text-slate-400'}`}>
+                {valorInicial > 0 ? `R$ ${valorInicial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não cadastrado'}
+              </span>
+              <span className="text-[8.5px] text-blue-400 font-medium mt-0.5 block">Valor ganho pela empresa no certame</span>
+            </div>
+
+            <div className={`p-3 rounded-xl border ${valorInicial > 0 && currentSol.valorPlanilha ? (valorInicial <= (currentSol.valorPlanilha || 0) ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200') : 'bg-slate-50 border-slate-200'}`}>
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Variação Certame</span>
+              {valorInicial > 0 && currentSol.valorPlanilha ? (() => {
+                const diff = valorInicial - (currentSol.valorPlanilha || 0);
+                const pct = ((diff / (currentSol.valorPlanilha || 1)) * 100).toFixed(1);
+                return (
+                  <>
+                    <span className={`text-[12.5px] font-black block mt-1 ${diff <= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {diff <= 0 ? '▼' : '▲'} {Math.abs(diff).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                    <span className={`text-[8.5px] font-bold mt-0.5 block ${diff <= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {diff <= 0 ? 'Desconto' : 'Acréscimo'} de {Math.abs(parseFloat(pct))}%
+                    </span>
+                  </>
+                );
+              })() : <span className="text-[11px] text-slate-400 block mt-1">—</span>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <span className="text-[9px] uppercase font-bold text-slate-400 block">Aditivos</span>
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Aditivos Aprovados</span>
               <span className="text-[12.5px] font-black text-amber-600 block mt-1">
                 R$ {sumAditivos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
 
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <span className="text-[9px] uppercase font-bold text-slate-400 block">Valor Atualizado</span>
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Valor Contratual Atual</span>
               <span className="text-[12.5px] font-black text-blue-700 block mt-1">
                 R$ {valorAtualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
@@ -4098,7 +4244,7 @@ function SubContratos({
               </span>
             </div>
 
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 col-span-2 md:col-span-1">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
               <span className="text-[9px] uppercase font-bold text-slate-400 block">Saldo Contratual</span>
               <span className="text-[12.5px] font-black text-indigo-700 block mt-1">
                 R$ {saldoContratual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -4254,22 +4400,41 @@ function SubContratos({
           {/* AÇÕES CONTRATUAIS — abrem modais dedicados */}
           <div className="border-t border-slate-105 pt-4">
             <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2.5">Ações Contratuais Disponíveis no SGO</h4>
-            <div className="grid grid-cols-2 gap-3">
+            {!currentSol.empresaContratada || currentSol.statusContratoEmpresa === 'Distratada' ? (
               <button
                 type="button"
-                onClick={() => { setTipoAcaoInput('alteracao'); setModalAlteracaoAberto(true); }}
-                className="py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-blue-50/50 hover:bg-blue-100/60 text-blue-700 border-blue-200 hover:border-blue-300"
+                onClick={() => setModalCadastroAberto(true)}
+                className="w-full py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-emerald-50/50 hover:bg-emerald-100/60 text-emerald-700 border-emerald-200 hover:border-emerald-300"
               >
-                <Edit className="w-4 h-4" /> Alteração do Contrato
+                <Plus className="w-4 h-4" /> Cadastrar Contrato
               </button>
-              <button
-                type="button"
-                onClick={() => { setTipoAcaoInput('distrato'); setModalDistratoAberto(true); }}
-                className="py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-rose-50/50 hover:bg-rose-100/60 text-rose-700 border-rose-200 hover:border-rose-300"
-              >
-                <Trash2 className="w-4 h-4" /> Distrato do Contrato
-              </button>
-            </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setTipoAcaoInput('alteracao'); setModalAlteracaoAberto(true); }}
+                  className="py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-blue-50/50 hover:bg-blue-100/60 text-blue-700 border-blue-200 hover:border-blue-300"
+                >
+                  <Edit className="w-4 h-4" /> Alteração do Contrato
+                </button>
+                {currentSol.statusObra === 'Paralisada' ? (
+                  <button
+                    type="button"
+                    onClick={() => { setTipoAcaoInput('distrato'); setModalDistratoAberto(true); }}
+                    className="py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-rose-50/50 hover:bg-rose-100/60 text-rose-700 border-rose-200 hover:border-rose-300"
+                  >
+                    <Trash2 className="w-4 h-4" /> Distrato do Contrato
+                  </button>
+                ) : (
+                  <div
+                    title={`Distrato só é permitido quando a obra está Paralisada. Status atual: ${currentSol.statusObra || 'Não definido'}`}
+                    className="py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed select-none"
+                  >
+                    <Lock className="w-4 h-4" /> Distrato do Contrato
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -4298,6 +4463,209 @@ function SubContratos({
         </div>
 
       </div>
+
+      {/* ===== MODAL CADASTRAR CONTRATO ===== */}
+      {modalCadastroAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setModalCadastroAberto(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[92vh] overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-emerald-100 bg-emerald-50/40 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-emerald-600 rounded-lg flex items-center justify-center">
+                  <Plus className="w-4 h-4 text-white" />
+                </div>
+                <h2 className="text-sm font-black text-emerald-800 uppercase tracking-wide">Cadastrar Contrato</h2>
+              </div>
+              <button onClick={() => setModalCadastroAberto(false)} className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-400 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              <form onSubmit={handleCadastrarContrato} className="space-y-4">
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                    Selecionar Empresa SGO (do Módulo de Segurança)*
+                  </label>
+                  <select
+                    required
+                    value={selectedEmpresaId}
+                    onChange={(e) => selectCompanyFromSeguranca(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="">-- Escolher Empresa Cadastrada --</option>
+                    {empresasSeguranca.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.nome} ({emp.situacaoCadastral})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Razão Social Contratada (Confirmada)</label>
+                  <input
+                    type="text"
+                    required
+                    readOnly
+                    value={empresaInput}
+                    placeholder="Selecione acima na listagem"
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 focus:outline-hidden font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">CNPJ do Responsável da Obra</label>
+                  <input
+                    type="text"
+                    required
+                    readOnly
+                    value={cnpjInput}
+                    placeholder="CNPJ vinculado à empresa escolhida"
+                    className="w-full text-xs font-mono p-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-600 focus:outline-hidden font-bold"
+                  />
+                </div>
+
+                <div className="border-t border-slate-100 pt-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-slate-500 block">Valor Homologado — Ganho no Certame (R$)*</label>
+                    {currentSol.valorPlanilha ? (
+                      <span className="text-[9px] text-violet-600 font-bold bg-violet-50 border border-violet-200 px-2 py-0.5 rounded">
+                        Autorizado: R$ {(currentSol.valorPlanilha).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    ) : null}
+                  </div>
+                  <input
+                    type="number"
+                    required
+                    value={valorInicialInput}
+                    onChange={(e) => setValorInicialInput(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden"
+                    placeholder="1350000"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Duração (Meses)</label>
+                  <input
+                    type="number"
+                    value={duracaoInput}
+                    onChange={(e) => setDuracaoInput(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-bold"
+                  />
+                </div>
+
+                <div className="border-t border-slate-100 pt-3 space-y-3">
+                  <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Vigência &amp; Assinatura</h4>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block mb-1">Data Assinatura*</label>
+                    <input
+                      type="date"
+                      required
+                      value={dataAssinaturaInput}
+                      onChange={(e) => setDataAssinaturaInput(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 block mb-1">Início da Vigência*</label>
+                      <input
+                        type="date"
+                        required
+                        value={inicioVigenciaInput}
+                        onChange={(e) => setInicioVigenciaInput(e.target.value)}
+                        className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 block mb-1">Fim da Vigência*</label>
+                      <input
+                        type="date"
+                        required
+                        value={fimVigenciaInput}
+                        onChange={(e) => setFimVigenciaInput(e.target.value)}
+                        className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-100 pt-3 space-y-3">
+                  <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Cadastro de Garantias</h4>
+
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block mb-1">Tipo de Garantia Exigida*</label>
+                    <select
+                      value={garantiaExigidaInput}
+                      onChange={(e) => setGarantiaExigidaInput(e.target.value)}
+                      className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden cursor-pointer"
+                    >
+                      <option value="Sem Garantia">Sem Garantia</option>
+                      <option value="Fiança Bancária">Fiança Bancária</option>
+                      <option value="Seguro Garantia">Seguro Garantia</option>
+                      <option value="Caução em Dinheiro">Caução em Dinheiro</option>
+                      <option value="Títulos da Dívida Pública">Títulos da Dívida Pública</option>
+                    </select>
+                  </div>
+
+                  {garantiaExigidaInput !== 'Sem Garantia' && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 block mb-1">Valor Garantido (R$)*</label>
+                        <input
+                          type="number"
+                          required
+                          value={garantiaValorInput}
+                          onChange={(e) => setGarantiaValorInput(e.target.value)}
+                          className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 block mb-1">Tipo de Apólice ou Recibo*</label>
+                        <input
+                          type="text"
+                          required
+                          value={garantiaTipoInput}
+                          placeholder="ex: Apólice nº 44-551-A"
+                          onChange={(e) => setGarantiaTipoInput(e.target.value)}
+                          className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-bold text-slate-400 block mb-1">Validade da Garantia*</label>
+                        <input
+                          type="date"
+                          required
+                          value={garantiaValidadeInput}
+                          onChange={(e) => setGarantiaValidadeInput(e.target.value)}
+                          className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 font-semibold focus:outline-hidden"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 text-xs text-white font-black uppercase rounded-xl cursor-pointer transition-colors shadow-xs bg-emerald-600 hover:bg-emerald-700"
+                >
+                  Cadastrar Contrato
+                </button>
+              </form>
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
+              <button type="button" onClick={() => setModalCadastroAberto(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 transition cursor-pointer">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== MODAL ALTERAÇÃO DO CONTRATO ===== */}
       {modalAlteracaoAberto && (
@@ -4633,17 +5001,25 @@ function SubContratos({
               </button>
               <button
                 type="button"
-                disabled={!distratoJustificativa || !distratoData}
+                disabled={!distratoJustificativa || !distratoData || currentSol?.statusObra !== 'Paralisada'}
                 onClick={() => {
                   if (!currentSol) return;
+                  if (currentSol.statusObra !== 'Paralisada') {
+                    alert('Distrato só é permitido quando a obra está com status Paralisada.');
+                    return;
+                  }
                   const updatedAnteriores = [...(currentSol.empresasAnteriores || [])];
                   const jaArquivada = updatedAnteriores.some(e => e.cnpj === currentSol.cnpjEmpresa);
                   if (!jaArquivada && currentSol.empresaContratada) {
+                    const cnpjAtual = currentSol.cnpjEmpresa || '';
+                    const fisicoAtual = (currentSol.medicoes || [])
+                      .filter(m => cnpjAtual ? m.empresaCnpj === cnpjAtual : true)
+                      .reduce((sum, m) => sum + (m.porcentagemFisica !== undefined ? m.porcentagemFisica : m.porcentagem), 0);
                     updatedAnteriores.push({
                       id: `prev_${Date.now()}`,
                       nome: currentSol.empresaContratada,
-                      cnpj: currentSol.cnpjEmpresa || '',
-                      avancoFisicoOriginal: 0,
+                      cnpj: cnpjAtual,
+                      avancoFisicoOriginal: fisicoAtual,
                       dataDistrato: distratoData,
                       justificativaDistrato: distratoJustificativa,
                       documentoDistratoFileName: distratoFile?.name,
@@ -4712,6 +5088,10 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'Pendente' | 'Aprovado' | 'Recusado'>('todos');
 
   if (!currentSol) return <NoObraSelected />;
+
+  const isDistratadaAdt = currentSol.statusContratoEmpresa === 'Distratada';
+  const isEmExecucaoAdt = computeStatusObra(currentSol).label === 'Em execução';
+  const podeSolicitarAditivo = isEmExecucaoAdt && !isDistratadaAdt;
 
   // Derived values
   const valorContratoOriginal = currentSol.valorPlanilha || 0;
@@ -4899,13 +5279,19 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
           <History className="w-4 h-4" /> Histórico de Aditivos ({currentSol.aditivos?.length || 0})
         </button>
         <button
-          onClick={() => {
-            setActiveTab('novo_atendimento');
-            setStep(1);
-          }}
-          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'novo_atendimento' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          onClick={() => { if (podeSolicitarAditivo) { setActiveTab('novo_atendimento'); setStep(1); } }}
+          title={
+            isDistratadaAdt ? 'Contrato distratado — não é possível solicitar aditivos' :
+            !isEmExecucaoAdt ? `Aditivos só são permitidos quando a obra está Em execução. Status atual: "${computeStatusObra(currentSol).label}"` : ''
+          }
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${
+            !podeSolicitarAditivo ? 'border-transparent text-slate-300 cursor-not-allowed' :
+            activeTab === 'novo_atendimento' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
         >
-          <Plus className="w-4 h-4" /> Iniciar Novo Atendimento (Aditivo)
+          {!podeSolicitarAditivo ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          Iniciar Novo Atendimento (Aditivo)
+          {!podeSolicitarAditivo && <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded font-black uppercase ml-1">Bloqueado</span>}
         </button>
       </div>
 
@@ -5416,6 +5802,8 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
 
   if (!currentSol) return <NoObraSelected />;
 
+  const isDistratadaAjuste = currentSol.statusContratoEmpresa === 'Distratada';
+
   // Derived values
   const valorContratoOriginal = currentSol.valorPlanilha || 0;
   const numAcre = parseFloat(valorAjusteInp) || 0;
@@ -5604,13 +5992,16 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
           <History className="w-4 h-4" /> Histórico de Ajustes ({currentSol.ajustes?.length || 0})
         </button>
         <button
-          onClick={() => {
-            setActiveTab('novo_atendimento');
-            setStep(1);
-          }}
-          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${activeTab === 'novo_atendimento' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+          onClick={() => { if (!isDistratadaAjuste) { setActiveTab('novo_atendimento'); setStep(1); } }}
+          title={isDistratadaAjuste ? 'Contrato distratado — não é possível registrar ajustes' : ''}
+          className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${
+            isDistratadaAjuste ? 'border-transparent text-slate-300 cursor-not-allowed' :
+            activeTab === 'novo_atendimento' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
         >
-          <Plus className="w-4 h-4" /> Registrar Ajuste de Planilha
+          {isDistratadaAjuste ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          Registrar Ajuste de Planilha
+          {isDistratadaAjuste && <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded font-black uppercase ml-1">Bloqueado</span>}
         </button>
       </div>
 

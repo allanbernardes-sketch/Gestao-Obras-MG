@@ -107,6 +107,7 @@ export interface Solicitacao {
   pago?: boolean;
 
   // Novos campos do formulário
+  codigoEndereco?: string;
   formaOcupacao?: string;
   predio?: string;
   tipoObra?: string;
@@ -115,6 +116,15 @@ export interface Solicitacao {
   anoEmenda?: string;
   atendimentoOrgao?: string;
   formaAtendimento?: string;
+  seiMinutaOcupacao?: string;
+  // Classificação da Demanda (substitui notificacao)
+  origemDemanda?: string;
+  orgaoEmissorNotificacao?: string;
+  numeroNotificacao?: string;
+  dataNotificacao?: string;
+  prazoAtendimentoNotificacao?: string;
+  grauPrioridade?: 'Crítico' | 'Alto' | 'Médio' | 'Baixo';
+  /** @deprecated use origemDemanda */
   notificacao?: string;
   descricaoFolhaRosto?: string;
   valorPlanilha?: number;
@@ -357,21 +367,25 @@ export function computeStatusObra(sol: Solicitacao): StatusObraInfo {
 
 export function syncChecklistDocs(
   documentos: DocumentoChecklist[] = [],
-  notificacao?: string,
+  /** origemDemanda: nova forma; notificacao: retrocompatibilidade */
+  origemOuNotificacao?: string,
   formaAtendimento?: string
 ): DocumentoChecklist[] {
   let updated = [...documentos];
 
-  // 1. Handle notification proof
-  const needsNotif = notificacao && notificacao !== 'Não há notificação';
+  // 1. Documento da Notificação — exigido quando origem = 'Notificação' ou 'Determinação Judicial'
+  const origensDemandaComDoc = ['Notificação', 'Determinação Judicial'];
+  const needsNotif =
+    origensDemandaComDoc.includes(origemOuNotificacao || '') ||
+    (origemOuNotificacao && origemOuNotificacao !== 'Não há notificação' && !['Solicitação da Escola', 'Solicitação da SRE', 'Programa Governamental', 'Fiscalização', 'Atendimento Político'].includes(origemOuNotificacao));
   const hasNotif = updated.some(d => d.id === 'doc_notificacao');
 
   if (needsNotif && !hasNotif) {
     updated.push({
       id: 'doc_notificacao',
-      nome: 'Comprovante da Notificação',
+      nome: 'Documento da Notificação',
       obrigatorio: true,
-      desc: 'Documento de comprovação da notificação emitida pelo Órgão Regulador.',
+      desc: 'Documento referente à notificação emitida pelo órgão competente.',
       status: 'pendente'
     });
   } else if (!needsNotif && hasNotif) {
@@ -385,9 +399,9 @@ export function syncChecklistDocs(
   if (needsSemOnus && !hasSemOnus) {
     updated.push({
       id: 'doc_recurso_sem_onus',
-      nome: 'Comprovação de Recurso (Sem Ônus)',
+      nome: 'Comprovação de recurso',
       obrigatorio: true,
-      desc: 'Documento de comprovação de recurso para atendimento sem ônus para o Estado.',
+      desc: 'Documento de comprovação do recurso para atendimento sem ônus para o Estado.',
       status: 'pendente'
     });
   } else if (!needsSemOnus && hasSemOnus) {

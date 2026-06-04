@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Solicitacao, DocumentoChecklist, syncChecklistDocs } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
+import { enderecosDados } from './GestaoObrasViews';
 import { X, AlertCircle, Database, FileText, CheckCircle2 } from 'lucide-react';
 
 interface NovaSolicitacaoModalProps {
@@ -65,8 +66,10 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
   }, [sreDoTecnico]);
   
   // Custom states
+  const [codigoEndereco, setCodigoEndereco] = useState('');
   const [formaOcupacao, setFormaOcupacao] = useState('PRÓPRIO');
   const [outraFormaOcupacao, setOutraFormaOcupacao] = useState('');
+  const [seiMinutaOcupacao, setSeiMinutaOcupacao] = useState('');
   const [predio, setPredio] = useState('PRINCIPAL');
   const [tombado, setTombado] = useState('NÃO É TOMBADO');
   const [orgaoTombador, setOrgaoTombador] = useState('');
@@ -77,7 +80,13 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
   const [numPaf, setNumPaf] = useState('');
   const [anoEmenda, setAnoEmenda] = useState('');
   const [formaAtendimento, setFormaAtendimento] = useState('VIA CAIXA ESCOLAR');
-  const [notificacao, setNotificacao] = useState('Não há notificação');
+  // Classificação da Demanda
+  const [origemDemanda, setOrigemDemanda] = useState('');
+  const [orgaoEmissorNotificacao, setOrgaoEmissorNotificacao] = useState('');
+  const [numeroNotificacao, setNumeroNotificacao] = useState('');
+  const [dataNotificacao, setDataNotificacao] = useState('');
+  const [prazoAtendimentoNotificacao, setPrazoAtendimentoNotificacao] = useState('');
+  const [grauPrioridade, setGrauPrioridade] = useState('');
   const [descricaoFolhaRosto, setDescricaoFolhaRosto] = useState('');
   const [valorPlanilha, setValorPlanilha] = useState('');
   const [iss, setIss] = useState('');
@@ -87,14 +96,23 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
 
   const [erro, setErro] = useState('');
 
-  // Handle CODESC change and auto-fill
+  // Handle CODESC change — limpa endereço e dados da escola
   const handleCodescChange = (val: string) => {
     setCodesc(val);
-    const match = baseDadosFiltrados.find(item => item.codesc === val.trim());
+    setCodigoEndereco('');
+    setNomeEscola('');
+    setMunicipio('');
+    if (perfilUsuario !== 'tecnico_infra') setSre('');
+  };
+
+  // Handle endereço change — preenche dados da escola pelo CODESC
+  const handleEnderecoChange = (val: string, currentCodesc: string) => {
+    setCodigoEndereco(val);
+    const match = baseDadosFiltrados.find(item => item.codesc === currentCodesc.trim());
     if (match) {
       setNomeEscola(match.escola);
       setMunicipio(match.municipio);
-      setSre(match.sre);
+      if (perfilUsuario !== 'tecnico_infra') setSre(match.sre);
     }
   };
 
@@ -173,7 +191,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
       justificativa: undefined
     }));
 
-    const checklistReset = syncChecklistDocs(baseChecklist, notificacao, formaAtendimento);
+    const checklistReset = syncChecklistDocs(baseChecklist, origemDemanda, formaAtendimento);
 
     const nova: Solicitacao = {
       id: `SOL-2026-${Math.floor(100 + Math.random() * 900)}`,
@@ -192,14 +210,21 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
       aditivos: [],
 
       // Extended fields
+      codigoEndereco: codigoEndereco.trim() || undefined,
       formaOcupacao: formaOcupacao === 'OUTRO' ? `OUTRO (${outraFormaOcupacao.trim().toUpperCase()})` : formaOcupacao,
+      seiMinutaOcupacao: formaOcupacao === 'OUTRO' ? seiMinutaOcupacao.trim() || undefined : undefined,
       predio: predio.toUpperCase(),
       tipoObra,
       tipoAtendimento,
       numPaf: tipoAtendimento === 'EMENDA' ? numPaf.trim().toUpperCase() : undefined,
       anoEmenda: tipoAtendimento === 'EMENDA' ? anoEmenda.trim() : undefined,
       formaAtendimento,
-      notificacao,
+      origemDemanda: origemDemanda || undefined,
+      orgaoEmissorNotificacao: origemDemanda === 'Notificação' ? orgaoEmissorNotificacao || undefined : undefined,
+      numeroNotificacao: origemDemanda === 'Notificação' ? numeroNotificacao || undefined : undefined,
+      dataNotificacao: origemDemanda === 'Notificação' ? dataNotificacao || undefined : undefined,
+      prazoAtendimentoNotificacao: origemDemanda === 'Notificação' ? prazoAtendimentoNotificacao || undefined : undefined,
+      grauPrioridade: grauPrioridade as any || undefined,
       descricaoFolhaRosto,
       valorPlanilha: valorPlanilha ? parseBRLToFloat(valorPlanilha) : undefined,
       iss,
@@ -248,68 +273,71 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
               1. Identificação Escolar
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-1">
+            {/* Passo 1: CODESC + Código do Endereço lado a lado */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Código CODESC *
                 </label>
                 <input
                   type="text"
-                  placeholder="Digite ex: 1902..."
+                  placeholder="Digite ex: 145236..."
                   value={codesc}
                   onChange={(e) => handleCodescChange(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-medium"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono font-medium"
                   required
                 />
               </div>
 
-              <div className="sm:col-span-2">
+              <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Nome da Escola *
+                  Código do Endereço *
+                  {!codesc && <span className="text-slate-300 font-normal normal-case ml-1">(selecione o CODESC primeiro)</span>}
                 </label>
-                <input
-                  type="text"
-                  placeholder="Preenchido automaticamente ao achar CODESC"
-                  value={nomeEscola}
-                  onChange={(e) => setNomeEscola(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans"
+                <select
                   required
-                />
+                  disabled={!codesc}
+                  value={codigoEndereco}
+                  onChange={(e) => handleEnderecoChange(e.target.value, codesc)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 bg-white font-mono text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                >
+                  <option value="">Selecione o endereço...</option>
+                  {enderecosDados
+                    .filter(e => e.codesc === codesc)
+                    .map(e => (
+                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                        {e.codigoEndereco} — {e.descricao}
+                      </option>
+                    ))}
+                </select>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Município *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: Belo Horizonte"
-                  value={municipio}
-                  onChange={(e) => setMunicipio(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans"
-                  required
-                />
+            {/* Passo 2: dados preenchidos automaticamente */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-3">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nome da Escola</label>
+                <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${nomeEscola ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                  {nomeEscola || 'Preenchido automaticamente ao selecionar o endereço'}
+                </div>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Superintendência SRE *
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Município</label>
+                <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${municipio ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                  {municipio || '—'}
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Superintendência SRE</label>
                 {perfilUsuario === 'tecnico_infra' ? (
-                  <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold flex items-center gap-2 cursor-default">
+                  <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold flex items-center gap-2">
                     <span className="text-[10px] text-slate-400 uppercase font-sans shrink-0">Sua regional:</span>
                     {sre}
                   </div>
                 ) : (
-                <input
-                  type="text"
-                  placeholder="Ex: SRE Metropolitana A"
-                  value={sre}
-                  onChange={(e) => setSre(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans"
-                  required
-                />
+                  <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${sre ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                    {sre || '—'}
+                  </div>
                 )}
               </div>
             </div>
@@ -354,18 +382,33 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             </div>
 
             {formaOcupacao === 'OUTRO' && (
-              <div className="sm:col-span-2 animate-in slide-in-from-top-2 duration-250">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Explique a Outra Forma de Ocupação *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Por favor, explique a forma de ocupação do imóvel..."
-                  value={outraFormaOcupacao}
-                  onChange={(e) => setOutraFormaOcupacao(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-blue-200 bg-blue-50/10 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans outline-hidden"
-                  required
-                />
+              <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-250">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Explique a Outra Forma de Ocupação *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Por favor, explique a forma de ocupação do imóvel..."
+                    value={outraFormaOcupacao}
+                    onChange={(e) => setOutraFormaOcupacao(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-blue-200 bg-blue-50/10 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans outline-hidden"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    SEI da Minuta *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: 1234.01.0012345/2026-00"
+                    value={seiMinutaOcupacao}
+                    onChange={(e) => setSeiMinutaOcupacao(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-blue-200 bg-blue-50/10 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-mono outline-hidden"
+                  />
+                </div>
               </div>
             )}
 
@@ -449,29 +492,62 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
               </select>
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 font-sans">
-                Há alguma notificação? *
-              </label>
-              <select
-                value={notificacao || 'Não há notificação'}
-                onChange={(e) => setNotificacao(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 bg-white transition-all font-sans cursor-pointer text-slate-705 font-medium"
-              >
-                <option value="Não há notificação">Não há notificação</option>
-                <option value="Ministério Publico">Ministério Publico</option>
-                <option value="Prefeitura">Prefeitura</option>
-                <option value="Defesa Civil">Defesa Civil</option>
-                <option value="TCE">TCE</option>
-              </select>
-            </div>
           </div>
 
-          {/* SECTION 3: Classificação da Demanda */}
+          {/* SECTION 3: Tipo de Obra, Atendimento e Origem da Demanda */}
           <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-200/60 space-y-4">
             <h4 className="text-xs font-bold text-slate-700 border-b border-slate-100 pb-2 uppercase tracking-wider font-mono">
               3. Tipo de Obra e Atendimento
             </h4>
+
+            {/* Origem da Demanda — integrada ao bloco de detalhamento */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Origem da Demanda *</label>
+              <select value={origemDemanda} onChange={(e) => setOrigemDemanda(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 bg-white transition-all font-sans cursor-pointer text-slate-705 font-medium">
+                <option value="">Selecione a origem...</option>
+                {['Solicitação da Escola', 'Solicitação da SRE', 'Programa Governamental', 'Fiscalização', 'Notificação', 'Determinação Judicial', 'Atendimento Político'].map(op => (
+                  <option key={op} value={op}>{op}</option>
+                ))}
+              </select>
+            </div>
+
+            {origemDemanda === 'Notificação' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl animate-in slide-in-from-top-2 duration-150">
+                <div className="sm:col-span-2 text-[10px] font-black text-amber-800 uppercase tracking-wider">Detalhes da Notificação</div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Órgão Emissor *</label>
+                  <select value={orgaoEmissorNotificacao} onChange={(e) => setOrgaoEmissorNotificacao(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white cursor-pointer font-medium text-slate-800">
+                    <option value="">Selecione...</option>
+                    {['Ministério Público', 'Defesa Civil', 'Corpo de Bombeiros', 'Prefeitura', 'TCE', 'CGE', 'Vigilância Sanitária', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Grau de Prioridade *</label>
+                  <select value={grauPrioridade} onChange={(e) => setGrauPrioridade(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white cursor-pointer font-medium text-slate-800">
+                    <option value="">Selecione...</option>
+                    {['Crítico', 'Alto', 'Médio', 'Baixo'].map(g => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Número da Notificação</label>
+                  <input type="text" placeholder="Ex: NOT-2026/001" value={numeroNotificacao} onChange={(e) => setNumeroNotificacao(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Data da Notificação</label>
+                  <input type="date" value={dataNotificacao} onChange={(e) => setDataNotificacao(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Prazo para Atendimento</label>
+                  <input type="date" value={prazoAtendimentoNotificacao} onChange={(e) => setPrazoAtendimentoNotificacao(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" />
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
@@ -513,7 +589,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                   TIPO DE ATENDIMENTO *
                 </label>
                 <div className="flex flex-col gap-1.5 border border-slate-200 rounded-lg p-3 bg-white">
-                  {['NORMAL', 'EMERGENCIAL', 'EMENDA', 'SOE', 'PDDE'].map((item) => (
+                  {['NORMAL', 'EMERGENCIAL', 'EMENDA', 'SOE', 'PDDE', 'ESPECIAL'].map((item) => (
                     <label key={item} className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                       <input 
                         type="radio" 

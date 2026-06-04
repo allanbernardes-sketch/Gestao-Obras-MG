@@ -4,6 +4,7 @@ import {
   ChevronRight, Download, Layers, Plus, Database, Check, Edit3, MessageSquare, RefreshCw 
 } from 'lucide-react';
 import { Solicitacao, DocumentoChecklist, PerfilUsuario, syncChecklistDocs, Aditivo, AjustePlanilha } from '../types';
+import { enderecosDados } from './GestaoObrasViews';
 
 interface ProcessAnalysisPanelProps {
   solicitacao: Solicitacao;
@@ -233,7 +234,7 @@ export default function ProcessAnalysisPanel({
       extra = { validacaoFormaOcupacao: 'editado' as const };
     } else if (key === 'predio') {
       extra = { validacaoPredioEscola: 'editado' as const };
-    } else if (key === 'tombado' || key === 'orgaoTombador' || key === 'notificacao') {
+    } else if (key === 'tombado' || key === 'orgaoTombador') {
       extra = { validacaoTombamento: 'editado' as const };
     } else if (key === 'coabitado' || key === 'tipoCoabitado') {
       extra = { validacaoCoabitado: 'editado' as const };
@@ -242,10 +243,12 @@ export default function ProcessAnalysisPanel({
     const updated: Solicitacao = {
       ...solicitacao,
       [key]: val,
-      ...extra
+      ...extra,
+      // Ao desmarcar tombamento, limpa o órgão tombador automaticamente
+      ...(key === 'tombado' && val === 'NÃO É TOMBADO' ? { orgaoTombador: '' } : {})
     };
 
-    if (key === 'notificacao') {
+    if (key === 'origemDemanda') {
       updated.documentos = syncChecklistDocs(updated.documentos || [], val, updated.formaAtendimento);
     }
 
@@ -391,8 +394,62 @@ export default function ProcessAnalysisPanel({
                         solicitacao.validacaoReferenciaDotacao === 'nao_validado';
 
   const docCount = solicitacao.documentos.length + (solicitacao.outrosDocumentos || []).length;
-  const docPendentes = solicitacao.documentos.filter(d => d.status === 'pendente').length + 
+  const docPendentes = solicitacao.documentos.filter(d => d.status === 'pendente').length +
                        (solicitacao.outrosDocumentos || []).filter(d => d.status === 'pendente').length;
+
+  // Campos de validação técnica
+  const validacaoFields = [
+    solicitacao.validacaoEscolar,
+    solicitacao.validacaoFormaOcupacao,
+    solicitacao.validacaoPredioEscola,
+    solicitacao.validacaoTombamento,
+    solicitacao.validacaoCoabitado,
+    solicitacao.validacaoTecnica,
+    solicitacao.validacaoReferenciaDotacao,
+  ];
+  // Campos ainda não analisados (undefined ou 'editado' = aguardando re-validação)
+  const camposPendentes = validacaoFields.filter(v => !v || v === 'editado').length;
+
+  // Analista iniciou ao menos uma revisão?
+  const hasStartedReview =
+    validacaoFields.some(v => v === 'validado' || v === 'nao_validado') ||
+    solicitacao.documentos.some(d => d.status === 'aprovado' || d.status === 'recusado') ||
+    (solicitacao.outrosDocumentos || []).some(d => d.status === 'aprovado' || d.status === 'recusado');
+
+  // Tudo revisado (nenhum pendente)?
+  const allReviewed = docPendentes === 0 && camposPendentes === 0;
+
+  // Pode aprovar: tudo revisado, nenhuma rejeição e revisão iniciada
+  const podeAprovar = hasStartedReview && allReviewed && !hasRejections;
+  // Pode devolver: revisão iniciada (não pode devolver sem ter olhado nada)
+  const podeDevolver = hasStartedReview;
+
+  // Classe de borda dinâmica por estado de validação de seção
+  const secBorder = (v?: string) =>
+    v === 'validado'     ? 'border-emerald-300 bg-emerald-50/20' :
+    v === 'nao_validado' ? 'border-red-400 bg-red-50/20' :
+    v === 'editado'      ? 'border-amber-400 bg-amber-50/20' :
+                           'border-amber-300 bg-amber-50/10';
+
+  // Scroll para a primeira seção com pendência
+  const scrollToFirstIssue = () => {
+    const secIds = [
+      { id: 'sec-escolar',      v: solicitacao.validacaoEscolar },
+      { id: 'sec-patrimonial',  v: [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].find(x => !x || x !== 'validado') },
+      { id: 'sec-tecnico',      v: solicitacao.validacaoTecnica },
+      { id: 'sec-referencia',   v: solicitacao.validacaoReferenciaDotacao },
+    ];
+    const primeira = secIds.find(s => s.v !== 'validado');
+    if (primeira) {
+      if (subTab !== 'dados_gerais') setSubTab('dados_gerais');
+      setTimeout(() => {
+        document.getElementById(primeira.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+      return;
+    }
+    // Se todos os campos OK mas há docs pendentes, vai para aba checklist
+    if (docPendentes > 0) setSubTab('checklist');
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -744,7 +801,7 @@ export default function ProcessAnalysisPanel({
           )}
 
           {/* SEÇÃO 1: Identificação Escolar */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
+          <div id="sec-escolar" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(solicitacao.validacaoEscolar)}`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
@@ -812,6 +869,28 @@ export default function ProcessAnalysisPanel({
                   disabled={!isMyAssignment}
                   className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-800 font-bold"
                 />
+              </div>
+
+              <div className="sm:col-span-1">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Código do Endereço
+                </label>
+                <select
+                  value={solicitacao.codigoEndereco || ''}
+                  onChange={(e) => handleUpdateEscolar('codigoEndereco', e.target.value)}
+                  disabled={!isMyAssignment}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-800 font-mono font-bold bg-white cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                >
+                  <option value="">Selecione...</option>
+                  {enderecosDados
+                    .filter(e => !solicitacao.codesc || e.codesc === solicitacao.codesc)
+                    .map(e => (
+                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                        {e.codigoEndereco} — {e.descricao}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[9px] text-slate-400 mt-0.5">Único por edificação — diferente do CODESC</p>
               </div>
             </div>
 
@@ -892,7 +971,15 @@ export default function ProcessAnalysisPanel({
           </div>
 
           {/* SEÇÃO 2: Classificação Patrimonial do Imóvel */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
+          <div id="sec-patrimonial" className={`p-5 rounded-xl border space-y-4 transition-colors ${
+            [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].some(v => v === 'nao_validado')
+              ? secBorder('nao_validado')
+              : [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].every(v => v === 'validado')
+                ? secBorder('validado')
+                : [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].some(v => v === 'editado')
+                  ? secBorder('editado')
+                  : secBorder(undefined)
+          }`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-705 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
@@ -1306,7 +1393,7 @@ export default function ProcessAnalysisPanel({
           </div>
 
           {/* SEÇÃO 3: Detalhamento Técnico e Demanda */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
+          <div id="sec-tecnico" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(solicitacao.validacaoTecnica)}`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
@@ -1358,6 +1445,7 @@ export default function ProcessAnalysisPanel({
                   <option value="EMENDA">EMENDA</option>
                   <option value="SOE">SOE</option>
                   <option value="PDDE">PDDE</option>
+                  <option value="ESPECIAL">ESPECIAL</option>
                 </select>
               </div>
 
@@ -1492,7 +1580,7 @@ export default function ProcessAnalysisPanel({
           </div>
 
           {/* SEÇÃO 4: Informações de Referência e Dotação Orçamentária SGO */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
+          <div id="sec-referencia" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(solicitacao.validacaoReferenciaDotacao)}`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
@@ -1685,11 +1773,11 @@ export default function ProcessAnalysisPanel({
                 const isUploaded = doc.fileName !== undefined;
                 return (
                   <div key={doc.id} className={`p-4 rounded-xl border transition-all ${
-                    doc.status === 'recusado' 
-                      ? 'border-red-200 bg-red-50/10'
+                    doc.status === 'recusado'
+                      ? 'border-red-300 bg-red-50/20'
                       : doc.status === 'aprovado'
-                        ? 'border-emerald-150 bg-emerald-50/5'
-                        : 'border-slate-200 bg-white hover:border-slate-300 shadow-3xs'
+                        ? 'border-emerald-300 bg-emerald-50/20'
+                        : 'border-amber-300 bg-amber-50/20'
                   }`}>
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       
@@ -1804,11 +1892,11 @@ export default function ProcessAnalysisPanel({
                 const isUploaded = doc.fileName !== undefined;
                 return (
                   <div key={doc.id} className={`p-4 rounded-xl border transition-all ${
-                    doc.status === 'recusado' 
-                      ? 'border-red-200 bg-red-50/10'
+                    doc.status === 'recusado'
+                      ? 'border-red-300 bg-red-50/20'
                       : doc.status === 'aprovado'
-                        ? 'border-emerald-150 bg-emerald-50/5'
-                        : 'border-slate-200 bg-white hover:border-slate-300 shadow-3xs'
+                        ? 'border-emerald-300 bg-emerald-50/20'
+                        : 'border-amber-300 bg-amber-50/20'
                   }`}>
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       
@@ -2082,27 +2170,81 @@ export default function ProcessAnalysisPanel({
 
       {/* BOTÕES FINAIS DO PROCESSO — sempre visíveis na tela de análise */}
       {!hideTransitionButtons && solicitacao.etapaAtual === 'analise' && (
-        <div className="flex items-center justify-between gap-3 pt-5 mt-4 border-t-2 border-slate-200">
-          <p className="text-[11px] text-slate-500 font-sans max-w-sm leading-relaxed">
-            Ação final para o processo <strong className="text-slate-700">{solicitacao.id}</strong> — {solicitacao.nomeEscola}.
-          </p>
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={enviarReprovacaoFinal || solicitarDevolucaoProcesso}
-              className="flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition cursor-pointer"
-            >
-              <XCircle className="w-4 h-4" />
-              Enviar Reprovação
-            </button>
-            <button
-              type="button"
-              onClick={enviarAprovacaoFinal || finalizarAnaliseDore}
-              className="flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition cursor-pointer"
-            >
-              <CheckCircle className="w-4 h-4" />
-              Enviar Aprovação
-            </button>
+        <div className="pt-5 mt-4 border-t-2 border-slate-200 space-y-4">
+
+          {/* Painel de status da revisão */}
+          {(!allReviewed || hasRejections || !hasStartedReview) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-black text-amber-800 uppercase tracking-wide text-[10px] flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  Pendências para liberação das ações finais
+                </p>
+                <button
+                  type="button"
+                  onClick={scrollToFirstIssue}
+                  className="shrink-0 px-3 py-1 bg-amber-200 hover:bg-amber-300 text-amber-900 font-black text-[9px] uppercase tracking-wide rounded-lg transition cursor-pointer flex items-center gap-1"
+                >
+                  <ChevronRight className="w-3 h-3" /> Ir para pendência
+                </button>
+              </div>
+              <ul className="space-y-1 text-amber-700 font-medium">
+                {!hasStartedReview && (
+                  <li>• Nenhum item foi analisado ainda. Revise os documentos e os campos de dados gerais antes de prosseguir.</li>
+                )}
+                {docPendentes > 0 && (
+                  <li>• {docPendentes} documento{docPendentes > 1 ? 's' : ''} ainda {docPendentes > 1 ? 'estão' : 'está'} com status <strong>Pendente</strong> — valide ou recuse cada um na aba Checklist.</li>
+                )}
+                {camposPendentes > 0 && (
+                  <li>• {camposPendentes} campo{camposPendentes > 1 ? 's' : ''} de dados gerais {camposPendentes > 1 ? 'ainda não foram validados' : 'ainda não foi validado'} (pendente ou editado) — acesse a aba Dados Gerais.</li>
+                )}
+                {hasRejections && allReviewed && (
+                  <li>• Existem itens <strong>recusados ou não validados</strong> — o processo só pode ser <strong>devolvido para correção</strong>, não aprovado.</li>
+                )}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] text-slate-500 font-sans max-w-sm leading-relaxed">
+              Ação final para o processo <strong className="text-slate-700">{solicitacao.id}</strong> — {solicitacao.nomeEscola}.
+            </p>
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                disabled={!podeDevolver}
+                onClick={podeDevolver ? (enviarReprovacaoFinal || solicitarDevolucaoProcesso) : undefined}
+                title={!podeDevolver ? 'Analise ao menos um item antes de devolver o processo' : 'Devolver para correção'}
+                className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
+                  podeDevolver
+                    ? 'bg-rose-600 hover:bg-rose-700 cursor-pointer'
+                    : 'bg-slate-300 cursor-not-allowed opacity-60'
+                }`}
+              >
+                <XCircle className="w-4 h-4" />
+                Enviar Reprovação
+              </button>
+              <button
+                type="button"
+                disabled={!podeAprovar}
+                onClick={podeAprovar ? (enviarAprovacaoFinal || finalizarAnaliseDore) : undefined}
+                title={
+                  !hasStartedReview ? 'Analise o processo antes de enviar aprovação' :
+                  docPendentes > 0 ? `Há ${docPendentes} documento(s) pendente(s) de análise` :
+                  camposPendentes > 0 ? `Há ${camposPendentes} campo(s) sem validação` :
+                  hasRejections ? 'Existem itens recusados — só é possível devolver para correção' :
+                  'Enviar aprovação'
+                }
+                className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
+                  podeAprovar
+                    ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
+                    : 'bg-slate-300 cursor-not-allowed opacity-60'
+                }`}
+              >
+                <CheckCircle className="w-4 h-4" />
+                Enviar Aprovação
+              </button>
+            </div>
           </div>
         </div>
       )}

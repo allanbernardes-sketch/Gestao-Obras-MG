@@ -69,6 +69,45 @@ const baseDados = [
   { codesc: '501301', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Duque de Caxias' },
 ];
 
+// Códigos de endereço únicos por edificação (CODESC pode se repetir para principal + anexos)
+export const enderecosDados = [
+  { codigoEndereco: 'END-001', codesc: '145236', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-002', codesc: '145236', descricao: 'Anexo I' },
+  { codigoEndereco: 'END-003', codesc: '145298', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-004', codesc: '145312', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-005', codesc: '145312', descricao: 'Anexo I' },
+  { codigoEndereco: 'END-006', codesc: '145401', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-007', codesc: '145489', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-008', codesc: '145524', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-009', codesc: '145524', descricao: 'Anexo I' },
+  { codigoEndereco: 'END-010', codesc: '145603', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-011', codesc: '145678', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-012', codesc: '1821',   descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-013', codesc: '1821',   descricao: 'Anexo I' },
+  { codigoEndereco: 'END-014', codesc: '102547', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-015', codesc: '103210', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-016', codesc: '103456', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-017', codesc: '103456', descricao: 'Anexo I' },
+  { codigoEndereco: 'END-018', codesc: '1902',   descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-019', codesc: '1104',   descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-020', codesc: '104112', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-021', codesc: '104112', descricao: 'Anexo I' },
+  { codigoEndereco: 'END-022', codesc: '205',    descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-023', codesc: '201334', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-024', codesc: '106470', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-025', codesc: '106537', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-026', codesc: '304958', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-027', codesc: '304958', descricao: 'Anexo I' },
+  { codigoEndereco: 'END-028', codesc: '305012', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-029', codesc: '205847', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-030', codesc: '205901', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-031', codesc: '405912', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-032', codesc: '405988', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-033', codesc: '501234', descricao: 'Prédio Principal' },
+  { codigoEndereco: 'END-034', codesc: '501234', descricao: 'Anexo I' },
+  { codigoEndereco: 'END-035', codesc: '501301', descricao: 'Prédio Principal' },
+];
+
 // ==========================================
 // 1. FORMULÁRIO DE NOVO ATENDIMENTO E TELA INTERMEDIÁRIA
 // ==========================================
@@ -113,8 +152,10 @@ export function NovoAtendimentoPanel({
   const [nomeEscola, setNomeEscola] = useState('');
   const [municipio, setMunicipio] = useState('');
   const [sre, setSre] = useState('');
+  const [codigoEndereco, setCodigoEndereco] = useState('');
   const [formaOcupacao, setFormaOcupacao] = useState('PRÓPRIO');
   const [outraFormaOcupacao, setOutraFormaOcupacao] = useState('');
+  const [seiMinutaOcupacao, setSeiMinutaOcupacao] = useState('');
   const [predio, setPredio] = useState('PRINCIPAL');
   const [tombado, setTombado] = useState('NÃO É TOMBADO');
   const [orgaoTombador, setOrgaoTombador] = useState('');
@@ -125,7 +166,13 @@ export function NovoAtendimentoPanel({
   const [numPaf, setNumPaf] = useState('');
   const [anoEmenda, setAnoEmenda] = useState('');
   const [formaAtendimento, setFormaAtendimento] = useState('VIA CAIXA ESCOLAR');
-  const [notificacao, setNotificacao] = useState('Não há notificação');
+  // Classificação da Demanda
+  const [origemDemanda, setOrigemDemanda] = useState('');
+  const [orgaoEmissorNotificacao, setOrgaoEmissorNotificacao] = useState('');
+  const [numeroNotificacao, setNumeroNotificacao] = useState('');
+  const [dataNotificacao, setDataNotificacao] = useState('');
+  const [prazoAtendimentoNotificacao, setPrazoAtendimentoNotificacao] = useState('');
+  const [grauPrioridade, setGrauPrioridade] = useState('');
   const [descricaoFolhaRosto, setDescricaoFolhaRosto] = useState('');
   const [valorPlanilha, setValorPlanilha] = useState('');
   const [iss, setIss] = useState('');
@@ -165,12 +212,12 @@ export function NovoAtendimentoPanel({
     }
   }, [atendimentoEmEdicaoDirect]);
 
-  // Synchronize documentosChecklist with notificacao and formaAtendimento during creation
+  // Synchronize documentosChecklist with origemDemanda and formaAtendimento during creation
   React.useEffect(() => {
     setDocumentosChecklist(prev => {
-      return syncChecklistDocs(prev, notificacao, formaAtendimento);
+      return syncChecklistDocs(prev, origemDemanda, formaAtendimento);
     });
-  }, [notificacao, formaAtendimento]);
+  }, [origemDemanda, formaAtendimento]);
 
   // Synchronize inline loaded/edited solicitation documents with fields
   React.useEffect(() => {
@@ -241,6 +288,7 @@ export function NovoAtendimentoPanel({
       !codesc.trim() ||
       !municipio.trim() ||
       !sre.trim() ||
+      !descricaoFolhaRosto.trim() ||
       (formaOcupacao === 'OUTRO' && !outraFormaOcupacao.trim()) ||
       (tipoAtendimento === 'EMENDA' && (!numPaf.trim() || !anoEmenda.trim()))
     ) {
@@ -397,14 +445,21 @@ export function NovoAtendimentoPanel({
       ajustes: [],
 
       // Extended fields
+      codigoEndereco: codigoEndereco.trim() || undefined,
       formaOcupacao: formaOcupacao === 'OUTRO' ? `OUTRO (${outraFormaOcupacao.trim().toUpperCase()})` : formaOcupacao,
+      seiMinutaOcupacao: formaOcupacao === 'OUTRO' ? seiMinutaOcupacao.trim() || undefined : undefined,
       predio: predio.toUpperCase(),
       tipoObra,
       tipoAtendimento,
       numPaf: tipoAtendimento === 'EMENDA' ? numPaf.trim().toUpperCase() : undefined,
       anoEmenda: tipoAtendimento === 'EMENDA' ? anoEmenda.trim() : undefined,
       formaAtendimento,
-      notificacao,
+      origemDemanda: origemDemanda || undefined,
+      orgaoEmissorNotificacao: origemDemanda === 'Notificação' ? orgaoEmissorNotificacao || undefined : undefined,
+      numeroNotificacao: origemDemanda === 'Notificação' ? numeroNotificacao || undefined : undefined,
+      dataNotificacao: origemDemanda === 'Notificação' ? dataNotificacao || undefined : undefined,
+      prazoAtendimentoNotificacao: origemDemanda === 'Notificação' ? prazoAtendimentoNotificacao || undefined : undefined,
+      grauPrioridade: grauPrioridade as any || undefined,
       descricaoFolhaRosto,
       valorPlanilha: valorPlanilha ? parseBRLToFloat(valorPlanilha) : 0,
       iss: iss ? (iss.includes('%') ? iss : `${iss}%`) : '5%',
@@ -572,8 +627,9 @@ export function NovoAtendimentoPanel({
                 <div className="text-[10px] text-slate-400 font-sans">Selecione o CODESC ou a escola para preencher automaticamente</div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-1">
+              {/* Passo 1: CODESC + Código do Endereço lado a lado */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     Código CODESC *
                   </label>
@@ -583,12 +639,10 @@ export function NovoAtendimentoPanel({
                     onChange={(e) => {
                       const val = e.target.value;
                       setCodesc(val);
-                      const match = baseDadosFiltrados.find(item => item.codesc === val);
-                      if (match) {
-                        setNomeEscola(match.escola);
-                        setMunicipio(match.municipio);
-                        setSre(match.sre);
-                      }
+                      setCodigoEndereco(''); // limpa endereço ao trocar escola
+                      setNomeEscola('');
+                      setMunicipio('');
+                      if (perfilUsuario !== 'tecnico_infra') setSre('');
                     }}
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans font-medium bg-white cursor-pointer text-slate-800"
                   >
@@ -599,71 +653,73 @@ export function NovoAtendimentoPanel({
                   </select>
                 </div>
 
-                <div className="sm:col-span-2">
+                <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Nome da Escola Estadual *
+                    Código do Endereço *
+                    {!codesc && <span className="text-slate-300 font-normal normal-case ml-1">(selecione o CODESC primeiro)</span>}
                   </label>
                   <select
                     required
-                    value={nomeEscola}
+                    disabled={!codesc}
+                    value={codigoEndereco}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setNomeEscola(val);
-                      const match = baseDadosFiltrados.find(item => item.escola === val);
+                      setCodigoEndereco(val);
+                      // Preenche escola, município e SRE ao selecionar o endereço
+                      const match = baseDadosFiltrados.find(item => item.codesc === codesc);
                       if (match) {
-                        setCodesc(match.codesc);
+                        setNomeEscola(match.escola);
                         setMunicipio(match.municipio);
-                        setSre(match.sre);
+                        if (perfilUsuario !== 'tecnico_infra') setSre(match.sre);
                       }
                     }}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white font-mono text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
-                    <option value="">Selecione a escola...</option>
-                    {baseDadosFiltrados.map(item => (
-                      <option key={item.codesc} value={item.escola}>{item.escola}</option>
-                    ))}
+                    <option value="">Selecione o endereço...</option>
+                    {enderecosDados
+                      .filter(e => e.codesc === codesc)
+                      .map(e => (
+                        <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                          {e.codigoEndereco} — {e.descricao}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+              {/* Passo 2: dados preenchidos automaticamente */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-3">
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Município *
+                    Nome da Escola Estadual
                   </label>
-                  <select
-                    required
-                    value={municipio}
-                    onChange={(e) => setMunicipio(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
-                  >
-                    <option value="">Selecione o município...</option>
-                    {[...new Set(baseDadosFiltrados.map(item => item.municipio))].sort().map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
+                  <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${nomeEscola ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                    {nomeEscola || 'Preenchido automaticamente ao selecionar o endereço'}
+                  </div>
                 </div>
+
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Superintendência Regional (SRE) *
+                    Município
+                  </label>
+                  <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${municipio ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                    {municipio || '—'}
+                  </div>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Superintendência Regional (SRE)
                   </label>
                   {perfilUsuario === 'tecnico_infra' ? (
-                    <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold flex items-center gap-2 cursor-default">
+                    <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold flex items-center gap-2">
                       <span className="text-[10px] text-slate-400 uppercase font-sans shrink-0">Sua regional:</span>
                       {sre}
                     </div>
                   ) : (
-                    <select
-                      required
-                      value={sre}
-                      onChange={(e) => setSre(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all font-sans bg-white cursor-pointer text-slate-800"
-                    >
-                      <option value="">Selecione a SRE...</option>
-                      {[...new Set(baseDadosFiltrados.map(item => item.sre))].sort().map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
+                    <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${sre ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
+                      {sre || '—'}
+                    </div>
                   )}
                 </div>
               </div>
@@ -788,37 +844,36 @@ export function NovoAtendimentoPanel({
               </div>
 
               {formaOcupacao === 'OUTRO' && (
-                <div className="sm:col-span-3 animate-in slide-in-from-top-2 duration-150">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Especifique a Outra Forma de Ocupação *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Especifique..."
-                    value={outraFormaOcupacao}
-                    onChange={(e) => setOutraFormaOcupacao(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600"
-                  />
+                <div className="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-150">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Especifique a Outra Forma de Ocupação *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Especifique..."
+                      value={outraFormaOcupacao}
+                      onChange={(e) => setOutraFormaOcupacao(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      SEI da Minuta *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: 1234.01.0012345/2026-00"
+                      value={seiMinutaOcupacao}
+                      onChange={(e) => setSeiMinutaOcupacao(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 font-mono"
+                    />
+                  </div>
                 </div>
               )}
 
-              <div className="sm:col-span-3">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 font-sans">
-                  Há alguma notificação? *
-                </label>
-                <select
-                  value={notificacao || 'Não há notificação'}
-                  onChange={(e) => setNotificacao(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800"
-                >
-                  <option value="Não há notificação">Não há notificação</option>
-                  <option value="Ministério Publico">Ministério Publico</option>
-                  <option value="Prefeitura">Prefeitura</option>
-                  <option value="Defesa Civil">Defesa Civil</option>
-                  <option value="TCE">TCE</option>
-                </select>
-              </div>
             </div>
 
             {/* SEÇÃO 3: Detalhamento Técnico e Demanda */}
@@ -828,6 +883,56 @@ export function NovoAtendimentoPanel({
                   3. Detalhamento Técnico e Demanda
                 </h4>
               </div>
+
+              {/* Origem da Demanda */}
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Origem da Demanda *</label>
+                <select value={origemDemanda} onChange={(e) => setOrigemDemanda(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white text-slate-800 font-bold cursor-pointer">
+                  <option value="">Selecione a origem...</option>
+                  {['Solicitação da Escola', 'Solicitação da SRE', 'Programa Governamental', 'Fiscalização', 'Notificação', 'Determinação Judicial', 'Atendimento Político'].map(op => (
+                    <option key={op} value={op}>{op}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sub-campos de Notificação */}
+              {origemDemanda === 'Notificação' && (
+                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl animate-in slide-in-from-top-2 duration-150">
+                  <div className="sm:col-span-2 text-[10px] font-black text-amber-800 uppercase tracking-wider">Detalhes da Notificação</div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Órgão Emissor *</label>
+                    <select value={orgaoEmissorNotificacao} onChange={(e) => setOrgaoEmissorNotificacao(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white cursor-pointer font-bold text-slate-800">
+                      <option value="">Selecione...</option>
+                      {['Ministério Público', 'Defesa Civil', 'Corpo de Bombeiros', 'Prefeitura', 'TCE', 'CGE', 'Vigilância Sanitária', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Grau de Prioridade *</label>
+                    <select value={grauPrioridade} onChange={(e) => setGrauPrioridade(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white cursor-pointer font-bold text-slate-800">
+                      <option value="">Selecione...</option>
+                      {['Crítico', 'Alto', 'Médio', 'Baixo'].map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Número da Notificação</label>
+                    <input type="text" placeholder="Ex: NOT-2026/001" value={numeroNotificacao} onChange={(e) => setNumeroNotificacao(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Data da Notificação</label>
+                    <input type="date" value={dataNotificacao} onChange={(e) => setDataNotificacao(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Prazo para Atendimento</label>
+                    <input type="date" value={prazoAtendimentoNotificacao} onChange={(e) => setPrazoAtendimentoNotificacao(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white" />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -861,6 +966,7 @@ export function NovoAtendimentoPanel({
                   <option value="EMENDA">EMENDA</option>
                   <option value="SOE">SOE</option>
                   <option value="PDDE">PDDE</option>
+                  <option value="ESPECIAL">ESPECIAL</option>
                 </select>
               </div>
 
@@ -911,10 +1017,11 @@ export function NovoAtendimentoPanel({
 
               <div className="sm:col-span-2">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Descrição Folha do Rosto (Sinopse e Diagnóstico Emergencial)
+                  Descrição Folha do Rosto (Sinopse e Diagnóstico Emergencial) *
                 </label>
                 <textarea
                   rows={2}
+                  required
                   placeholder="Descreva a folha de rosto do atendimento escolhendo focos de sinistro, intempéries ou risco"
                   value={descricaoFolhaRosto}
                   onChange={(e) => setDescricaoFolhaRosto(e.target.value)}
@@ -1382,22 +1489,46 @@ export function NovoAtendimentoPanel({
       )}
 
       {/* 2. TERCEIRO CASO (QUANDO SELEÇÃO DE EDIÇÃO ESTÁ ATIVA) */}
-      {selectedAtendimentoForEdit && (
-        <div className="bg-white rounded-xl border-2 border-dashed border-amber-300 p-6 shadow-3xs max-w-4xl mx-auto w-full text-left animate-in fade-in duration-200">
-          <div className="border-b border-amber-200 pb-4 mb-6 flex items-center justify-between">
+      {selectedAtendimentoForEdit && (() => {
+        const sol = selectedAtendimentoForEdit;
+        const isCorrecao = sol.etapaAtual === 'correcao';
+
+        // Retorna true quando o grupo foi validado pelo analista (campo bloqueado para edição)
+        const vLocked = (v?: string) => isCorrecao && v === 'validado';
+
+        // Marca o grupo de validação como 'editado' após correção do técnico
+        const markEditado = (campo: string) => isCorrecao ? { [campo]: 'editado' } : {};
+
+        // Comentários do analista por grupo
+        const comentariosAnalista = isCorrecao ? [
+          { label: 'Identificação Escolar', motivo: sol.motivoNaoValidacaoEscolar, valida: sol.validacaoEscolar },
+          { label: 'Patrimônio / Tombamento', motivo: sol.motivoNaoValidacaoPatrimonial, valida: sol.validacaoPatrimonial },
+          { label: 'Detalhamento Técnico', motivo: sol.motivoNaoValidacaoTecnica, valida: sol.validacaoTecnica },
+          { label: 'Referência de Dotação', motivo: sol.motivoNaoValidacaoReferenciaDotacao, valida: sol.validacaoReferenciaDotacao },
+          { label: 'Observações Gerais', motivo: sol.observacoesAnalistaDadosGerais, valida: undefined },
+        ].filter(c => c.motivo) : [];
+
+        const docsRecusados = isCorrecao
+          ? (sol.documentos || []).filter(d => d.status === 'recusado' && d.justificativa)
+          : [];
+
+        return (
+        <div className={`rounded-xl border-2 p-6 shadow-3xs max-w-4xl mx-auto w-full text-left animate-in fade-in duration-200 ${isCorrecao ? 'bg-rose-50/30 border-rose-300' : 'bg-white border-dashed border-amber-300'}`}>
+          <div className={`border-b pb-4 mb-6 flex items-center justify-between ${isCorrecao ? 'border-rose-200' : 'border-amber-200'}`}>
             <div>
-              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-md tracking-wider uppercase font-mono">
-                Modo de Edição / Continuação de Preenchimento
+              <span className={`px-2 py-0.5 text-[10px] font-bold rounded-md tracking-wider uppercase font-mono ${isCorrecao ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`}>
+                {isCorrecao ? 'Correção Exigida pela DORE' : 'Modo de Edição / Continuação de Preenchimento'}
               </span>
               <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-1.5 font-sans mt-1">
-                <Sparkles className="w-5 h-5 text-amber-500" />
-                Configurar Processo Ativo: {selectedAtendimentoForEdit.id}
+                {isCorrecao ? <AlertCircle className="w-5 h-5 text-rose-500" /> : <Sparkles className="w-5 h-5 text-amber-500" />}
+                {isCorrecao ? `Correção do Processo: ${sol.id}` : `Configurar Processo Ativo: ${sol.id}`}
               </h2>
               <p className="text-xs text-slate-500 font-sans mt-0.5">
-                Altere ou complemente as informações de checklist, valores, patrimônio e relatórios.
+                {isCorrecao
+                  ? 'Corrija apenas os itens apontados pelo analista. Campos validados estão bloqueados para edição.'
+                  : 'Altere ou complemente as informações de checklist, valores, patrimônio e relatórios.'}
               </p>
             </div>
-            
             <button
               onClick={() => setSelectedAtendimentoForEdit(null)}
               className="p-1 px-3 border border-slate-250 hover:bg-slate-50 text-slate-500 hover:text-slate-800 text-xs rounded-md shadow-3xs flex items-center gap-1 font-semibold cursor-pointer"
@@ -1406,6 +1537,32 @@ export function NovoAtendimentoPanel({
             </button>
           </div>
 
+          {/* Painel de comentários do analista */}
+          {isCorrecao && (comentariosAnalista.length > 0 || docsRecusados.length > 0) && (
+            <div className="mb-6 bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-3">
+              <h4 className="text-[10px] font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4" /> Parecer do Analista DORE — Itens a Corrigir
+              </h4>
+              {comentariosAnalista.map((c, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${c.valida === 'nao_validado' ? 'bg-rose-200 text-rose-800' : 'bg-slate-200 text-slate-600'}`}>{c.label}</span>
+                  <p className="text-rose-900 font-medium leading-relaxed">{c.motivo}</p>
+                </div>
+              ))}
+              {docsRecusados.length > 0 && (
+                <div className="space-y-1.5 border-t border-rose-200 pt-2 mt-2">
+                  <span className="text-[9px] font-black uppercase text-rose-700 block">Documentos Recusados</span>
+                  {docsRecusados.map(d => (
+                    <div key={d.id} className="flex items-start gap-2 text-xs">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-200 text-rose-800">{d.nome}</span>
+                      <p className="text-rose-900 font-medium leading-relaxed">{d.justificativa}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <form onSubmit={handleSaveEdit} className="space-y-6">
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-3 font-bold text-xs text-slate-700 uppercase tracking-wider font-mono border-b border-slate-100 pb-1 flex items-center justify-between">
@@ -1413,22 +1570,23 @@ export function NovoAtendimentoPanel({
                 <span className="text-[10px] text-slate-400 font-mono lower">Criado em: {selectedAtendimentoForEdit.dataCriacao}</span>
               </div>
 
+              {/* CODESC / Escola / Município / SRE — grupo validacaoEscolar */}
+              {isCorrecao && vLocked(sol.validacaoEscolar) && (
+                <div className="sm:col-span-3 flex items-center gap-2 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-bold">
+                  <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Identificação Escolar validada pelo analista — campo bloqueado.
+                </div>
+              )}
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Código CODESC
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Código CODESC</label>
                 <select
-                  value={selectedAtendimentoForEdit.codesc || ''}
+                  disabled={vLocked(sol.validacaoEscolar)}
+                  value={sol.codesc || ''}
                   onChange={(e) => {
                     const val = e.target.value;
                     const match = baseDadosFiltrados.find(item => item.codesc === val);
-                    setSelectedAtendimentoForEdit({
-                      ...selectedAtendimentoForEdit,
-                      codesc: val,
-                      ...(match ? { nomeEscola: match.escola, municipio: match.municipio, sre: match.sre } : {})
-                    });
+                    setSelectedAtendimentoForEdit({ ...sol, codesc: val, ...(match ? { nomeEscola: match.escola, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('validacaoEscolar') });
                   }}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecione o CODESC...</option>
                   {baseDadosFiltrados.map(item => (
@@ -1438,21 +1596,16 @@ export function NovoAtendimentoPanel({
               </div>
 
               <div className="sm:col-span-2">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Escola Estadual
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Escola Estadual</label>
                 <select
-                  value={selectedAtendimentoForEdit.nomeEscola || ''}
+                  disabled={vLocked(sol.validacaoEscolar)}
+                  value={sol.nomeEscola || ''}
                   onChange={(e) => {
                     const val = e.target.value;
                     const match = baseDadosFiltrados.find(item => item.escola === val);
-                    setSelectedAtendimentoForEdit({
-                      ...selectedAtendimentoForEdit,
-                      nomeEscola: val,
-                      ...(match ? { codesc: match.codesc, municipio: match.municipio, sre: match.sre } : {})
-                    });
+                    setSelectedAtendimentoForEdit({ ...sol, nomeEscola: val, ...(match ? { codesc: match.codesc, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('validacaoEscolar') });
                   }}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecione a escola...</option>
                   {baseDadosFiltrados.map(item => (
@@ -1462,13 +1615,12 @@ export function NovoAtendimentoPanel({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Município
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Município</label>
                 <select
-                  value={selectedAtendimentoForEdit.municipio || ''}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, municipio: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
+                  disabled={vLocked(sol.validacaoEscolar)}
+                  value={sol.municipio || ''}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, municipio: e.target.value, ...markEditado('validacaoEscolar') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecione o município...</option>
                   {[...new Set(baseDadosFiltrados.map(item => item.municipio))].sort().map(m => (
@@ -1478,13 +1630,12 @@ export function NovoAtendimentoPanel({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Superintendência SRE
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Superintendência SRE</label>
                 <select
-                  value={selectedAtendimentoForEdit.sre || ''}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, sre: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer"
+                  disabled={vLocked(sol.validacaoEscolar)}
+                  value={sol.sre || ''}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, sre: e.target.value, ...markEditado('validacaoEscolar') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecione a SRE...</option>
                   {[...new Set(baseDadosFiltrados.map(item => item.sre))].sort().map(s => (
@@ -1495,26 +1646,59 @@ export function NovoAtendimentoPanel({
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Prédio Escola
+                  Código do Endereço
+                  {isCorrecao && vLocked(sol.validacaoEscolar) && <span className="text-emerald-600 normal-case font-medium ml-1">(validado)</span>}
                 </label>
                 <select
-                  value={selectedAtendimentoForEdit.predio || 'PRINCIPAL'}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, predio: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium"
+                  disabled={vLocked(sol.validacaoEscolar)}
+                  value={sol.codigoEndereco || ''}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, codigoEndereco: e.target.value, ...markEditado('validacaoEscolar') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-mono cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
+                >
+                  <option value="">Selecione o endereço...</option>
+                  {enderecosDados
+                    .filter(e => !sol.codesc || e.codesc === sol.codesc)
+                    .map(e => (
+                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                        {e.codigoEndereco} — {e.descricao}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[9px] text-slate-400 mt-0.5">Identifica unicamente cada edificação (principal ou anexo)</p>
+              </div>
+
+              {/* Prédio — grupo validacaoPredioEscola */}
+              {isCorrecao && vLocked(sol.validacaoPredioEscola) && (
+                <div className="flex items-center gap-2 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-bold">
+                  <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Prédio validado — bloqueado.
+                </div>
+              )}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Prédio Escola</label>
+                <select
+                  disabled={vLocked(sol.validacaoPredioEscola)}
+                  value={sol.predio || 'PRINCIPAL'}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, predio: e.target.value, ...markEditado('validacaoPredioEscola') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="PRINCIPAL">PRINCIPAL</option>
                   <option value="ANEXO">ANEXO</option>
                 </select>
               </div>
 
+              {/* Tipo Obra / Tipo Atendimento / Valor / ISS — grupo validacaoTecnica */}
+              {isCorrecao && vLocked(sol.validacaoTecnica) && (
+                <div className="sm:col-span-3 flex items-center gap-2 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-bold">
+                  <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Detalhamento Técnico validado — campos bloqueados.
+                </div>
+              )}
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Tipo de Obra
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tipo de Obra</label>
                 <select
-                  value={selectedAtendimentoForEdit.tipoObra || 'REFORMA'}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, tipoObra: e.target.value, tipo: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium"
+                  disabled={vLocked(sol.validacaoTecnica)}
+                  value={sol.tipoObra || 'REFORMA'}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, tipoObra: e.target.value, tipo: e.target.value, ...markEditado('validacaoTecnica') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="AMPLIAÇÃO">AMPLIAÇÃO</option>
                   <option value="REFORMA">REFORMA</option>
@@ -1526,60 +1710,62 @@ export function NovoAtendimentoPanel({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Tipo Atendimento
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tipo Atendimento</label>
                 <select
-                  value={selectedAtendimentoForEdit.tipoAtendimento || 'NORMAL'}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, tipoAtendimento: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium"
+                  disabled={vLocked(sol.validacaoTecnica)}
+                  value={sol.tipoAtendimento || 'NORMAL'}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, tipoAtendimento: e.target.value, ...markEditado('validacaoTecnica') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="NORMAL">NORMAL</option>
                   <option value="EMERGENCIAL">EMERGENCIAL</option>
                   <option value="EMENDA">EMENDA</option>
                   <option value="SOE">SOE</option>
                   <option value="PDDE">PDDE</option>
+                  <option value="ESPECIAL">ESPECIAL</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Valor Estimado (R$)
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Valor Estimado (R$)</label>
                 <input
                   type="number"
-                  value={selectedAtendimentoForEdit.valorPlanilha || 0}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, valorPlanilha: parseFloat(e.target.value) || 0 })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-mono font-bold"
+                  disabled={vLocked(sol.validacaoTecnica)}
+                  value={sol.valorPlanilha || 0}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, valorPlanilha: parseFloat(e.target.value) || 0, ...markEditado('validacaoTecnica') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-mono font-bold disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 />
               </div>
 
+              {/* ISS — grupo validacaoReferenciaDotacao */}
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Alíquota ISS
+                  Alíquota ISS {isCorrecao && vLocked(sol.validacaoReferenciaDotacao) && <span className="text-emerald-600 normal-case font-medium ml-1">(validado)</span>}
                 </label>
                 <input
                   type="text"
-                  value={selectedAtendimentoForEdit.iss || '5%'}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, iss: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800"
+                  disabled={vLocked(sol.validacaoReferenciaDotacao)}
+                  value={sol.iss || '5%'}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, iss: e.target.value, ...markEditado('validacaoReferenciaDotacao') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 />
               </div>
 
+               {/* Tombamento — grupo validacaoTombamento */}
+              {isCorrecao && vLocked(sol.validacaoTombamento) && (
+                <div className="flex items-center gap-2 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-bold">
+                  <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Tombamento validado — bloqueado.
+                </div>
+              )}
                <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Tombamento
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tombamento</label>
                 <select
-                  value={selectedAtendimentoForEdit.tombado || 'NÃO É TOMBADO'}
+                  disabled={vLocked(sol.validacaoTombamento)}
+                  value={sol.tombado || 'NÃO É TOMBADO'}
                   onChange={(e) => {
                     const nextTombado = e.target.value;
-                    const nextOrgao = nextTombado === 'NÃO É TOMBADO' ? '' : (selectedAtendimentoForEdit.orgaoTombador || 'MUNICIPAL');
-                    setSelectedAtendimentoForEdit({ 
-                      ...selectedAtendimentoForEdit, 
-                      tombado: nextTombado,
-                      orgaoTombador: nextOrgao
-                    });
+                    const nextOrgao = nextTombado === 'NÃO É TOMBADO' ? '' : (sol.orgaoTombador || 'MUNICIPAL');
+                    setSelectedAtendimentoForEdit({ ...sol, tombado: nextTombado, orgaoTombador: nextOrgao, ...markEditado('validacaoTombamento') });
                   }}
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium"
                 >
@@ -1594,34 +1780,35 @@ export function NovoAtendimentoPanel({
                   Órgão Tombador
                 </label>
                 <select
-                  value={selectedAtendimentoForEdit.orgaoTombador || ''}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, orgaoTombador: e.target.value })}
-                  disabled={(selectedAtendimentoForEdit.tombado || 'NÃO É TOMBADO') === 'NÃO É TOMBADO'}
+                  disabled={vLocked(sol.validacaoTombamento) || (sol.tombado || 'NÃO É TOMBADO') === 'NÃO É TOMBADO'}
+                  value={sol.orgaoTombador || ''}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, orgaoTombador: e.target.value, ...markEditado('validacaoTombamento') })}
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium disabled:bg-slate-50 disabled:text-slate-400"
                 >
-                  {(selectedAtendimentoForEdit.tombado || 'NÃO É TOMBADO') === 'NÃO É TOMBADO' && <option value="">NÃO APLICÁVEL</option>}
+                  {(sol.tombado || 'NÃO É TOMBADO') === 'NÃO É TOMBADO' && <option value="">NÃO APLICÁVEL</option>}
                   <option value="MUNICIPAL">MUNICIPAL</option>
                   <option value="ESTADUAL">ESTADUAL</option>
                   <option value="FEDERAL">FEDERAL</option>
                 </select>
               </div>
 
+              {/* Coabitado — grupo validacaoCoabitado */}
+              {isCorrecao && vLocked(sol.validacaoCoabitado) && (
+                <div className="flex items-center gap-2 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-bold">
+                  <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Coabitação validada — bloqueado.
+                </div>
+              )}
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Imóvel Coabitado?
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Imóvel Coabitado?</label>
                 <select
-                  value={selectedAtendimentoForEdit.coabitado || 'NÃO'}
+                  disabled={vLocked(sol.validacaoCoabitado)}
+                  value={sol.coabitado || 'NÃO'}
                   onChange={(e) => {
                     const nextCoabitado = e.target.value;
-                    const nextTipo = nextCoabitado === 'NÃO' ? '' : (selectedAtendimentoForEdit.tipoCoabitado || 'Coabitado com outra escola Estadual');
-                    setSelectedAtendimentoForEdit({
-                      ...selectedAtendimentoForEdit,
-                      coabitado: nextCoabitado,
-                      tipoCoabitado: nextTipo
-                    });
+                    const nextTipo = nextCoabitado === 'NÃO' ? '' : (sol.tipoCoabitado || 'Coabitado com outra escola Estadual');
+                    setSelectedAtendimentoForEdit({ ...sol, coabitado: nextCoabitado, tipoCoabitado: nextTipo, ...markEditado('validacaoCoabitado') });
                   }}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium"
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="NÃO">NÃO</option>
                   <option value="SIM">SIM</option>
@@ -1629,16 +1816,14 @@ export function NovoAtendimentoPanel({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Tipo de Coabitação
-                </label>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tipo de Coabitação</label>
                 <select
-                  value={selectedAtendimentoForEdit.tipoCoabitado || ''}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, tipoCoabitado: e.target.value })}
-                  disabled={(selectedAtendimentoForEdit.coabitado || 'NÃO') === 'NÃO'}
+                  disabled={vLocked(sol.validacaoCoabitado) || (sol.coabitado || 'NÃO') === 'NÃO'}
+                  value={sol.tipoCoabitado || ''}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, tipoCoabitado: e.target.value, ...markEditado('validacaoCoabitado') })}
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium disabled:bg-slate-50 disabled:text-slate-400"
                 >
-                  {(selectedAtendimentoForEdit.coabitado || 'NÃO') === 'NÃO' && <option value="">NÃO APLICÁVEL</option>}
+                  {(sol.coabitado || 'NÃO') === 'NÃO' && <option value="">NÃO APLICÁVEL</option>}
                   <option value="Coabitado com outra escola Estadual">Coabitado com outra escola Estadual</option>
                   <option value="Coabitado com outra escola municipal">Coabitado com outra escola municipal</option>
                   <option value="Coabitado com outro órgão estadual">Coabitado com outro órgão estadual</option>
@@ -1647,30 +1832,63 @@ export function NovoAtendimentoPanel({
                 </select>
               </div>
 
-               <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Há alguma notificação?
-                </label>
-                <select
-                  value={selectedAtendimentoForEdit.notificacao || 'Não há notificação'}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, notificacao: e.target.value })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium cursor-pointer"
-                >
-                  <option value="Não há notificação">Não há notificação</option>
-                  <option value="Ministério Publico">Ministério Publico</option>
-                  <option value="Prefeitura">Prefeitura</option>
-                  <option value="Defesa Civil">Defesa Civil</option>
-                  <option value="TCE">TCE</option>
+              {/* Classificação da Demanda — modo edição inline */}
+              <div className="sm:col-span-3 space-y-2 border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-600 mb-1.5">Origem da Demanda</p>
+                <select disabled={vLocked(sol.validacaoTecnica)} value={sol.origemDemanda || ''}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, origemDemanda: e.target.value, ...markEditado('validacaoTecnica') })}
+                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-medium cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed">
+                  <option value="">Selecione a origem...</option>
+                  {['Solicitação da Escola', 'Solicitação da SRE', 'Programa Governamental', 'Fiscalização', 'Notificação', 'Determinação Judicial', 'Atendimento Político'].map(op => (
+                    <option key={op} value={op}>{op}</option>
+                  ))}
                 </select>
+                {sol.origemDemanda === 'Notificação' && (
+                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-amber-200 bg-amber-50/50 rounded-lg p-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Órgão Emissor</label>
+                      <select disabled={vLocked(sol.validacaoTecnica)} value={sol.orgaoEmissorNotificacao || ''} onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, orgaoEmissorNotificacao: e.target.value, ...markEditado('validacaoTecnica') })}
+                        className="w-full px-2 py-1 text-xs border border-slate-200 rounded bg-white disabled:bg-slate-100 disabled:cursor-not-allowed">
+                        <option value="">Selecione...</option>
+                        {['Ministério Público', 'Defesa Civil', 'Corpo de Bombeiros', 'Prefeitura', 'TCE', 'CGE', 'Vigilância Sanitária', 'Outro'].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Grau de Prioridade</label>
+                      <select disabled={vLocked(sol.validacaoTecnica)} value={sol.grauPrioridade || ''} onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, grauPrioridade: e.target.value as any, ...markEditado('validacaoTecnica') })}
+                        className="w-full px-2 py-1 text-xs border border-slate-200 rounded bg-white disabled:bg-slate-100 disabled:cursor-not-allowed">
+                        <option value="">Selecione...</option>
+                        {['Crítico', 'Alto', 'Médio', 'Baixo'].map(g => <option key={g} value={g}>{g}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Número da Notificação</label>
+                      <input type="text" disabled={vLocked(sol.validacaoTecnica)} value={sol.numeroNotificacao || ''} onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, numeroNotificacao: e.target.value, ...markEditado('validacaoTecnica') })}
+                        className="w-full px-2 py-1 text-xs border border-slate-200 rounded bg-white disabled:bg-slate-100 disabled:cursor-not-allowed" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Data da Notificação</label>
+                      <input type="date" disabled={vLocked(sol.validacaoTecnica)} value={sol.dataNotificacao || ''} onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, dataNotificacao: e.target.value, ...markEditado('validacaoTecnica') })}
+                        className="w-full px-2 py-1 text-xs border border-slate-200 rounded bg-white disabled:bg-slate-100 disabled:cursor-not-allowed" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[9px] font-bold text-slate-500 uppercase block mb-1">Prazo para Atendimento</label>
+                      <input type="date" disabled={vLocked(sol.validacaoTecnica)} value={sol.prazoAtendimentoNotificacao || ''} onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, prazoAtendimentoNotificacao: e.target.value, ...markEditado('validacaoTecnica') })}
+                        className="w-full px-2 py-1 text-xs border border-slate-200 rounded bg-white disabled:bg-slate-100 disabled:cursor-not-allowed" />
+                    </div>
+                  </div>
+                )}
               </div>
 
+              {/* Etapa — oculta em modo correção (o técnico não pode alterar a etapa manualmente) */}
+              {!isCorrecao && (
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   Fase / Etapa de Fluxo
                 </label>
                 <select
-                  value={selectedAtendimentoForEdit.etapaAtual}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, etapaAtual: e.target.value as EtapaProcesso })}
+                  value={sol.etapaAtual}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, etapaAtual: e.target.value as EtapaProcesso })}
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-bold text-blue-750"
                 >
                   <option value="cadastro">INSTRUCÃO DOCUMENTAL</option>
@@ -1682,16 +1900,21 @@ export function NovoAtendimentoPanel({
                   <option value="execucao">OBRAS EM EXECUCÃO</option>
                 </select>
               </div>
+              )}
 
+              {/* Descrição folha do rosto — parte de validacaoTecnica */}
               <div className="sm:col-span-3">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Descrição Folha do Rosto
+                  Descrição Folha do Rosto *
+                  {isCorrecao && vLocked(sol.validacaoTecnica) && <span className="text-emerald-600 normal-case font-medium ml-1">(validada)</span>}
                 </label>
                 <textarea
                   rows={2}
-                  value={selectedAtendimentoForEdit.descricaoFolhaRosto || ''}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, descricaoFolhaRosto: e.target.value })}
-                  className="w-full px-2.5 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800"
+                  required
+                  disabled={vLocked(sol.validacaoTecnica)}
+                  value={sol.descricaoFolhaRosto || ''}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, descricaoFolhaRosto: e.target.value, ...markEditado('validacaoTecnica') })}
+                  className="w-full px-2.5 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -1701,8 +1924,8 @@ export function NovoAtendimentoPanel({
                 </label>
                 <textarea
                   rows={2}
-                  value={selectedAtendimentoForEdit.observacoesFicha || ''}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...selectedAtendimentoForEdit, observacoesFicha: e.target.value })}
+                  value={sol.observacoesFicha || ''}
+                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, observacoesFicha: e.target.value })}
                   className="w-full px-2.5 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800"
                 />
               </div>
@@ -1718,7 +1941,7 @@ export function NovoAtendimentoPanel({
               </p>
 
               <div className="space-y-2.5">
-                {selectedAtendimentoForEdit.documentos.map((doc) => (
+                {sol.documentos.map((doc) => (
                   <div key={doc.id} className="bg-white p-3 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
@@ -1784,16 +2007,15 @@ export function NovoAtendimentoPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    if (!selectedAtendimentoForEdit) return;
-                    // Update as draft
+                    if (!sol) return;
                     const updated = {
-                      ...selectedAtendimentoForEdit,
-                      etapaAtual: 'cadastro' as const
+                      ...sol,
+                      etapaAtual: isCorrecao ? 'correcao' as const : 'cadastro' as const
                     };
                     onUpdateSolicitacao(updated);
                     setSelectedAtendimentoForEdit(null);
                     if (onLimparEdicaoDirect) onLimparEdicaoDirect();
-                    alert('Alterações salvas como rascunho com sucesso!');
+                    alert('Alterações salvas com sucesso!');
                   }}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-755 hover:text-slate-900 rounded-lg text-xs font-bold transition cursor-pointer"
                 >
@@ -1803,9 +2025,8 @@ export function NovoAtendimentoPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    if (!selectedAtendimentoForEdit) return;
-                    // Validate mandatory checklist documents
-                    const missingMandatory = selectedAtendimentoForEdit.documentos.filter(d => d.obrigatorio && !d.fileName);
+                    if (!sol) return;
+                    const missingMandatory = sol.documentos.filter(d => d.obrigatorio && !d.fileName);
                     if (missingMandatory.length > 0) {
                       alert(
                         `Não é possível encaminhar para a DORE. Para encaminhar o Atendimento, todos os documentos obrigatórios devem estar devidamente anexados ao checklist.\n\n` +
@@ -1816,33 +2037,34 @@ export function NovoAtendimentoPanel({
                     }
 
                     const updated = {
-                      ...selectedAtendimentoForEdit,
+                      ...sol,
                       etapaAtual: 'analise' as const,
-                      analistaAtribuido: undefined,
+                      analistaAtribuido: isCorrecao ? sol.analistaAtribuido : undefined,
                       historicoEtapas: [
-                        ...selectedAtendimentoForEdit.historicoEtapas,
-                        { 
-                          etapa: 'analise' as const, 
-                          data: new Date().toISOString().split('T')[0], 
-                          responsavel: selectedAtendimentoForEdit.responsavel || 'Téc. de Infraestrutura' 
+                        ...sol.historicoEtapas,
+                        {
+                          etapa: 'analise' as const,
+                          data: new Date().toISOString().split('T')[0],
+                          responsavel: sol.responsavel || 'Téc. de Infraestrutura'
                         }
                       ]
                     };
                     onUpdateSolicitacao(updated);
                     setSelectedAtendimentoForEdit(null);
                     if (onLimparEdicaoDirect) onLimparEdicaoDirect();
-                    alert('Atendimento encaminhado para a DORE com sucesso!');
+                    alert(isCorrecao ? 'Correções enviadas para revalidação pela DORE!' : 'Atendimento encaminhado para a DORE com sucesso!');
                   }}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+                  className={`px-5 py-2 font-extrabold text-xs rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer text-white ${isCorrecao ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <span>Finalizar e Encaminhar para DORE</span>
+                  <span>{isCorrecao ? 'Enviar Correções para Revalidação DORE' : 'Finalizar e Encaminhar para DORE'}</span>
                 </button>
               </div>
             </div>
           </form>
         </div>
-      )}
+        );
+      })()}
 
       {/* 3. TELA INTERMEDIÁRIA COMPLETA: LISTA VISUAL INTERCALÁVEL */}
       {currentView === 'intermediaria' && !selectedAtendimentoForEdit && (
@@ -2140,17 +2362,19 @@ interface AtribuicaoPanelProps {
   viewMode?: 'lista' | 'kanban_status' | 'kanban_analista';
   onMudarViewMode?: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
   perfilUsuario?: string;
+  onNavToAnalise?: (sol: Solicitacao) => void;
 }
 
-export function AtribuicaoPanel({ 
-  solicitacoes, 
-  onUpdateSolicitacao, 
-  usuariosSeguranca, 
-  atribuicoes, 
+export function AtribuicaoPanel({
+  solicitacoes,
+  onUpdateSolicitacao,
+  usuariosSeguranca,
+  atribuicoes,
   onAssign,
   viewMode,
   onMudarViewMode,
-  perfilUsuario = 'gestor_dore'
+  perfilUsuario = 'gestor_dore',
+  onNavToAnalise
 }: AtribuicaoPanelProps) {
   const [feedbackMsg, setFeedbackMsg] = useState<{ [solId: string]: string }>({});
 
@@ -2603,10 +2827,11 @@ export function AtribuicaoPanel({
               return (
                 <tr
                   key={sol.id}
-                  className={`hover:bg-slate-50/80 transition-all group cursor-pointer ${
+                  onClick={() => onNavToAnalise?.(sol)}
+                  className={`hover:bg-blue-50/40 transition-all group cursor-pointer ${
                     isRecent ? 'bg-emerald-50/10' : ''
                   }`}
-                  title="Painel de atribuição técnica"
+                  title="Clique para abrir na Validação Técnica"
                 >
                   {/* 1. OBRA ID */}
                   <td className="py-4 px-4 font-mono text-slate-500 whitespace-nowrap">

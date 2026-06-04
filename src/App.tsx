@@ -114,6 +114,9 @@ export default function App() {
   const [filterAnaliseResponsavelText, setFilterAnaliseResponsavelText] = useState('');
   const [filterAnaliseDataInicio, setFilterAnaliseDataInicio] = useState('');
   const [filterAnaliseDataFim, setFilterAnaliseDataFim] = useState('');
+  // Modo da aba de análise: fila ativa ou histórico de processos validados
+  const [analiseViewMode, setAnaliseViewMode] = useState<'ativa' | 'historico'>('ativa');
+  const [historicoSelectedId, setHistoricoSelectedId] = useState<string | null>(null);
   
   // REJECTION STATE FOR "3. AUTORIZAÇÃO DO PAF"
   const [rejectingSchoolId, setRejectingSchoolId] = useState<string | null>(null);
@@ -876,7 +879,8 @@ export default function App() {
     let targetSubTask = 'cadastro';
     const etapa = sol.etapaAtual;
     if (etapa === 'cadastro' || etapa === 'correcao') {
-      if (perfilUsuario === 'tecnico_infra' && etapa === 'cadastro') {
+      if (etapa === 'correcao' || (perfilUsuario === 'tecnico_infra' && etapa === 'cadastro')) {
+        // Correção sempre vai para o atendimento inicial para edição guiada
         targetSubTask = 'novo_atendimento';
         setAtendimentoEmEdicaoDirect(sol);
         setSolicitacaoEmEdicao(null);
@@ -2332,7 +2336,26 @@ export default function App() {
                   {/* CABEÇALHO DA FILA E SELETOR DE ATENDIMENTO - LIGHTENED THE COLOR */}
                   {activeSubTask === 'analise' ? (
                     <div id="paf-autorizacao-workspace" className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs text-left text-slate-800 space-y-4">
-                      {/* Top Row with Header and Step Queue Info */}
+                      {/* Toggle: Fila Ativa / Histórico */}
+                      <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                        <button
+                          type="button"
+                          onClick={() => setAnaliseViewMode('ativa')}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${analiseViewMode === 'ativa' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                        >
+                          Fila Ativa ({listFiltered.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setAnaliseViewMode('historico'); setHistoricoSelectedId(null); }}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all flex items-center gap-1.5 ${analiseViewMode === 'historico' ? 'bg-slate-700 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                        >
+                          <FileClock className="w-3.5 h-3.5" /> Histórico Validados ({solicitacoes.filter(s => s.etapaAtual !== 'analise' && (s.historicoEtapas || []).some(h => h.etapa === 'analise')).length})
+                        </button>
+                      </div>
+
+                      {/* Top Row with Header and Step Queue Info — só na fila ativa */}
+                      {analiseViewMode === 'ativa' && (
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
                         <div className="flex items-center gap-2">
                           <Search className="w-4 h-4 text-blue-600" />
@@ -2344,7 +2367,9 @@ export default function App() {
                           Fila da Etapa: {listFiltered.length} de {solicitacoes.filter(s => s.etapaAtual === 'analise').length} demandas analisáveis
                         </span>
                       </div>
+                      )}
 
+                      {analiseViewMode === 'ativa' && (<>
                       {/* Dropdowns and Date Fields Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                         {/* ID DE OBRA */}
@@ -2499,6 +2524,72 @@ export default function App() {
                             })}
                         </div>
                       </div>
+                      </>)}
+
+                      {/* Painel Histórico de Processos Validados */}
+                      {analiseViewMode === 'historico' && (() => {
+                        const historico = solicitacoes.filter(s =>
+                          s.etapaAtual !== 'analise' &&
+                          (s.historicoEtapas || []).some(h => h.etapa === 'analise')
+                        );
+                        const etapaLabels: Record<string, string> = {
+                          paf_autorizacao: 'Autorização PAF',
+                          paf: 'Geração PAF',
+                          ordem_inicio: 'Ordem de Início',
+                          execucao: 'Execução',
+                          correcao: 'Correção',
+                          cancelado: 'Cancelado',
+                        };
+                        return (
+                          <div className="space-y-3">
+                            <p className="text-[11px] text-slate-500 font-medium">
+                              Processos que passaram pela etapa de Análise Técnica. Clique em um para consultar o dossiê em modo somente leitura.
+                            </p>
+                            {historico.length === 0 ? (
+                              <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+                                Nenhum processo foi validado ainda nesta sessão.
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                                {historico.map(s => {
+                                  const etapaAnalise = (s.historicoEtapas || []).find(h => h.etapa === 'analise');
+                                  const etapaApos = (s.historicoEtapas || []).find(h => h.etapa === 'paf_autorizacao' || h.etapa === 'correcao');
+                                  const foiAprovado = s.etapaAtual !== 'correcao' && !['cadastro', 'analise'].includes(s.etapaAtual);
+                                  const isSelected = historicoSelectedId === s.id;
+                                  return (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      onClick={() => setHistoricoSelectedId(isSelected ? null : s.id)}
+                                      className={`w-full text-left px-4 py-3 rounded-xl border text-xs transition-all flex items-center justify-between gap-3 ${isSelected ? 'bg-slate-700 text-white border-slate-600' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'}`}
+                                    >
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <span className="font-black font-mono shrink-0">{s.id}</span>
+                                        <div className="min-w-0">
+                                          <p className="font-bold truncate">{s.nomeEscola}</p>
+                                          <p className="text-[10px] opacity-60 truncate">{s.sre} — CODESC {s.codesc}</p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {etapaAnalise?.data && (
+                                          <span className="text-[10px] opacity-60">Analisado: {new Date(etapaAnalise.data).toLocaleDateString('pt-BR')}</span>
+                                        )}
+                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${foiAprovado ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                          {foiAprovado ? 'Aprovado' : 'Devolvido'}
+                                        </span>
+                                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-600 uppercase">
+                                          {etapaLabels[s.etapaAtual] || s.etapaAtual}
+                                        </span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                     </div>
                   ) : (
                     <div className="bg-gradient-to-r from-blue-50/65 to-indigo-50/45 border border-blue-100/90 text-slate-800 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-left">
@@ -2648,7 +2739,40 @@ export default function App() {
                   )}
 
                   <div className="w-full flex flex-col space-y-6">
-                    {activeSchool ? (
+                    {/* Modo histórico — exibir processo selecionado em somente leitura */}
+                    {activeSubTask === 'analise' && analiseViewMode === 'historico' && historicoSelectedId ? (() => {
+                      const solHistorico = solicitacoes.find(s => s.id === historicoSelectedId);
+                      if (!solHistorico) return null;
+                      return (
+                        <div className="bg-white rounded-xl border border-slate-700/20 shadow-sm p-1 ring-2 ring-slate-600/10">
+                          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 rounded-t-lg">
+                            <FileClock className="w-4 h-4 text-slate-300" />
+                            <span className="text-xs font-black text-white uppercase tracking-wide">Consulta Histórica — Somente Leitura</span>
+                            <span className="ml-auto text-[10px] text-slate-300 font-mono">{solHistorico.id} · {solHistorico.nomeEscola}</span>
+                            <button type="button" onClick={() => setHistoricoSelectedId(null)} className="ml-2 text-slate-400 hover:text-white transition">
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <SolicitacaoDetalhes
+                            solicitacao={solHistorico}
+                            perfilUsuario={perfilUsuario}
+                            onVoltar={() => setHistoricoSelectedId(null)}
+                            onUpdate={() => {}}
+                            forcedTab="checklist"
+                            hideVoltar={true}
+                            hideStepper={true}
+                            hideTransitionButtons={true}
+                            hideTabs={true}
+                            activeSubTask="analise"
+                            usuariosSeguranca={usuariosSeguranca}
+                          />
+                        </div>
+                      );
+                    })() : activeSubTask === 'analise' && analiseViewMode === 'historico' ? (
+                      <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400 text-xs shadow-sm">
+                        Selecione um processo no histórico acima para visualizar o dossiê.
+                      </div>
+                    ) : activeSchool ? (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-1">
                       <SolicitacaoDetalhes
                         solicitacao={activeSchool}
@@ -2736,6 +2860,10 @@ export default function App() {
                         viewMode={viewMode}
                         onMudarViewMode={(mode) => setViewMode(mode)}
                         perfilUsuario={perfilUsuario}
+                        onNavToAnalise={(sol) => {
+                          setActiveSubTask('analise');
+                          setSelectedSchoolsPorSubtask(prev => ({ ...prev, analise: sol.id }));
+                        }}
                       />
                     ) : (
                       <KanbanViews
