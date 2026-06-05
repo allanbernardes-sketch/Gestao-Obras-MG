@@ -367,20 +367,6 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
               </select>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Prédio *
-              </label>
-              <select
-                value={predio}
-                onChange={(e) => setPredio(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 bg-white transition-all font-sans cursor-pointer text-slate-705 font-medium"
-              >
-                <option value="PRINCIPAL">PRINCIPAL</option>
-                <option value="ANEXO">ANEXO</option>
-              </select>
-            </div>
-
             {formaOcupacao === 'OUTRO' && (
               <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in slide-in-from-top-2 duration-250">
                 <div>
