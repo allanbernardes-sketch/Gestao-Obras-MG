@@ -657,6 +657,11 @@ ${totalPendencias > 0
 
   const parsedValor = valorHomologadoContratacaoInput ? parseFloat(valorHomologadoContratacaoInput) : 0;
   const parsedMeses = calcularDuracaoMeses(dataOrdemInicioInput, previsaoTerminoInput);
+  const ordemInicioInvalida = !!(
+    solicitacao.contratoDataAssinatura &&
+    dataOrdemInicioInput &&
+    dataOrdemInicioInput < solicitacao.contratoDataAssinatura
+  );
   const complexidadeCalculada = calcularComplexidade(parsedValor, tipoObraInput, parsedMeses);
 
   // Keep state in sync with parent updates
@@ -760,6 +765,14 @@ ${totalPendencias > 0
 
   const salvarOrdemInicio = (e: React.FormEvent) => {
     e.preventDefault();
+    if (ordemInicioInvalida) {
+      alert(
+        `A Data de Ordem de Início não pode ser anterior à Data de Assinatura do Contrato.\n\n` +
+        `Assinatura do contrato: ${new Date(solicitacao.contratoDataAssinatura + 'T12:00:00').toLocaleDateString('pt-BR')}\n` +
+        `Data informada: ${new Date(dataOrdemInicioInput + 'T12:00:00').toLocaleDateString('pt-BR')}`
+      );
+      return;
+    }
     const valor = valorHomologadoContratacaoInput ? parseFloat(valorHomologadoContratacaoInput) : 0;
     const meses = calcularDuracaoMeses(dataOrdemInicioInput, previsaoTerminoInput);
     const comp = calcularComplexidade(valor, tipoObraInput, meses);
@@ -2710,7 +2723,7 @@ ${totalPendencias > 0
                     <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Dados Contratuais de Iniciação</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                        <label className={`block text-xs font-semibold mb-1 uppercase tracking-wider ${ordemInicioInvalida ? 'text-rose-600' : 'text-neutral-600'}`}>
                           INÍCIO OBRA (DATA DA ORDEM DE INÍCIO) *
                         </label>
                         <input
@@ -2719,8 +2732,14 @@ ${totalPendencias > 0
                           onChange={(e) => setDataOrdemInicioInput(e.target.value)}
                           disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                           required
-                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
+                          min={solicitacao.contratoDataAssinatura || undefined}
+                          className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 bg-white font-mono ${ordemInicioInvalida ? 'border-rose-400 bg-rose-50/30 text-rose-800 focus:ring-rose-500' : 'border-neutral-300 text-neutral-700 focus:ring-blue-500'}`}
                         />
+                        {ordemInicioInvalida && (
+                          <p className="text-[10px] text-rose-600 font-bold mt-1">
+                            ⚠ Data anterior à assinatura do contrato ({new Date(solicitacao.contratoDataAssinatura! + 'T12:00:00').toLocaleDateString('pt-BR')}).
+                          </p>
+                        )}
                       </div>
 
                       <div>

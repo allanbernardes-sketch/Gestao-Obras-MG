@@ -1485,40 +1485,74 @@ export default function App() {
 
                   {!collapsedCategories.execucao && (
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
+                      {/* Itens principais */}
                       {[
-                        { id: 'execucao_central', label: 'Central de Navegação', func: 'painel geral do fiscal', icon: Navigation },
-                        { id: 'execucao_cadastro', label: 'Cadastro de Obras', func: 'cadastro', icon: Building2 },
-                        { id: 'execucao_contratos', label: 'Contratos', func: 'jurídico/financeiro', icon: ClipboardList },
-                        { id: 'execucao_acompanhamento', label: 'Acompanhamento da Obra', func: 'Dashboard, Diário, Vistorias', icon: HardHat },
-                        { id: 'execucao_medicoes', label: 'Medições', func: 'financeiro técnico', icon: Layers },
-                        { id: 'execucao_ajustes', label: 'Ajustes', func: 'alteração contratual', icon: Calculator },
-                        { id: 'execucao_aditivos', label: 'Aditivos', func: 'alterações contratuais', icon: Plus },
-                        { id: 'execucao_documentos', label: 'Documentações', func: 'GED', icon: UploadCloud },
-                        { id: 'conclusao', label: 'Termo de Encerramento', func: 'encerramento da obra', icon: CheckCircle }
+                        { id: 'execucao_central',        label: 'Central de Navegação',    func: 'painel geral do fiscal',         icon: Navigation },
+                        { id: 'execucao_cadastro',       label: 'Cadastro de Obras',        func: 'cadastro',                       icon: Building2 },
+                        { id: 'execucao_contratos',      label: 'Contratos',                func: 'jurídico/financeiro',             icon: ClipboardList },
+                        { id: 'execucao_acompanhamento', label: 'Acompanhamento da Obra',   func: 'Dashboard, Diário, Vistorias',   icon: HardHat },
+                        { id: 'execucao_medicoes',       label: 'Medições',                 func: 'financeiro técnico',             icon: Layers },
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
                         return (
-                          <button
-                            key={item.id}
-                            id={`subtask-${item.id}`}
-                            onClick={() => {
-                              setActiveSubTask(item.id);
-                              setIdSolicitacaoSelecionada(null);
-                            }}
-                            className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5'
-                                : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'
-                            }`}
-                          >
+                          <button key={item.id} id={`subtask-${item.id}`}
+                            onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                            className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
                             <div className="flex items-center gap-1.5 w-full">
                               <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
                               <span className="text-xs font-sans font-bold leading-tight">{item.label}</span>
                             </div>
-                            <span className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-wider pl-4.5 block">
-                              {item.func}
-                            </span>
+                            <span className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-wider pl-4.5 block">{item.func}</span>
+                          </button>
+                        );
+                      })}
+
+                      {/* Grupo: Ajustes Contratuais */}
+                      <div className="pt-1">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 pb-1 flex items-center gap-1">
+                          <Wrench className="w-2.5 h-2.5" /> Ajustes Contratuais
+                        </p>
+                        <div className="pl-2 border-l border-slate-100 ml-2 space-y-0.5">
+                          {[
+                            { id: 'execucao_reequilibrio',       label: 'Reequilíbrio Financeiro',          func: 'reequilíbrio econômico',       icon: BarChart2 },
+                            { id: 'execucao_saldo_complementar', label: 'Saldo Complementar Distratado',    func: 'contrato distratado',           icon: Coins },
+                            { id: 'execucao_aditivos',           label: 'Aditivo',                          func: 'alterações contratuais',        icon: Plus },
+                            { id: 'execucao_ajustes',            label: 'Ajuste de Planilha',               func: 'remanejamento orçamentário',    icon: Calculator },
+                          ].map(item => {
+                            const Icon = item.icon;
+                            const isActive = activeSubTask === item.id;
+                            return (
+                              <button key={item.id} id={`subtask-${item.id}`}
+                                onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                                className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
+                                <div className="flex items-center gap-1.5 w-full">
+                                  <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                                  <span className="text-xs font-sans font-bold leading-tight">{item.label}</span>
+                                </div>
+                                <span className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-wider pl-4.5 block">{item.func}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Itens finais */}
+                      {[
+                        { id: 'execucao_documentos', label: 'Documentações',         func: 'GED',                     icon: UploadCloud },
+                        { id: 'conclusao',           label: 'Termo de Encerramento', func: 'encerramento da obra',    icon: CheckCircle },
+                      ].map(item => {
+                        const Icon = item.icon;
+                        const isActive = activeSubTask === item.id;
+                        return (
+                          <button key={item.id} id={`subtask-${item.id}`}
+                            onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                            className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
+                            <div className="flex items-center gap-1.5 w-full">
+                              <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                              <span className="text-xs font-sans font-bold leading-tight">{item.label}</span>
+                            </div>
+                            <span className="text-[9px] font-mono font-medium text-slate-500 uppercase tracking-wider pl-4.5 block">{item.func}</span>
                           </button>
                         );
                       })}
@@ -2907,6 +2941,7 @@ export default function App() {
                       perfilUsuario={perfilUsuario}
                       onSelect={(sol) => handleSelectSolicitacao(sol)}
                       empresasSeguranca={empresasSeguranca}
+                      usuariosSeguranca={usuariosSeguranca}
                       setActiveSubTask={setActiveSubTask}
                     />
                   ) : activeSubTask.startsWith('relat_') ? (

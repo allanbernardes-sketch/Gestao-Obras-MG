@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  Building2, HardHat, Layers, ClipboardList, Plus, Calculator, ShieldCheck, 
-  UploadCloud, LayoutGrid, DollarSign, Calendar, MapPin, Search, CheckCircle, 
+import {
+  Building2, HardHat, Layers, ClipboardList, Plus, Calculator, ShieldCheck,
+  UploadCloud, LayoutGrid, DollarSign, Calendar, MapPin, Search, CheckCircle,
   Trash2, AlertCircle, Sparkles, User, FileText, ChevronRight, Scale, Clock,
   FileCheck, FileUp, Zap, HelpCircle, History, Info, Trash, RefreshCw, Eye,
-  TrendingUp, Edit, ClipboardCheck, Wrench, ArrowRight, Lock, Filter, X
+  TrendingUp, Edit, ClipboardCheck, Wrench, ArrowRight, Lock, Filter, X,
+  BarChart2, Coins,
 } from 'lucide-react';
-import { Solicitacao, Medicao, Aditivo, AjustePlanilha, PerfilUsuario, EmpresaSeguranca, computeStatusObra } from '../types';
+import { Solicitacao, Medicao, Aditivo, AjustePlanilha, SaldoComplementarItem, ReequilibrioItem, PerfilUsuario, EmpresaSeguranca, UsuarioSistema, computeStatusObra } from '../types';
 
 interface ExecucaoSubmodulosProps {
   activeSubTask: string;
@@ -15,16 +16,18 @@ interface ExecucaoSubmodulosProps {
   perfilUsuario: PerfilUsuario;
   onSelect: (sol: Solicitacao) => void;
   empresasSeguranca?: EmpresaSeguranca[];
+  usuariosSeguranca?: UsuarioSistema[];
   setActiveSubTask?: (subTask: string) => void;
 }
 
-export default function ExecucaoSubmodulos({ 
-  activeSubTask, 
-  solicitacoes, 
-  onUpdate, 
-  perfilUsuario, 
+export default function ExecucaoSubmodulos({
+  activeSubTask,
+  solicitacoes,
+  onUpdate,
+  perfilUsuario,
   onSelect,
   empresasSeguranca = [],
+  usuariosSeguranca = [],
   setActiveSubTask
 }: ExecucaoSubmodulosProps) {
   // Common state: active selected construction (defaults to first available in execution stage)
@@ -459,9 +462,10 @@ export default function ExecucaoSubmodulos({
       {/* 6. AJUSTE */}
       {activeSubTask === 'execucao_ajustes' && (
         hasContract ? (
-          <SubAjustes 
-            currentSol={selectedSol} 
-            onUpdate={handlePropagateUpdate} 
+          <SubAjustes
+            currentSol={selectedSol}
+            onUpdate={handlePropagateUpdate}
+            usuariosSeguranca={usuariosSeguranca}
           />
         ) : renderBlockedScreen()
       )}
@@ -475,11 +479,28 @@ export default function ExecucaoSubmodulos({
         />
       )}
 
+      {/* 7b. REEQUILÍBRIO FINANCEIRO */}
+      {activeSubTask === 'execucao_reequilibrio' && (
+        hasContract ? (
+          <SubReequilibrio currentSol={selectedSol} onUpdate={handlePropagateUpdate} />
+        ) : renderBlockedScreen()
+      )}
+
+      {/* 7c. SALDO COMPLEMENTAR OBRA DISTRATADA */}
+      {activeSubTask === 'execucao_saldo_complementar' && (
+        hasContract ? (
+          <SubSaldoComplementar
+            currentSol={selectedSol}
+            onUpdate={handlePropagateUpdate}
+          />
+        ) : renderBlockedScreen()
+      )}
+
       {/* 8. DOCUMENTOS */}
       {activeSubTask === 'execucao_documentos' && (
-        <SubDocumentos 
-          currentSol={selectedSol} 
-          onUpdate={handlePropagateUpdate} 
+        <SubDocumentos
+          currentSol={selectedSol}
+          onUpdate={handlePropagateUpdate}
         />
       )}
 
@@ -2240,7 +2261,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                 <FileCheck className="w-4 h-4 text-blue-500" /> Contrato de Empreiteira Credenciada
               </h3>
 
-              {!currentSol.empresaContratada ? (
+              {!currentSol.contratoDataAssinatura ? (
                 <div className="py-6 text-center text-slate-400 text-xs italic">
                   Nenhum contrato ativo cadastrado para este atendimento.
                 </div>
@@ -3901,11 +3922,9 @@ function SubContratos({
   // Filter list of works in process of contracting (Obras em processo de contratação)
   const worksInContratacao = useMemo(() => {
     return (todasSolicitacoes || []).filter(sol => {
-      const isConcluida = sol.statusObra === 'Concluída';
-      const isParalisada = sol.statusObra === 'Paralisada';
-      const isEmAndamento = sol.statusObra === 'Em Andamento';
-      const hasContractVal = !!sol.contratoValorInicial && !!sol.contratoDataAssinatura;
-      return !isConcluida && !isParalisada && !isEmAndamento && !hasContractVal;
+      const isConcluida  = sol.statusObra === 'Concluída';
+      const hasContrato  = !!(sol.contratoDataAssinatura && sol.statusContratoEmpresa !== 'Distratada');
+      return !isConcluida && !hasContrato;
     });
   }, [todasSolicitacoes]);
 
@@ -3995,10 +4014,113 @@ function SubContratos({
     }
   }, [currentSol, empresasSeguranca]);
 
-  if (!currentSol) return <NoObraSelected />;
+  // ── Tela de listagem: nenhuma obra selecionada ───────────────────────────
+  if (!currentSol) {
+    const totalComContrato = todasSolicitacoes.filter(s => s.contratoValorInicial && s.contratoDataAssinatura).length;
+    const fmtC = (v?: number) => v ? `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
+
+    return (
+      <div className="space-y-5 animate-in fade-in duration-200">
+        {/* Cabeçalho */}
+        <div>
+          <h2 className="text-base font-extrabold text-slate-800 font-sans flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-blue-500" /> Gestão de Contratos de Obra
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Selecione uma obra para gerenciar ou cadastrar o contrato.
+          </p>
+        </div>
+
+        {/* KPIs */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-center">
+            <p className="text-2xl font-black text-amber-700">{worksFiltradasContratacao.length}</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Aguardando Contrato</p>
+          </div>
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+            <p className="text-2xl font-black text-emerald-700">{totalComContrato}</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Com Contrato Ativo</p>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+            <p className="text-2xl font-black text-slate-700">{todasSolicitacoes.length}</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Total de Obras</p>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {[
+            { label: 'Município', value: filtroMunicipioContrato, set: setFiltroMunicipioContrato, opts: uniqueMunicipios },
+            { label: 'SRE',       value: filtroSreContrato,       set: setFiltroSreContrato,       opts: uniqueSres },
+            { label: 'Escola',    value: filtroEscolaContrato,    set: setFiltroEscolaContrato,    opts: uniqueEscolas },
+          ].map(f => (
+            <select key={f.label} value={f.value} onChange={e => f.set(e.target.value)}
+              className="px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+              <option value="todos">{f.label}: Todos</option>
+              {f.opts.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {(filtroMunicipioContrato !== 'todos' || filtroSreContrato !== 'todos' || filtroEscolaContrato !== 'todos') && (
+            <button type="button"
+              onClick={() => { setFiltroMunicipioContrato('todos'); setFiltroSreContrato('todos'); setFiltroEscolaContrato('todos'); }}
+              className="flex items-center gap-1 px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer font-bold">
+              ✕ Limpar filtros
+            </button>
+          )}
+        </div>
+
+        {/* Lista de obras */}
+        {worksFiltradasContratacao.length === 0 ? (
+          <div className="text-center py-16 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-sm space-y-2">
+            <ClipboardList className="w-10 h-10 mx-auto opacity-20" />
+            <p className="font-semibold">Nenhuma obra aguardando contratação.</p>
+            <p className="text-xs">Todas as obras já possuem contrato formalizado ou estão em outro status.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {worksFiltradasContratacao.map(sol => (
+              <div key={sol.id}
+                className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-4 hover:border-blue-200 transition-colors">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-slate-800 truncate">{sol.nomeEscola}</p>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                      {sol.id} · CODESC {sol.codesc} · {sol.municipio}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-semibold">{sol.tipo}</span>
+                      <span className="text-[9px] bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded font-semibold border border-violet-100">
+                        PAF: {fmtC(sol.valorPlanilha || sol.valorHomologado)}
+                      </span>
+                      {sol.sre && (
+                        <span className="text-[9px] text-slate-400">{sol.sre}</span>
+                      )}
+                      {sol.fiscalObraAtribuido && (
+                        <span className="text-[9px] text-slate-400">Fiscal: {sol.fiscalObraAtribuido}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSolId?.(sol.id)}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-2 text-[10px] font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition cursor-pointer shadow-sm whitespace-nowrap">
+                  <Plus className="w-3.5 h-3.5" /> Cadastrar Contrato
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Dynamic calculations
   const valorInicial = parseFloat(valorInicialInput) || 0;
+  const vigenciaInvalida = !!(inicioVigenciaInput && fimVigenciaInput && fimVigenciaInput < inicioVigenciaInput);
   
   // Sum approved aditivos
   const sumAditivos = currentSol?.aditivos
@@ -4080,8 +4202,25 @@ function SubContratos({
     e.preventDefault();
     if (!currentSol) return;
 
-    let updatedEmpresasAnteriores = [...(currentSol.empresasAnteriores || [])];
     const isDistrato = tipoAcaoInput === 'distrato';
+
+    if (!isDistrato) {
+      const valorPAF = currentSol.valorPlanilha || currentSol.valorHomologado || 0;
+      if (valorPAF > 0 && valorInicial > valorPAF) {
+        alert(
+          `Valor Homologado (Certame) não pode ser maior que o Valor Autorizado (PAF).\n\n` +
+          `Certame: R$ ${valorInicial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+          `Autorizado (PAF): R$ ${valorPAF.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+        );
+        return;
+      }
+      if (vigenciaInvalida) {
+        alert('O Fim da Vigência não pode ser anterior ao Início da Vigência.');
+        return;
+      }
+    }
+
+    let updatedEmpresasAnteriores = [...(currentSol.empresasAnteriores || [])];
 
     if (isDistrato && empresaInput) {
       const alreadyArchived = updatedEmpresasAnteriores.some(emp => emp.cnpj === cnpjInput);
@@ -4132,6 +4271,21 @@ function SubContratos({
     e.preventDefault();
     if (!currentSol) return;
 
+    const valorPAF = currentSol.valorPlanilha || currentSol.valorHomologado || 0;
+    if (valorPAF > 0 && valorInicial > valorPAF) {
+      alert(
+        `Valor Homologado (Certame) não pode ser maior que o Valor Autorizado (PAF).\n\n` +
+        `Certame: R$ ${valorInicial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
+        `Autorizado (PAF): R$ ${valorPAF.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+      );
+      return;
+    }
+
+    if (vigenciaInvalida) {
+      alert('O Fim da Vigência não pode ser anterior ao Início da Vigência.');
+      return;
+    }
+
     const updated = {
       ...currentSol,
       empresaContratada: empresaInput,
@@ -4169,10 +4323,22 @@ function SubContratos({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn text-left">
-      
+
       {/* Information card view of contract details */}
       <div className={showForm ? "lg:col-span-2 space-y-6" : "lg:col-span-3 space-y-6"}>
-        
+
+        {/* Voltar à lista */}
+        {setSelectedSolId && (
+          <div className="flex items-center justify-between">
+            <button type="button"
+              onClick={() => setSelectedSolId('')}
+              className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+              ← Voltar à lista
+            </button>
+            <p className="text-[10px] text-slate-400 font-mono truncate">{currentSol.nomeEscola} · {currentSol.id}</p>
+          </div>
+        )}
+
         {/* Dynamic header summary */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs">
           <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
@@ -4400,7 +4566,7 @@ function SubContratos({
           {/* AÇÕES CONTRATUAIS — abrem modais dedicados */}
           <div className="border-t border-slate-105 pt-4">
             <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2.5">Ações Contratuais Disponíveis no SGO</h4>
-            {!currentSol.empresaContratada || currentSol.statusContratoEmpresa === 'Distratada' ? (
+            {!currentSol.contratoDataAssinatura || currentSol.statusContratoEmpresa === 'Distratada' ? (
               <button
                 type="button"
                 onClick={() => setModalCadastroAberto(true)}
@@ -4532,18 +4698,31 @@ function SubContratos({
                     <label className="text-[10px] font-bold text-slate-500 block">Valor Homologado — Ganho no Certame (R$)*</label>
                     {currentSol.valorPlanilha ? (
                       <span className="text-[9px] text-violet-600 font-bold bg-violet-50 border border-violet-200 px-2 py-0.5 rounded">
-                        Autorizado: R$ {(currentSol.valorPlanilha).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        Autorizado (PAF): R$ {(currentSol.valorPlanilha).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </span>
                     ) : null}
                   </div>
-                  <input
-                    type="number"
-                    required
-                    value={valorInicialInput}
-                    onChange={(e) => setValorInicialInput(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden"
-                    placeholder="1350000"
-                  />
+                  {(() => {
+                    const valorPAF = currentSol.valorPlanilha || currentSol.valorHomologado || 0;
+                    const excede = valorPAF > 0 && valorInicial > valorPAF;
+                    return (
+                      <>
+                        <input
+                          type="number"
+                          required
+                          value={valorInicialInput}
+                          onChange={(e) => setValorInicialInput(e.target.value)}
+                          className={`w-full text-xs p-2.5 border rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden ${excede ? 'border-rose-400 bg-rose-50/30 text-rose-800' : 'border-slate-300'}`}
+                          placeholder="1350000"
+                        />
+                        {excede && (
+                          <p className="text-[10px] text-rose-600 font-bold flex items-center gap-1 mt-1">
+                            ⚠ O valor do certame excede o valor autorizado no PAF em R$ {(valorInicial - valorPAF).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Corrija antes de salvar.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div>
@@ -4582,14 +4761,18 @@ function SubContratos({
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] font-bold text-slate-400 block mb-1">Fim da Vigência*</label>
+                      <label className={`text-[9px] font-bold block mb-1 ${vigenciaInvalida ? 'text-rose-500' : 'text-slate-400'}`}>Fim da Vigência*</label>
                       <input
                         type="date"
                         required
+                        min={inicioVigenciaInput || undefined}
                         value={fimVigenciaInput}
                         onChange={(e) => setFimVigenciaInput(e.target.value)}
-                        className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
+                        className={`w-full text-xs p-2 border rounded-xl bg-white focus:outline-hidden font-semibold ${vigenciaInvalida ? 'border-rose-400 bg-rose-50/30 text-rose-800' : 'border-slate-300 text-slate-800'}`}
                       />
+                      {vigenciaInvalida && (
+                        <p className="text-[9px] text-rose-600 font-bold mt-1">⚠ Fim da Vigência não pode ser anterior ao Início.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -4789,14 +4972,18 @@ function SubContratos({
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-bold text-slate-400 block mb-1">Fim da Vigência*</label>
+                  <label className={`text-[9px] font-bold block mb-1 ${vigenciaInvalida ? 'text-rose-500' : 'text-slate-400'}`}>Fim da Vigência*</label>
                   <input
                     type="date"
                     required
+                    min={inicioVigenciaInput || undefined}
                     value={fimVigenciaInput}
                     onChange={(e) => setFimVigenciaInput(e.target.value)}
-                    className="w-full text-xs p-2 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-semibold"
+                    className={`w-full text-xs p-2 border rounded-xl bg-white focus:outline-hidden font-semibold ${vigenciaInvalida ? 'border-rose-400 bg-rose-50/30 text-rose-800' : 'border-slate-300 text-slate-800'}`}
                   />
+                  {vigenciaInvalida && (
+                    <p className="text-[9px] text-rose-600 font-bold mt-1">⚠ Fim da Vigência não pode ser anterior ao Início.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -5649,17 +5836,6 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
                       />
                     </div>
 
-                    <div>
-                      <span className="text-[9px] text-slate-400 block uppercase font-bold">Supressão Financeira (R$)</span>
-                      <input
-                        type="number"
-                        disabled={tipo === 'Prazo'}
-                        placeholder="Ex. 10000"
-                        value={supressao}
-                        onChange={(e) => setSupressao(e.target.value)}
-                        className="w-full text-xs p-1.5 border border-slate-300 rounded-lg bg-white mt-1 font-mono"
-                      />
-                    </div>
                   </div>
 
                   {/* Calculated metrics */}
@@ -5766,9 +5942,17 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
 }
 
 // --- 6. SUB AJUSTE FILIAL ---
-function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void }) {
+function SubAjustes({
+  currentSol,
+  onUpdate,
+  usuariosSeguranca = [],
+}: {
+  currentSol: Solicitacao | null;
+  onUpdate: (sol: Solicitacao) => void;
+  usuariosSeguranca?: UsuarioSistema[];
+}) {
   const [activeTab, setActiveTab] = useState<'historico' | 'novo_atendimento'>('historico');
-  const [role, setRole] = useState<'proponente' | 'dore'>('proponente'); // Proponente vs Analista DORE
+  const [role, setRole] = useState<'proponente' | 'dore'>('proponente');
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form states - Step 1
@@ -5778,9 +5962,26 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
   const [prazoExtra, setPrazoExtra] = useState('');
   const [reprogramacao, setReprogramacao] = useState<'Sim' | 'Não'>('Não');
   const [saldoComplementar, setSaldoComplementar] = useState<'Sim' | 'Não'>('Não');
-  const [responsavelP, setResponsavelP] = useState('Guilherme Pereira e Silva');
-  const [registroProfissional, setRegistroProfissional] = useState('CREA 21458/D');
+  const [responsavelP, setResponsavelP] = useState(currentSol?.fiscalObraAtribuido || '');
+  const [registroProfissional, setRegistroProfissional] = useState('');
   const [observacoesAjuste, setObservacoesAjuste] = useState('');
+
+  // Sincroniza fiscal da obra quando currentSol muda
+  useEffect(() => {
+    const nome = currentSol?.fiscalObraAtribuido || '';
+    setResponsavelP(nome);
+    if (nome && usuariosSeguranca.length) {
+      const u = usuariosSeguranca.find(usr =>
+        usr.nome && (
+          usr.nome.toLowerCase().includes(nome.toLowerCase()) ||
+          nome.toLowerCase().includes(usr.nome.toLowerCase())
+        )
+      );
+      setRegistroProfissional(u?.creaNum || '');
+    } else {
+      setRegistroProfissional('');
+    }
+  }, [currentSol?.id]);
 
   // Checklist items step 2
   const [checklist, setChecklist] = useState([
@@ -5836,11 +6037,7 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
 
   const handleNextStep = () => {
     if (!responsavelP.trim()) {
-      alert('Por favor, preencha o campo obrigatório: Responsável Técnico (Eng)!');
-      return;
-    }
-    if (!registroProfissional.trim()) {
-      alert('Por favor, preencha o campo obrigatório: Nº Registro Mtb (CREA/CAU)!');
+      alert('Nenhum fiscal técnico atribuído à obra. Atribua um fiscal antes de registrar o ajuste.');
       return;
     }
     if (!observacoesAjuste.trim()) {
@@ -6246,15 +6443,14 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
 
           <form onSubmit={handleCreateAjuste} className="space-y-6">
             {step === 1 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 transition-all">
-                <div className="space-y-4 text-xs">
+              <div className="space-y-5 text-xs">
+
+                {/* Tipo de Remanejamento + Cronograma lado a lado */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Tipo de Remanejamento Planejado*</label>
-                    <select
-                      value={tipoAjuste}
-                      onChange={(e) => setTipoAjuste(e.target.value as any)}
-                      className="w-full text-xs font-bold p-3 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-hidden"
-                    >
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Tipo de Remanejamento Planejado *</label>
+                    <select value={tipoAjuste} onChange={(e) => setTipoAjuste(e.target.value as any)}
+                      className="w-full text-xs font-bold p-3 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-hidden">
                       <option value="sem_alteracao_meta">Ajuste técnico sem alteração de metas físicas</option>
                       <option value="com_alteracao_meta">Remanejamento com alteração de metas parciais</option>
                       <option value="com_alteracao_meta_projeto">Alteração substancial de metas e adequação de projetos</option>
@@ -6262,124 +6458,58 @@ function SubAjustes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; 
                       <option value="ajuste_sem_meta_com_projeto">Ajuste sem alteração de meta e com alteração de projeto</option>
                     </select>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Responsável Técnico (Eng)*</label>
-                      <input
-                        type="text"
-                        required
-                        value={responsavelP}
-                        onChange={(e) => setResponsavelP(e.target.value)}
-                        className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-white focus:outline-hidden"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nº Registro Mtb (CREA/CAU)*</label>
-                      <input
-                        type="text"
-                        required
-                        value={registroProfissional}
-                        onChange={(e) => setRegistroProfissional(e.target.value)}
-                        className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-white focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Reprogramação Física Requerida?</label>
-                      <select
-                        value={reprogramacao}
-                        onChange={(e) => setReprogramacao(e.target.value as any)}
-                        className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-slate-50 focus:outline-hidden"
-                      >
-                        <option value="Não">Não</option>
-                        <option value="Sim">Sim</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Saldo Complementar Requerido?</label>
-                      <select
-                        value={saldoComplementar}
-                        onChange={(e) => setSaldoComplementar(e.target.value as any)}
-                        className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-slate-50 focus:outline-hidden"
-                      >
-                        <option value="Não">Não</option>
-                        <option value="Sim">Sim</option>
-                      </select>
-                    </div>
-                  </div>
-
                   <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Justificativa e Anotações Técnicas de Ajuste*</label>
-                    <textarea
-                      required
-                      value={observacoesAjuste}
-                      onChange={(e) => setObservacoesAjuste(e.target.value)}
-                      rows={4}
-                      placeholder="Identifique de forma lógica as alterações de insumos e especificações técnicas de materiais..."
-                      className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden"
-                    />
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                      Exigirá atualização no cronograma físico financeiro?
+                    </label>
+                    <select value={reprogramacao} onChange={(e) => setReprogramacao(e.target.value as any)}
+                      className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-slate-50 focus:outline-hidden">
+                      <option value="Não">Não</option>
+                      <option value="Sim">Sim</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Calculations info */}
-                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 text-xs">
-                  <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1 border-b pb-2">
-                    <Calculator className="w-4 h-4 text-indigo-600" />
-                    Balanço Orçamentário Proposto
-                  </h4>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <span className="text-[9px] text-slate-400 block uppercase font-bold">Acréscimo de Itens (R$)</span>
-                      <input
-                        type="number"
-                        placeholder="Ex: 15400"
-                        value={valorAjusteInp}
-                        onChange={(e) => setValorAjusteInp(e.target.value)}
-                        className="w-full text-xs p-1.5 border border-slate-300 bg-white rounded-lg mt-1 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <span className="text-[9px] text-slate-400 block uppercase font-bold">Supressão de Itens (R$)</span>
-                      <input
-                        type="number"
-                        placeholder="Ex: 12000"
-                        value={supressao}
-                        onChange={(e) => setSupressao(e.target.value)}
-                        className="w-full text-xs p-1.5 border border-slate-300 bg-white rounded-lg mt-1 font-mono"
-                      />
+                {/* Responsável + CREA — auto-preenchidos pelo fiscal da obra */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                      Responsável Técnico (Eng)
+                      <span className="ml-1.5 text-[8px] text-emerald-500 font-black normal-case bg-emerald-50 px-1 py-0.5 rounded">Auto</span>
+                    </label>
+                    <div className={`px-3 py-2.5 text-xs border rounded-xl font-semibold ${responsavelP ? 'border-emerald-200 bg-emerald-50/40 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400 italic'}`}>
+                      {responsavelP || 'Nenhum fiscal atribuído à obra'}
                     </div>
                   </div>
-
-                  <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2 mt-4 text-xs">
-                    <div className="flex justify-between items-center bg-white">
-                      <span className="text-slate-500 font-bold">Valor Líquido do Ajuste:</span>
-                      <strong className={`font-mono ${valorAditivoLiquido >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                        R$ {valorAditivoLiquido.toLocaleString('pt-BR')}
-                      </strong>
-                    </div>
-
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-slate-500 font-bold">Porcentagem do Contrato:</span>
-                      <strong className="text-slate-700 font-mono">
-                        {percentualContrato.toFixed(2)}%
-                      </strong>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                      Nº Registro (CREA/CAU)
+                      <span className="ml-1.5 text-[8px] text-emerald-500 font-black normal-case bg-emerald-50 px-1 py-0.5 rounded">Auto</span>
+                    </label>
+                    <div className={`px-3 py-2.5 text-xs border rounded-xl font-semibold font-mono ${registroProfissional ? 'border-emerald-200 bg-emerald-50/40 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400 italic'}`}>
+                      {registroProfissional || 'CREA/CAU não informado no perfil do fiscal'}
                     </div>
                   </div>
+                </div>
 
-                  <div className="pt-2 text-right">
-                    <button
-                      type="button"
-                      onClick={handleNextStep}
-                      className="px-6 py-2.5 text-xs font-black uppercase text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer shadow-xs inline-flex items-center gap-1"
-                    >
-                      Checklist de Evidências <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
+                {/* Justificativa */}
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                    Justificativa e Anotações Técnicas de Ajuste *
+                  </label>
+                  <textarea required value={observacoesAjuste} onChange={(e) => setObservacoesAjuste(e.target.value)}
+                    rows={5}
+                    placeholder="Identifique de forma lógica as alterações de insumos e especificações técnicas de materiais..."
+                    className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden leading-relaxed"
+                  />
+                </div>
+
+                {/* Botão próximo */}
+                <div className="flex justify-end pt-1">
+                  <button type="button" onClick={handleNextStep}
+                    className="px-6 py-2.5 text-xs font-black uppercase text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer shadow-xs inline-flex items-center gap-1.5">
+                    Checklist de Evidências <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ) : (
@@ -6775,6 +6905,671 @@ function NoObraSelected() {
       <HardHat className="w-12 h-12 mx-auto text-slate-300 mb-2 animate-bounce" />
       <h3 className="text-sm font-black uppercase text-slate-700 mb-1">Selecione uma Obra para Atuar</h3>
       <p className="text-xs">Para gerenciar este subunidade, por favor escolha uma escola em execução na barra superior de filtros.</p>
+    </div>
+  );
+}
+
+// ==========================================================
+// AJUSTES CONTRATUAIS — COMPONENTES
+// ==========================================================
+
+// --- REEQUILÍBRIO FINANCEIRO ---
+function SubReequilibrio({
+  currentSol,
+  onUpdate,
+}: {
+  currentSol: Solicitacao | null;
+  onUpdate: (sol: Solicitacao) => void;
+}) {
+  const [step, setStep] = useState<1 | 2>(1);
+
+  // Etapa 1
+  const [justificativaFile, setJustificativaFile]     = useState<{ name: string; size: string } | null>(null);
+  const [autorizacaoDIPCFile, setAutorizacaoDIPCFile] = useState<{ name: string; size: string } | null>(null);
+
+  // Etapa 2
+  const [planilhaFile, setPlanilhaFile]           = useState<{ name: string; size: string } | null>(null);
+  const [dataRefSEE, setDataRefSEE]               = useState('');
+  const [descontoContratual, setDescontoContratual] = useState('');
+  const [valorReequilibrado, setValorReequilibrado] = useState('');
+
+  if (!currentSol) return <NoObraSelected />;
+
+  // ── Validação Automática de Homologação ──────────────────────────────────
+  const dataRef = currentSol.dataHomologacao || currentSol.contratoDataAssinatura;
+  const mesesDesdeHomologacao = (() => {
+    if (!dataRef) return null;
+    const d = new Date(dataRef + 'T00:00:00');
+    const hoje = new Date();
+    return (hoje.getFullYear() - d.getFullYear()) * 12 + (hoje.getMonth() - d.getMonth());
+  })();
+  const validacaoOk = mesesDesdeHomologacao !== null && mesesDesdeHomologacao > 12;
+
+  const valorOriginal = currentSol.valorHomologadoContratacao || currentSol.valorPlanilha || currentSol.valorHomologado || 0;
+  const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const fmtSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleFile = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (f: { name: string; size: string } | null) => void,
+  ) => {
+    const file = e.target.files?.[0];
+    if (file) setter({ name: file.name, size: fmtSize(file.size) });
+    e.target.value = '';
+  };
+
+  const handleSubmit = () => {
+    if (!planilhaFile) { alert('Anexe a Planilha de Reequilíbrio.'); return; }
+    if (!dataRefSEE)   { alert('Informe a Data da Referência SEE.'); return; }
+
+    const novo: ReequilibrioItem = {
+      id: `REQ-${Date.now()}`,
+      dataCriacao: new Date().toISOString().split('T')[0],
+      status: 'aguardando_analista',
+      justificativaFileName:   justificativaFile?.name,
+      justificativaFileSize:   justificativaFile?.size,
+      autorizacaoDIPCFileName: autorizacaoDIPCFile?.name,
+      autorizacaoDIPCFileSize: autorizacaoDIPCFile?.size,
+      planilhaFileName:        planilhaFile.name,
+      planilhaFileSize:        planilhaFile.size,
+      dataReferenceSEE:        dataRefSEE,
+      descontoContratual:      parseFloat(descontoContratual) || 0,
+      valorOriginal,
+      valorReequilibrado: parseFloat(valorReequilibrado) || undefined,
+    };
+
+    onUpdate({ ...currentSol, reequilibrios: [...(currentSol.reequilibrios || []), novo] });
+    alert('Solicitação de Reequilíbrio Financeiro enviada! Aguardando atribuição de analista.');
+  };
+
+  const inputCls = 'w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500/20';
+  const labelCls = 'block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1';
+
+  const UploadZone = ({
+    id, label, file, accept, onFile, cor,
+  }: {
+    id: string; label: string; accept: string;
+    file: { name: string; size: string } | null;
+    onFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    cor: string;
+  }) => (
+    <div>
+      <label className={labelCls}>{label}</label>
+      {file ? (
+        <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs ${cor}`}>
+          <FileText className="w-4 h-4 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-bold truncate">{file.name}</p>
+            <p className="text-[9px] opacity-70">{file.size}</p>
+          </div>
+          <label htmlFor={id} className="shrink-0 px-2 py-1 text-[9px] font-black border rounded cursor-pointer hover:opacity-80 transition">
+            Trocar
+          </label>
+          <input id={id} type="file" accept={accept} className="hidden" onChange={onFile} />
+        </div>
+      ) : (
+        <label htmlFor={id}
+          className="flex flex-col items-center justify-center gap-1.5 px-4 py-4 border-2 border-dashed border-slate-300 hover:border-violet-400 hover:bg-violet-50/20 rounded-xl cursor-pointer transition group">
+          <UploadCloud className="w-5 h-5 text-slate-300 group-hover:text-violet-400 transition" />
+          <p className="text-xs font-bold text-slate-500 group-hover:text-violet-700 transition">Clique para anexar</p>
+          <p className="text-[9px] text-slate-400">{accept.toUpperCase().replace(/\./g, '').replace(/,/g, ', ')}</p>
+          <input id={id} type="file" accept={accept} className="hidden" onChange={onFile} />
+        </label>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-200">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-violet-600" /> Reequilíbrio Financeiro
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Solicitação de reequilíbrio econômico-financeiro do contrato de obra.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {[1, 2].map(n => (
+            <span key={n} className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border-2 ${step === n ? 'bg-violet-600 text-white border-violet-600' : n < step ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>{n}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* ── ETAPA 1 ────────────────────────────────────────────────────────── */}
+      {step === 1 && (
+        <div className="space-y-5">
+
+          {/* Validação Automática */}
+          <div className={`rounded-2xl border p-5 space-y-3 ${validacaoOk ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <h3 className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+              {validacaoOk
+                ? <CheckCircle className="w-4 h-4 text-emerald-600" />
+                : <AlertCircle className="w-4 h-4 text-rose-500" />
+              }
+              <span className={validacaoOk ? 'text-emerald-800' : 'text-rose-800'}>
+                Validação Automática — Tempo de Homologação
+              </span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-white/70 rounded-xl border p-3">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Data de Homologação (PAF)</p>
+                <p className="text-xs font-black text-slate-800 mt-1 font-mono">
+                  {dataRef ? new Date(dataRef + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informada'}
+                </p>
+              </div>
+              <div className="bg-white/70 rounded-xl border p-3">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Meses Decorridos</p>
+                <p className={`text-xl font-black mt-1 ${validacaoOk ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {mesesDesdeHomologacao !== null ? `${mesesDesdeHomologacao} meses` : '—'}
+                </p>
+              </div>
+              <div className={`rounded-xl border p-3 flex items-center gap-2 ${validacaoOk ? 'bg-emerald-100 border-emerald-300' : 'bg-rose-100 border-rose-300'}`}>
+                {validacaoOk
+                  ? <><CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" /><div><p className="text-[10px] font-black text-emerald-800">Apto para reequilíbrio</p><p className="text-[9px] text-emerald-600">Homologação superior a 12 meses</p></div></>
+                  : <><AlertCircle className="w-5 h-5 text-rose-500 shrink-0" /><div><p className="text-[10px] font-black text-rose-800">Processo bloqueado</p><p className="text-[9px] text-rose-600">Necessário mínimo de 12 meses</p></div></>
+                }
+              </div>
+            </div>
+
+            {!validacaoOk && (
+              <div className="p-3 bg-rose-100 border border-rose-300 rounded-xl text-xs text-rose-800 font-medium leading-relaxed">
+                O processo de reequilíbrio financeiro somente pode ser iniciado quando a homologação do contrato
+                superar <strong>12 meses</strong>. Retorne após atingir este prazo.
+              </div>
+            )}
+          </div>
+
+          {validacaoOk && (
+            <>
+              {/* Documentos Etapa 1 */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2 flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-violet-500" /> Documentos da Etapa 1
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <UploadZone
+                    id="just-empresa" label="Justificativa da Empresa *"
+                    accept=".pdf" file={justificativaFile}
+                    cor="border-violet-200 bg-violet-50 text-violet-800"
+                    onFile={e => handleFile(e, setJustificativaFile)}
+                  />
+                  <UploadZone
+                    id="autoriza-dipc" label="Autorização da DIPC *"
+                    accept=".pdf" file={autorizacaoDIPCFile}
+                    cor="border-blue-200 bg-blue-50 text-blue-800"
+                    onFile={e => handleFile(e, setAutorizacaoDIPCFile)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button type="button"
+                  disabled={!justificativaFile || !autorizacaoDIPCFile}
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-1.5 px-5 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl transition cursor-pointer">
+                  Planilha de Reequilíbrio <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── ETAPA 2 ────────────────────────────────────────────────────────── */}
+      {step === 2 && (
+        <div className="space-y-5">
+          {/* Upload planilha */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2 flex items-center gap-1.5">
+              <UploadCloud className="w-4 h-4 text-violet-500" /> Planilha de Reequilíbrio
+            </h3>
+            <UploadZone
+              id="planilha-req" label="Planilha XLSX *"
+              accept=".xlsx,.xls"
+              file={planilhaFile}
+              cor="border-emerald-200 bg-emerald-50 text-emerald-800"
+              onFile={e => handleFile(e, setPlanilhaFile)}
+            />
+          </div>
+
+          {/* Dados do reequilíbrio */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2 flex items-center gap-1.5">
+              <Calculator className="w-4 h-4 text-violet-500" /> Dados Registrados pelo Sistema
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Data da Referência SEE *</label>
+                <input type="date" value={dataRefSEE} onChange={e => setDataRefSEE(e.target.value)} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Desconto Contratual (%)</label>
+                <input type="number" placeholder="Ex: 5.5" value={descontoContratual}
+                  onChange={e => setDescontoContratual(e.target.value)} className={inputCls + ' font-mono'} />
+              </div>
+              <div>
+                <label className={labelCls}>Valor Original (R$)</label>
+                <div className="px-3 py-2 text-xs border border-emerald-200 bg-emerald-50/40 rounded-xl font-mono font-bold text-slate-800">
+                  {fmtBRL(valorOriginal)}
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Valor Reequilibrado (R$)</label>
+                <input type="number" placeholder="Calculado ou informado" value={valorReequilibrado}
+                  onChange={e => setValorReequilibrado(e.target.value)} className={inputCls + ' font-mono'} />
+              </div>
+            </div>
+
+            {/* Resumo */}
+            {(descontoContratual || valorReequilibrado) && (
+              <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 text-xs space-y-1.5">
+                <p className="font-black text-violet-700 text-[10px] uppercase tracking-wider">Resumo do Reequilíbrio</p>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Valor Original:</span>
+                  <span className="font-mono font-bold">{fmtBRL(valorOriginal)}</span>
+                </div>
+                {descontoContratual && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Desconto Contratual:</span>
+                    <span className="font-mono font-bold text-rose-600">−{descontoContratual}%</span>
+                  </div>
+                )}
+                {valorReequilibrado && (
+                  <div className="flex justify-between border-t border-violet-200 pt-1.5">
+                    <span className="font-bold text-violet-800">Valor Reequilibrado:</span>
+                    <span className="font-mono font-black text-violet-800">{fmtBRL(parseFloat(valorReequilibrado))}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-between">
+            <button type="button" onClick={() => setStep(1)}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">
+              ← Voltar
+            </button>
+            <button type="button" onClick={handleSubmit}
+              className="flex items-center gap-1.5 px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-black rounded-xl shadow-sm transition cursor-pointer">
+              <CheckCircle className="w-4 h-4" /> Enviar Solicitação
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Histórico */}
+      {(currentSol.reequilibrios || []).length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2">
+            Histórico de Solicitações
+          </h3>
+          {(currentSol.reequilibrios || []).map(r => (
+            <div key={r.id} className="flex items-start justify-between gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              <div>
+                <p className="font-bold text-slate-700">{r.id} — {r.dataCriacao}</p>
+                {r.valorReequilibrado && <p className="text-slate-500 mt-0.5">Valor reequilibrado: {fmtBRL(r.valorReequilibrado)}</p>}
+              </div>
+              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                r.status === 'aguardando_analista' ? 'bg-amber-100 text-amber-700' :
+                r.status === 'em_analise'          ? 'bg-blue-100 text-blue-700' :
+                r.status === 'aprovado'            ? 'bg-emerald-100 text-emerald-700' :
+                                                    'bg-rose-100 text-rose-700'
+              }`}>{r.status.replace(/_/g, ' ')}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- SALDO COMPLEMENTAR OBRA DISTRATADA ---
+const DOCS_SALDO_COMPLEMENTAR = [
+  'Extrato bancário',
+  'Declaração da escola',
+  'Medições acumuladas',
+  'Distrato',
+  'Relatório técnico',
+  'Justificativa técnica',
+  'Ata do colegiado',
+  'Relatório fotográfico',
+  'Projeto básico',
+];
+
+function SubSaldoComplementar({
+  currentSol,
+  onUpdate,
+}: {
+  currentSol: Solicitacao | null;
+  onUpdate: (sol: Solicitacao) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<'dados' | 'documentos'>('dados');
+
+  // Dados financeiros
+  const [valorTC,            setValorTC]            = useState('');
+  const [valorLiberado,      setValorLiberado]      = useState('');
+  const [valorPago,          setValorPago]          = useState('');
+  const [saldoEmConta,       setSaldoEmConta]       = useState('');
+  const [necessidadeAditivo, setNecessidadeAditivo] = useState('');
+
+  // Documentos
+  const [docs, setDocs] = useState(
+    DOCS_SALDO_COMPLEMENTAR.map(item => ({ item, checked: false, fileName: '' }))
+  );
+
+  const [saved, setSaved] = useState(false);
+
+  if (!currentSol) return <NoObraSelected />;
+
+  // Disponível apenas para obras com contrato distratado
+  const isDistratada =
+    currentSol.statusContratoEmpresa === 'Distratada' ||
+    (currentSol.empresasAnteriores && currentSol.empresasAnteriores.length > 0);
+
+  if (!isDistratada) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 space-y-3">
+        <Lock className="w-12 h-12 mx-auto text-slate-300" />
+        <h3 className="text-sm font-black text-slate-700">Funcionalidade Restrita</h3>
+        <p className="text-xs max-w-xs mx-auto leading-relaxed">
+          O Saldo Complementar de Obra Distratada está disponível apenas para obras cujo contrato
+          foi <strong className="text-rose-600">distratado</strong>.
+        </p>
+      </div>
+    );
+  }
+
+  // Empresa distratada
+  const empresaDistratada =
+    currentSol.empresasAnteriores?.slice(-1)[0]?.nome ||
+    (currentSol.statusContratoEmpresa === 'Distratada' ? currentSol.empresaContratada : '') ||
+    '—';
+
+  // Cálculos
+  const numTC       = parseFloat(valorTC)            || 0;
+  const numLib      = parseFloat(valorLiberado)      || 0;
+  const numPago     = parseFloat(valorPago)          || 0;
+  const numSaldo    = parseFloat(saldoEmConta)       || 0;
+  const numAditivo  = parseFloat(necessidadeAditivo) || 0;
+
+  const valorDisponivel        = numSaldo;
+  const valorAindaNaoLiberado  = Math.max(0, numTC - numLib);
+  const valorTotalDisponivel   = valorDisponivel + valorAindaNaoLiberado + numAditivo;
+
+  const fmtBRL = (v: number) =>
+    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  const todosDocsMarcados = docs.every(d => d.checked);
+
+  const toggleDoc = (idx: number) => {
+    setDocs(prev => prev.map((d, i) =>
+      i === idx
+        ? { ...d, checked: !d.checked, fileName: !d.checked ? `${d.item.replace(/\s/g, '_')}.pdf` : '' }
+        : d
+    ));
+  };
+
+  const handleSubmit = () => {
+    if (!todosDocsMarcados) {
+      alert('Todos os documentos são obrigatórios. Marque todos antes de enviar.');
+      return;
+    }
+    if (!valorTC || !saldoEmConta) {
+      alert('Preencha ao menos o Valor TC e o Saldo em Conta.');
+      return;
+    }
+
+    const novo: SaldoComplementarItem = {
+      id: `SC-${Date.now()}`,
+      dataCriacao: new Date().toISOString().split('T')[0],
+      status: 'aguardando_analista',
+      valorTC: numTC,
+      valorLiberado: numLib,
+      valorPago: numPago,
+      saldoEmConta: numSaldo,
+      necessidadeAditivo: numAditivo,
+      documentos: docs.map(d => ({ item: d.item, obrigatorio: true, checked: d.checked, fileName: d.fileName })),
+    };
+
+    onUpdate({
+      ...currentSol,
+      saldosComplementares: [...(currentSol.saldosComplementares || []), novo],
+    });
+
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+    alert('Solicitação de Saldo Complementar enviada! Aguardando atribuição de analista.');
+  };
+
+  const inputCls = 'w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white text-slate-800 font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20';
+  const labelCls = 'block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1';
+  const autoCls  = 'px-3 py-2 text-xs border border-emerald-200 bg-emerald-50/40 rounded-xl font-semibold text-slate-800';
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-200">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+            <Coins className="w-4 h-4 text-teal-600" /> Saldo Complementar — Obra Distratada
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Levantamento financeiro e documental para continuidade da obra após distrato contratual.
+          </p>
+        </div>
+        {saved && (
+          <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 shrink-0">
+            <CheckCircle className="w-3.5 h-3.5" /> Enviado
+          </span>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 gap-1">
+        {[
+          { id: 'dados',      label: 'Dados & Financeiro' },
+          { id: 'documentos', label: 'Documentação Obrigatória' },
+        ].map(t => (
+          <button key={t.id} type="button"
+            onClick={() => setActiveTab(t.id as any)}
+            className={`px-4 py-2.5 text-xs font-black border-b-2 transition-colors cursor-pointer ${
+              activeTab === t.id
+                ? 'border-teal-600 text-teal-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── ABA 1: DADOS ─────────────────────────────────────────────────── */}
+      {activeTab === 'dados' && (
+        <div className="space-y-5">
+          {/* Dados da Obra */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2 flex items-center gap-1.5">
+              <Building2 className="w-4 h-4 text-teal-500" /> Dados da Obra
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label className={labelCls}>TC / PAF</label>
+                <div className={autoCls}>{currentSol.numeroPAF || '—'}</div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Escola</label>
+                <div className={autoCls}>{currentSol.nomeEscola}</div>
+              </div>
+              <div>
+                <label className={labelCls}>Município</label>
+                <div className={autoCls}>{currentSol.municipio || '—'}</div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>SRE</label>
+                <div className={autoCls}>{currentSol.sre || '—'}</div>
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Empresa — Contrato Distratado</label>
+                <div className="px-3 py-2 text-xs border border-rose-200 bg-rose-50/30 rounded-xl font-semibold text-rose-800">
+                  {empresaDistratada}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Dados Financeiros */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2 flex items-center gap-1.5">
+              <DollarSign className="w-4 h-4 text-teal-500" /> Dados Financeiros
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {[
+                { label: 'Valor TC (R$)',               val: valorTC,            set: setValorTC,            ph: '500000' },
+                { label: 'Valor Liberado (R$)',          val: valorLiberado,      set: setValorLiberado,      ph: '300000' },
+                { label: 'Valor Pago (R$)',              val: valorPago,          set: setValorPago,          ph: '200000' },
+                { label: 'Saldo em Conta (R$)',          val: saldoEmConta,       set: setSaldoEmConta,       ph: '100000' },
+                { label: 'Necessidade de Aditivo (R$)', val: necessidadeAditivo, set: setNecessidadeAditivo, ph: '50000' },
+              ].map(f => (
+                <div key={f.label}>
+                  <label className={labelCls}>{f.label}</label>
+                  <input type="number" placeholder={f.ph} value={f.val}
+                    onChange={e => f.set(e.target.value)} className={inputCls} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Cálculo */}
+          <div className="bg-teal-50 border border-teal-200 rounded-2xl p-5 space-y-3">
+            <h3 className="text-xs font-black uppercase tracking-wider text-teal-700 flex items-center gap-1.5">
+              <Calculator className="w-4 h-4" /> Valor Total Disponível — Cálculo Automático
+            </h3>
+            <div className="space-y-2 text-sm">
+              {[
+                { label: 'Valor Disponível (Saldo em Conta)',  value: valorDisponivel,       sign: '' },
+                { label: 'Valor Ainda Não Liberado',           value: valorAindaNaoLiberado,  sign: '+' },
+                { label: 'Necessidade de Aditivo',             value: numAditivo,             sign: '+' },
+              ].map(r => (
+                <div key={r.label} className="flex items-center justify-between gap-4 text-xs">
+                  <span className="text-teal-700 font-semibold flex items-center gap-1.5">
+                    {r.sign && <span className="text-teal-500 font-black w-3">{r.sign}</span>}
+                    {!r.sign && <span className="w-3" />}
+                    {r.label}
+                  </span>
+                  <span className="font-mono font-bold text-teal-900">{fmtBRL(r.value)}</span>
+                </div>
+              ))}
+              <div className="border-t border-teal-300 pt-2 flex items-center justify-between gap-4">
+                <span className="text-teal-800 font-black text-xs flex items-center gap-1.5">
+                  <span className="text-teal-600 font-black w-3">=</span>
+                  Valor Total Disponível
+                </span>
+                <span className="font-mono font-black text-base text-teal-900">{fmtBRL(valorTotalDisponivel)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button type="button" onClick={() => setActiveTab('documentos')}
+              className="flex items-center gap-1.5 px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-black rounded-xl transition cursor-pointer">
+              Documentação <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── ABA 2: DOCUMENTAÇÃO ──────────────────────────────────────────── */}
+      {activeTab === 'documentos' && (
+        <div className="space-y-5">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <UploadCloud className="w-4 h-4 text-teal-500" /> Documentação Obrigatória
+              </h3>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${todosDocsMarcados ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'}`}>
+                {docs.filter(d => d.checked).length}/{docs.length} anexados
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500">
+              Todos os documentos são obrigatórios para envio da solicitação.
+            </p>
+            <div className="space-y-2">
+              {docs.map((doc, idx) => (
+                <div key={doc.item}
+                  className={`flex items-center justify-between gap-3 p-3 rounded-xl border text-xs transition-colors ${
+                    doc.checked ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50/30 border-rose-200'
+                  }`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    {doc.checked
+                      ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                      : <FileText className="w-4 h-4 text-rose-400 shrink-0" />
+                    }
+                    <div className="min-w-0">
+                      <span className={`font-bold block truncate ${doc.checked ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        ☑ {doc.item}
+                        <span className="ml-1.5 text-[8px] bg-rose-100 text-rose-600 px-1 rounded font-black uppercase">Obrigatório</span>
+                      </span>
+                      {doc.fileName && (
+                        <span className="text-[9px] text-slate-400 font-mono">{doc.fileName}</span>
+                      )}
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => toggleDoc(idx)}
+                    className={`shrink-0 px-3 py-1 text-[10px] font-black rounded-lg border transition cursor-pointer ${
+                      doc.checked
+                        ? 'bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                        : 'bg-white border-rose-300 text-rose-600 hover:bg-rose-50'
+                    }`}>
+                    {doc.checked ? '✓ Anexado' : '+ Marcar Anexado'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" onClick={() => setActiveTab('dados')}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">
+              ← Voltar
+            </button>
+            <button type="button" onClick={handleSubmit}
+              disabled={!todosDocsMarcados}
+              className="flex items-center gap-1.5 px-5 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-sm transition cursor-pointer">
+              <CheckCircle className="w-4 h-4" /> Enviar Solicitação
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Histórico */}
+      {(currentSol.saldosComplementares || []).length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2">
+            Histórico de Solicitações
+          </h3>
+          {(currentSol.saldosComplementares || []).map(sc => (
+            <div key={sc.id} className="flex items-start justify-between gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              <div>
+                <p className="font-bold text-slate-700">{sc.id} — {sc.dataCriacao}</p>
+                <p className="text-slate-500 mt-0.5">Valor Total: {fmtBRL(sc.saldoEmConta + Math.max(0, sc.valorTC - sc.valorLiberado) + sc.necessidadeAditivo)}</p>
+              </div>
+              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                sc.status === 'aguardando_analista' ? 'bg-amber-100 text-amber-700' :
+                sc.status === 'em_analise'          ? 'bg-blue-100 text-blue-700' :
+                sc.status === 'aprovado'            ? 'bg-emerald-100 text-emerald-700' :
+                                                     'bg-rose-100 text-rose-700'
+              }`}>{sc.status.replace('_', ' ')}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -266,6 +266,45 @@ export interface Solicitacao {
     resultado: 'Aprovada' | 'Aprovada com Ressalvas' | 'Reprovada';
     fotosLaudos?: string[];
   }[];
+
+  // Saldo Complementar de Obra Distratada
+  saldosComplementares?: SaldoComplementarItem[];
+  // Reequilíbrio Financeiro
+  reequilibrios?: ReequilibrioItem[];
+}
+
+export interface ReequilibrioItem {
+  id: string;
+  dataCriacao: string;
+  status: 'aguardando_analista' | 'em_analise' | 'aprovado' | 'reprovado';
+  analistaAtribuido?: string;
+  // Etapa 1
+  justificativaFileName?: string;
+  justificativaFileSize?: string;
+  autorizacaoDIPCFileName?: string;
+  autorizacaoDIPCFileSize?: string;
+  // Etapa 2
+  planilhaFileName?: string;
+  planilhaFileSize?: string;
+  dataReferenceSEE?: string;
+  descontoContratual?: number;
+  valorOriginal?: number;
+  valorReequilibrado?: number;
+}
+
+export interface SaldoComplementarItem {
+  id: string;
+  dataCriacao: string;
+  status: 'aguardando_analista' | 'em_analise' | 'aprovado' | 'reprovado';
+  analistaAtribuido?: string;
+  // Dados financeiros
+  valorTC: number;
+  valorLiberado: number;
+  valorPago: number;
+  saldoEmConta: number;
+  necessidadeAditivo: number;
+  // Documentos
+  documentos: { item: string; obrigatorio: boolean; checked: boolean; fileName?: string }[];
 }
 
 export type PerfilUsuario = 'tecnico_infra' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore';
