@@ -286,6 +286,7 @@ export interface UsuarioSistema {
   dataUltimaAtualizacao?: string;
   tipoVinculo?: 'regional' | 'orgao_central';
   equipeCentral?: string;
+  regionais?: string[];
 }
 
 export type StatusObraComputado =

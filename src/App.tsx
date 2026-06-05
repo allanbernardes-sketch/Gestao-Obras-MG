@@ -11,7 +11,7 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle, FolderOpen } from 'lucide-react';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
@@ -19,6 +19,7 @@ import AcompanhamentoPaf from './components/AcompanhamentoPaf';
 import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
 import CentralNavegacaoObras from './components/CentralNavegacaoObras';
 import OrcamentoModule from './components/orcamento/OrcamentoModule';
+import PatrimonioModule from './components/patrimonio/PatrimonioModule';
 
 
 export default function App() {
@@ -188,7 +189,7 @@ export default function App() {
   const [usrSituacaoFuncional, setUsrSituacaoFuncional] = useState<'Ativo' | 'Férias' | 'Licença' | 'Afastado' | 'Desligado'>('Ativo');
   const [usrTipoVinculo, setUsrTipoVinculo] = useState<'regional' | 'orgao_central'>('regional');
   const [usrEquipeCentral, setUsrEquipeCentral] = useState('Planejamento');
-  const [usrRegional, setUsrRegional] = useState('SRE Metropolitana A');
+  const [usrRegionais, setUsrRegionais] = useState<string[]>(['SRE Metropolitana A']);
 
   // FILTROS DA TABELA DE USUÁRIOS
   const [filtroUsrBusca, setFiltroUsrBusca] = useState('');
@@ -226,7 +227,7 @@ export default function App() {
     setUsrSituacaoFuncional('Ativo');
     setUsrTipoVinculo('regional');
     setUsrEquipeCentral('Planejamento');
-    setUsrRegional('SRE Metropolitana A');
+    setUsrRegionais(['SRE Metropolitana A']);
     setUsrIdEmEdicao(null);
     setShowCadastroUsuarioModal(false);
   };
@@ -243,7 +244,9 @@ export default function App() {
     setUsrSituacaoFuncional(u.situacaoFuncional || 'Ativo');
     setUsrTipoVinculo(u.tipoVinculo || 'regional');
     setUsrEquipeCentral(u.equipeCentral || 'Planejamento');
-    setUsrRegional(u.tipoVinculo === 'regional' ? u.departamento : 'SRE Metropolitana A');
+    setUsrRegionais(u.tipoVinculo === 'regional'
+      ? (u.regionais?.length ? u.regionais : (u.departamento ? [u.departamento] : ['SRE Metropolitana A']))
+      : ['SRE Metropolitana A']);
     setShowCadastroUsuarioModal(true);
   };
 
@@ -310,7 +313,7 @@ export default function App() {
       : 'gestor_dore';
 
     const departamento = usrTipoVinculo === 'regional'
-      ? usrRegional
+      ? (usrRegionais[0] || '')
       : `DORE - ${usrEquipeCentral}`;
 
     const dadosAtualizados = {
@@ -318,6 +321,7 @@ export default function App() {
       email: usrEmail,
       perfil,
       departamento,
+      regionais: usrTipoVinculo === 'regional' ? usrRegionais : undefined,
       cargo: usrCargo,
       formacao: usrFormacao,
       creaNum: usrCreaNum || undefined,
@@ -448,13 +452,19 @@ export default function App() {
     alert(`Empresa "${empNome}" pré-cadastrada e homologada com sucesso no módulo de Segurança.`);
   };
 
-  // Controle de acesso regional: tecnico_infra só vê dados da sua SRE
-  const sreDoTecnico = perfilUsuario === 'tecnico_infra'
-    ? (usuariosSeguranca.find(u => u.perfil === 'tecnico_infra')?.departamento || '')
-    : '';
+  // Controle de acesso regional: tecnico_infra só vê dados das suas SREs
+  const regionaisDoTecnico: string[] = perfilUsuario === 'tecnico_infra'
+    ? (() => {
+        const u = usuariosSeguranca.find(u => u.perfil === 'tecnico_infra');
+        if (!u) return [];
+        return u.regionais?.length ? u.regionais : (u.departamento ? [u.departamento] : []);
+      })()
+    : [];
 
-  const solicitacoesVisiveis = sreDoTecnico
-    ? solicitacoes.filter(s => s.sre?.toLowerCase() === sreDoTecnico.toLowerCase())
+  const sreDoTecnico = regionaisDoTecnico[0] || '';
+
+  const solicitacoesVisiveis = regionaisDoTecnico.length
+    ? solicitacoes.filter(s => regionaisDoTecnico.some(sre => s.sre?.toLowerCase() === sre.toLowerCase()))
     : solicitacoes;
 
   // Initialize from LocalStorage or the rich pre-defined mock set
@@ -1736,9 +1746,11 @@ export default function App() {
 
               <div className="space-y-1.5">
                 {[
-                  { id: 'blank_imoveis', label: 'Cadastro de Próprios', desc: 'Registro de imóveis públicos', icon: Building2 },
-                  { id: 'blank_vistorias', label: 'Vistorias & Inspeções', desc: 'Relatório de integridade predial', icon: ClipboardList },
-                  { id: 'blank_regularizacao', label: 'Regularização Documental', desc: 'Escrituras e títulos', icon: FileText }
+                  { id: 'blank_imoveis',       label: 'Cadastro de Próprios',     desc: 'Registro de imóveis públicos',       icon: Building2 },
+                  { id: 'blank_regularizacao', label: 'Regularização Documental', desc: 'Situação fundiária e documentos',      icon: FileText },
+                  { id: 'blank_projetos',      label: 'Projetos',                 desc: 'Projetos técnicos atualizados',        icon: FolderOpen },
+                  { id: 'blank_vistorias',     label: 'Vistorias & Inspeções',    desc: 'Laudos de integridade predial',        icon: ClipboardList },
+                  { id: 'blank_ficha',         label: 'Ficha Consolidada',        desc: 'Prontuário imobiliário completo',      icon: BookOpen }
                 ].map((item) => {
                   const Icon = item.icon;
                   const isActive = activeSubTask === item.id;
@@ -3170,7 +3182,15 @@ export default function App() {
                                           <p className="text-[10px] font-semibold text-slate-700">
                                             {usr.tipoVinculo === 'regional' ? '🏫 Regional' : usr.tipoVinculo === 'orgao_central' ? '🏛️ Central' : '—'}
                                           </p>
-                                          <p className="text-[9.5px] text-slate-500">{u.departamento}</p>
+                                          {u.tipoVinculo === 'regional' && u.regionais && u.regionais.length > 1 ? (
+                                            <div className="flex flex-wrap gap-0.5 mt-0.5">
+                                              {u.regionais.map(r => (
+                                                <span key={r} className="text-[8.5px] bg-rose-50 text-rose-700 border border-rose-100 px-1 py-0.5 rounded font-semibold">{r.replace('SRE ', '')}</span>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className="text-[9.5px] text-slate-500">{u.departamento}</p>
+                                          )}
                                         </td>
                                         <td className="py-2.5 px-3 font-mono text-[10px] text-slate-500 whitespace-nowrap">
                                           {usr.dataUltimaAtualizacao || <span className="text-slate-400 italic">—</span>}
@@ -3387,58 +3407,12 @@ export default function App() {
               )}
 
               {activeModule === 'imoveis' && (
-                <div className="flex-1 flex flex-col items-center justify-center py-12 text-center select-none animate-in fade-in duration-200">
-                  <div className="w-16 h-16 bg-teal-50 rounded-full flex items-center justify-center border border-teal-100 mb-4 animate-bounce">
-                    <Building className="w-8 h-8 text-teal-600" />
-                  </div>
-                  <h2 className="text-base font-bold text-slate-800 font-sans">
-                    Módulo de Patrimônio & Imóveis (Em Construção)
-                  </h2>
-                  <p className="text-xs text-slate-500 max-w-lg mt-1.5 font-sans leading-relaxed text-center">
-                    Espaço reservado para o dossiê imobiliário completo da Rede Estadual de Ensino de Minas Gerais. 
-                    Aqui será possível registrar títulos de propriedade, escrituras públicas, certidões de regularização municipal e o mapeamento de áreas disponíveis para novas construções ou ampliações.
-                  </p>
-
-                  <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl w-full text-left">
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-3xs hover:border-teal-200 transition-all">
-                      <div className="w-8 h-8 bg-teal-50 rounded-lg flex items-center justify-center text-teal-600 font-bold mb-3 text-xs">
-                        01
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-800 mb-1 font-sans">Dossiê e Registro</h4>
-                      <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
-                        Armazenamento e checklist de escrituras públicas, certidões e termos de cessão de uso com as prefeituras parceiras.
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-3xs hover:border-teal-200 transition-all">
-                      <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600 font-bold mb-3 text-xs">
-                        02
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-800 mb-1 font-sans">Vistorias Prediais</h4>
-                      <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
-                        Fichas de conferência física, laudos de integridade estrutural e acompanhamento preventivo das edificações escolares.
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-3xs hover:border-teal-200 transition-all">
-                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold mb-3 text-xs">
-                        03
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-800 mb-1 font-sans">Georreferenciamento</h4>
-                      <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
-                        Mapeamento geográfico das escolas por SRE e cruzamento com índices de adensamento demográfico regional.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-8 flex gap-2">
-                    <span className="px-2.5 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500 font-mono">
-                      v1.4.0-planned
-                    </span>
-                    <span className="px-2.5 py-1 bg-teal-100 rounded-full text-[10px] font-bold text-teal-700 font-sans">
-                      DORE Desenvolvimento
-                    </span>
-                  </div>
+                <div className="w-full p-6">
+                  <PatrimonioModule
+                    activeSubTask={activeSubTask}
+                    perfilUsuario={perfilUsuario}
+                    regionaisDoTecnico={regionaisDoTecnico}
+                  />
                 </div>
               )}
 
@@ -3641,13 +3615,29 @@ export default function App() {
                 </div>
 
                 {usrTipoVinculo === 'regional' && (
-                  <div className="animate-in slide-in-from-top-1 duration-200">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Superintendência Regional *</label>
-                    <select value={usrRegional} onChange={(e) => setUsrRegional(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
-                      {['SRE Metropolitana A','SRE Metropolitana B','SRE Metropolitana C','SRE Patos de Minas','SRE Diamantina','SRE Itajubá','SRE Pouso Alegre','SRE Juiz de Fora','SRE Ouro Preto','SRE Montes Claros','SRE Uberaba','SRE Uberlândia','SRE Governador Valadares','SRE Teófilo Otoni','SRE Ipatinga','SRE Coronel Fabriciano','SRE Passos','SRE São João del-Rei','SRE Barbacena'].map(sre => (
-                        <option key={sre} value={sre}>{sre}</option>
-                      ))}
-                    </select>
+                  <div className="animate-in slide-in-from-top-1 duration-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Superintendências Regionais *
+                        <span className="ml-1.5 text-[9px] font-normal text-slate-400 normal-case">Selecione uma ou mais</span>
+                      </label>
+                      {usrRegionais.length > 0 && (
+                        <span className="text-[10px] text-rose-600 font-bold">{usrRegionais.length} selecionada{usrRegionais.length > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 max-h-52 overflow-y-auto p-2 border border-slate-200 rounded-xl bg-slate-50/50">
+                      {['SRE Metropolitana A','SRE Metropolitana B','SRE Metropolitana C','SRE Patos de Minas','SRE Diamantina','SRE Itajubá','SRE Pouso Alegre','SRE Juiz de Fora','SRE Ouro Preto','SRE Montes Claros','SRE Uberaba','SRE Uberlândia','SRE Governador Valadares','SRE Teófilo Otoni','SRE Ipatinga','SRE Coronel Fabriciano','SRE Passos','SRE São João del-Rei','SRE Barbacena'].map(sre => {
+                        const checked = usrRegionais.includes(sre);
+                        return (
+                          <label key={sre} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-[11px] transition-all border ${checked ? 'bg-rose-50 border-rose-300 text-rose-800 font-bold' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}>
+                            <input type="checkbox" checked={checked}
+                              onChange={e => setUsrRegionais(prev => e.target.checked ? [...prev, sre] : prev.filter(r => r !== sre))}
+                              className="accent-rose-600 shrink-0" />
+                            {sre}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
