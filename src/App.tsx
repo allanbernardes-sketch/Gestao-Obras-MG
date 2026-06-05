@@ -473,8 +473,16 @@ export default function App() {
 
   const sreDoTecnico = regionaisDoTecnico[0] || '';
 
+  // Nome do técnico logado (para permitir acesso a obras onde é fiscal, mesmo fora da sua SRE)
+  const nomeTecnicoLogado = perfilUsuario === 'tecnico_infra'
+    ? (usuariosSeguranca.find(u => u.perfil === 'tecnico_infra')?.nome || '')
+    : '';
+
   const solicitacoesVisiveis = regionaisDoTecnico.length
-    ? solicitacoes.filter(s => regionaisDoTecnico.some(sre => s.sre?.toLowerCase() === sre.toLowerCase()))
+    ? solicitacoes.filter(s =>
+        regionaisDoTecnico.some(sre => s.sre?.toLowerCase() === sre.toLowerCase()) ||
+        (nomeTecnicoLogado && s.fiscalObraAtribuido === nomeTecnicoLogado)
+      )
     : solicitacoes;
 
   // Initialize from LocalStorage or the rich pre-defined mock set

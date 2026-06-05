@@ -151,11 +151,13 @@ export interface Solicitacao {
   garantiaValor?: number;
   garantiaTipo?: string;
   garantiaValidade?: string;
-  empresasAnteriores?: { 
-    id: string; 
-    nome: string; 
-    cnpj: string; 
+  empresasAnteriores?: {
+    id: string;
+    nome: string;
+    cnpj: string;
     avancoFisicoOriginal: number;
+    contratoValorInicial?: number;
+    valorExecutado?: number;
     dataOrdemInicio?: string;
     previsaoTerminoObra?: string;
     valorHomologadoContratacao?: number;
@@ -180,6 +182,12 @@ export interface Solicitacao {
   analistaAtribuido?: string;
   contadorAnalises?: number;
   parecerConsolidado?: string;
+  historicoCorrecoes?: {
+    contador: number;
+    data: string;
+    motivos: { label: string; campo: string; motivo: string }[];
+    docsRecusados: { nome: string; id: string; justificativa: string }[];
+  }[];
   statusPAF?: 'Aguardando Geração' | 'Aguardando Pagamento' | 'Pago e Liberado';
 
   // Campos específicos da Ordem de Início (Atividade 4 / Novo status)
@@ -197,6 +205,7 @@ export interface Solicitacao {
   classeObra?: string;
   pontuacaoComplexidade?: number;
   fiscalObraAtribuido?: string;
+  cadastroObraConfirmado?: boolean;
 
   // Campos específicos do Distrato
   justificativaDistrato?: string;
@@ -366,8 +375,8 @@ export function computeStatusObra(sol: Solicitacao): StatusObraInfo {
     };
   }
 
-  // 3. Em execução — Ordem de Início preenchida e medições em andamento
-  if (sol.dataOrdemInicio) {
+  // 3. Em execução — etapa execucao confirmada com Ordem de Início emitida
+  if (sol.etapaAtual === 'execucao' && sol.dataOrdemInicio) {
     return {
       label: 'Em execução',
       color: 'blue',
@@ -376,7 +385,7 @@ export function computeStatusObra(sol: Solicitacao): StatusObraInfo {
     };
   }
 
-  // 4. Não iniciada — contrato assinado mas sem Ordem de Início
+  // 4. Não iniciada — contrato assinado mas Ordem de Início ainda não emitida
   if (sol.empresaContratada && sol.contratoDataAssinatura) {
     return {
       label: 'Não iniciada',
@@ -386,22 +395,22 @@ export function computeStatusObra(sol: Solicitacao): StatusObraInfo {
     };
   }
 
-  // 5. Em processo de contratação — cadastro feito (valorPlanilha) mas sem contrato
-  if (sol.valorPlanilha) {
+  // 5. Em processo de contratação — fiscal definido e obra cadastrada, sem contrato ainda
+  if (sol.fiscalObraAtribuido) {
     return {
       label: 'Em processo de contratação',
       color: 'yellow',
       badgeClass: 'bg-yellow-100 text-yellow-700 border-yellow-200',
-      descricao: 'Cadastro da obra concluído. Aguardando registro do contrato na aba Contratos.',
+      descricao: 'Cadastro da obra concluído e fiscal atribuído. Aguardando registro do contrato na aba Contratos.',
     };
   }
 
-  // 6. Em cadastramento — PAF gerado mas dados da obra ainda não preenchidos
+  // 6. Em cadastramento — PAF gerado, aguardando cadastro da obra e definição do fiscal
   return {
     label: 'Em cadastramento da obra',
     color: 'purple',
     badgeClass: 'bg-purple-100 text-purple-700 border-purple-200',
-    descricao: 'PAF autorizado. Aguardando preenchimento do cadastro da obra pelo engenheiro responsável.',
+    descricao: 'PAF autorizado. Preencha os dados da obra e defina o fiscal para avançar para processo de contratação.',
   };
 }
 
