@@ -751,20 +751,6 @@ export function NovoAtendimentoPanel({
 
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Prédio Escola *
-                </label>
-                <select
-                  value={predio}
-                  onChange={(e) => setPredio(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white cursor-pointer font-bold text-slate-800"
-                >
-                  <option value="PRINCIPAL">PRINCIPAL</option>
-                  <option value="ANEXO">ANEXO</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                   Tombamento *
                 </label>
                 <select
