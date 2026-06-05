@@ -4,14 +4,14 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog } from './types';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, computeStatusObra } from './types';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
 import Dashboard from './components/Dashboard';
 import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle, FolderOpen } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle, FolderOpen, RefreshCw, Filter } from 'lucide-react';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
@@ -99,6 +99,16 @@ export default function App() {
   const [selectedSchoolsPorSubtask, setSelectedSchoolsPorSubtask] = useState<{ [subtask: string]: string }>({});
   const [schoolSearchQuery, setSchoolSearchQuery] = useState('');
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+
+  // Modal states for Termo de Encerramento (conclusao)
+  const [conclusaoModalAberto, setConclusaoModalAberto] = useState(false);
+  const [conclusaoModalBusca, setConclusaoModalBusca] = useState('');
+  const [conclusaoFiltroId, setConclusaoFiltroId] = useState('');
+  const [conclusaoFiltroCodesc, setConclusaoFiltroCodesc] = useState('Todos');
+  const [conclusaoFiltroMunicipio, setConclusaoFiltroMunicipio] = useState('Todos');
+  const [conclusaoFiltroSre, setConclusaoFiltroSre] = useState('Todos');
+  const [conclusaoFiltroEscola, setConclusaoFiltroEscola] = useState('Todos');
+  const [conclusaoFiltroStatus, setConclusaoFiltroStatus] = useState('Todos');
 
   // FILTERS STATE FOR "3. AUTORIZAÇÃO DO PAF"
   const [filterCodesc, setFilterCodesc] = useState('');
@@ -2637,6 +2647,236 @@ export default function App() {
                       })()}
 
                     </div>
+                  ) : activeSubTask === 'conclusao' ? (
+                    /* ── Header estilo ExecucaoSubmodulos para Termo de Encerramento ── */
+                    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] uppercase font-extrabold tracking-widest bg-emerald-50 text-emerald-700 border border-emerald-200/50">
+                              Termo de Encerramento
+                            </span>
+                            <span className="text-xs text-slate-400 font-mono">SGO Ativo</span>
+                          </div>
+                          <h1 className="text-xl font-bold font-sans tracking-tight text-slate-900">
+                            Conclusão e Encerramento de Obra
+                          </h1>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Proceda com as vistorias finais, checklist de pendências e emissão do termo de encerramento da execução.
+                          </p>
+                        </div>
+                        <div className="flex gap-4 self-start md:self-auto shrink-0">
+                          <div className="bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/60 font-sans">
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Obras para Encerrar</div>
+                            <div className="text-base font-black text-slate-900 font-mono">{listFiltered.length} Escola{listFiltered.length !== 1 ? 's' : ''}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Obra sob Foco — esquerda / botão — direita */}
+                      <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs font-sans flex-wrap">
+                          {activeSchool ? (
+                            <>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Obra sob Foco:</span>
+                              <span className="font-black text-slate-800">{activeSchool.nomeEscola}</span>
+                              <span className="text-slate-400">•</span>
+                              <span className="font-mono text-blue-700 font-bold">{activeSchool.id}</span>
+                              <span className="text-slate-400 hidden sm:inline">•</span>
+                              <span className="text-slate-500 hidden sm:inline">{activeSchool.municipio} • {activeSchool.sre}</span>
+                            </>
+                          ) : (
+                            <span className="text-slate-400 italic">Nenhuma obra selecionada</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setConclusaoModalAberto(true)}
+                          className="flex items-center gap-2 px-4 py-2 bg-[#13264d] hover:bg-[#1a3a6e] text-white text-xs font-black rounded-xl transition-all cursor-pointer shadow-sm shrink-0"
+                        >
+                          <Search className="w-3.5 h-3.5" />
+                          Alterar Obra Focada
+                          <span className="bg-blue-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{listFiltered.length}</span>
+                        </button>
+                      </div>
+
+                      {/* MODAL de seleção de obra — idêntico ao ExecucaoSubmodulos */}
+                      {conclusaoModalAberto && (() => {
+                        const municipios = ['Todos', ...Array.from(new Set(listFiltered.map(s => s.municipio)))];
+                        const sres = ['Todos', ...Array.from(new Set(listFiltered.map(s => s.sre)))];
+                        const escolas = ['Todos', ...listFiltered.map(s => s.nomeEscola)];
+                        const statusOpts = ['Todos', 'Em cadastramento da obra', 'Em processo de contratação', 'Não iniciada', 'Em execução', 'Paralisada', 'Concluída'];
+
+                        const obrasFiltradas = listFiltered.filter(s => {
+                          const q = conclusaoModalBusca.toLowerCase();
+                          const matchBusca = !conclusaoModalBusca || s.nomeEscola.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.municipio.toLowerCase().includes(q) || s.codesc.includes(q);
+                          const matchId = !conclusaoFiltroId || s.id === conclusaoFiltroId;
+                          const matchCodesc = conclusaoFiltroCodesc === 'Todos' || s.codesc === conclusaoFiltroCodesc;
+                          const matchMun = conclusaoFiltroMunicipio === 'Todos' || s.municipio === conclusaoFiltroMunicipio;
+                          const matchSre = conclusaoFiltroSre === 'Todos' || s.sre === conclusaoFiltroSre;
+                          const matchEscola = conclusaoFiltroEscola === 'Todos' || s.nomeEscola === conclusaoFiltroEscola;
+                          const matchStatus = conclusaoFiltroStatus === 'Todos' || computeStatusObra(s).label === conclusaoFiltroStatus;
+                          return matchBusca && matchId && matchCodesc && matchMun && matchSre && matchEscola && matchStatus;
+                        });
+
+                        const limparFiltros = () => {
+                          setConclusaoFiltroId('');
+                          setConclusaoFiltroCodesc('Todos');
+                          setConclusaoFiltroMunicipio('Todos');
+                          setConclusaoFiltroSre('Todos');
+                          setConclusaoFiltroEscola('Todos');
+                          setConclusaoFiltroStatus('Todos');
+                          setConclusaoModalBusca('');
+                        };
+
+                        return (
+                          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setConclusaoModalAberto(false)} />
+                            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh] overflow-hidden">
+                              {/* Header */}
+                              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 bg-emerald-600 rounded-lg flex items-center justify-center shrink-0">
+                                    <Building2 className="w-4 h-4 text-white" />
+                                  </div>
+                                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide">Mudar Escola em Foco</h2>
+                                </div>
+                                <button onClick={() => setConclusaoModalAberto(false)} className="p-1.5 hover:bg-slate-100 rounded-lg transition text-slate-500 cursor-pointer">
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              <div className="px-5 py-3 overflow-y-auto flex-1 space-y-4">
+                                <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+                                  Selecione outra escola aplicando filtros de pesquisa abaixo.
+                                </p>
+
+                                {/* Filtros */}
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <Filter className="w-3 h-3 text-blue-500" />
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">Filtros de Pesquisa</span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2.5">
+                                    <div className="space-y-1">
+                                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">ID de Obra</label>
+                                      <select value={conclusaoFiltroId} onChange={e => setConclusaoFiltroId(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                                        <option value="">Todos</option>
+                                        {listFiltered.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
+                                      </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">CODESC</label>
+                                      <select value={conclusaoFiltroCodesc} onChange={e => setConclusaoFiltroCodesc(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                                        {['Todos', ...Array.from(new Set(listFiltered.map(s => s.codesc)))].map(v => <option key={v} value={v}>{v}</option>)}
+                                      </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Município</label>
+                                      <select value={conclusaoFiltroMunicipio} onChange={e => setConclusaoFiltroMunicipio(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                                        {municipios.map(v => <option key={v} value={v}>{v}</option>)}
+                                      </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Regional (SRE)</label>
+                                      <select value={conclusaoFiltroSre} onChange={e => setConclusaoFiltroSre(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                                        {sres.map(v => <option key={v} value={v}>{v}</option>)}
+                                      </select>
+                                    </div>
+                                    <div className="col-span-2 space-y-1">
+                                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Escola</label>
+                                      <select value={conclusaoFiltroEscola} onChange={e => setConclusaoFiltroEscola(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                                        {escolas.map(v => <option key={v} value={v}>{v}</option>)}
+                                      </select>
+                                    </div>
+                                    <div className="col-span-2 space-y-1">
+                                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 block">Status</label>
+                                      <select value={conclusaoFiltroStatus} onChange={e => setConclusaoFiltroStatus(e.target.value)} className="w-full text-xs p-1.5 border border-slate-200 rounded-lg bg-white font-sans">
+                                        {statusOpts.map(v => <option key={v} value={v}>{v}</option>)}
+                                      </select>
+                                    </div>
+                                  </div>
+                                  <button onClick={limparFiltros} className="flex items-center gap-1 text-[10px] text-blue-600 hover:text-blue-800 font-bold ml-auto cursor-pointer transition">
+                                    <RefreshCw className="w-3 h-3" /> Limpar Filtros
+                                  </button>
+                                </div>
+
+                                {/* Busca rápida */}
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                                  <input
+                                    type="text"
+                                    placeholder="Busca rápida por palavra-chave..."
+                                    value={conclusaoModalBusca}
+                                    onChange={e => setConclusaoModalBusca(e.target.value)}
+                                    className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 font-sans"
+                                  />
+                                </div>
+
+                                {/* Resultados */}
+                                <div className="space-y-2">
+                                  {obrasFiltradas.length === 0 ? (
+                                    <div className="py-8 text-center text-xs text-slate-400 font-sans">
+                                      Nenhuma obra encontrada com os filtros aplicados.
+                                    </div>
+                                  ) : obrasFiltradas.map(sol => {
+                                    const isSelecionada = sol.id === activeSchoolId;
+                                    const statusInfo = computeStatusObra(sol);
+                                    return (
+                                      <button
+                                        key={sol.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedSchoolsPorSubtask(prev => ({ ...prev, [activeSubTask]: sol.id }));
+                                          setConclusaoModalAberto(false);
+                                        }}
+                                        className={`w-full text-left px-4 py-3 rounded-xl border transition-all cursor-pointer ${
+                                          isSelecionada
+                                            ? 'border-blue-400 bg-blue-50 shadow-sm'
+                                            : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50/70'
+                                        }`}
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div>
+                                            <p className={`text-xs font-black leading-tight ${isSelecionada ? 'text-blue-800' : 'text-slate-800'}`}>{sol.nomeEscola}</p>
+                                            <p className="text-[10px] text-slate-500 font-sans mt-0.5">
+                                              {sol.municipio} • {sol.sre} • CODESC {sol.codesc}
+                                            </p>
+                                          </div>
+                                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border shrink-0 ${statusInfo.badgeClass}`}>
+                                            {statusInfo.label}
+                                          </span>
+                                        </div>
+                                        {isSelecionada && (
+                                          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-blue-600 font-bold">
+                                            <CheckCircle className="w-3 h-3" /> Em foco
+                                          </div>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Footer */}
+                              <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/50">
+                                <span className="text-[10px] text-slate-400 font-sans">
+                                  Exibindo {obrasFiltradas.length} {obrasFiltradas.length === 1 ? 'escola' : 'escolas'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setConclusaoModalAberto(false)}
+                                  className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 hover:text-slate-800 transition cursor-pointer"
+                                >
+                                  <LayoutGrid className="w-3 h-3" />
+                                  Fechar
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   ) : (
                     <div className="bg-gradient-to-r from-blue-50/65 to-indigo-50/45 border border-blue-100/90 text-slate-800 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-left">
                       <div className="space-y-1">
@@ -2654,7 +2894,6 @@ export default function App() {
                           {activeSubTask === 'execucao' && 'Forneça a Ordem de Início, calendarize cronogramas, acompanhe as obras e medições físico-financeiras.'}
                           {activeSubTask === 'aditivos' && 'Gerencie acréscimos, supressões de valor e prorrogações de prazo do contrato.'}
                           {activeSubTask === 'ajustes' && 'Controle os ajustes e remanejamento de saldos da planilha orçamentária.'}
-                          {activeSubTask === 'conclusao' && 'Proceda com as vistorias finais, emissão de termos e encerramento da obra.'}
                           {/* 9 execution submodules descriptions */}
                           {activeSubTask === 'execucao_cadastro' && 'Cadastre e visualize o dossiê detalhado das obras em andamento, incluindo contratos, prazos e faturamento.'}
                           {activeSubTask === 'execucao_acompanhamento' && 'Acompanhe a evolução física das obras e o avanço técnico de cada etapa.'}
@@ -2672,7 +2911,7 @@ export default function App() {
                           <label className="text-[10px] font-bold text-blue-700 block uppercase font-mono tracking-wider">
                             Selecione a Escola Ativa desta Etapa:
                           </label>
-                          
+
                           <div className="relative">
                             <button
                               type="button"
@@ -2680,8 +2919,8 @@ export default function App() {
                               className="w-full px-3 py-2 text-xs bg-white border border-slate-250 text-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-sans cursor-pointer font-bold shadow-xs text-left pr-8 flex items-center justify-between"
                             >
                               <span className="truncate">
-                                {activeSchool 
-                                  ? `${activeSchool.codesc} - ${activeSchool.nomeEscola} (${activeSchool.sre}) - ${activeSchool.id}` 
+                                {activeSchool
+                                  ? `${activeSchool.codesc} - ${activeSchool.nomeEscola} (${activeSchool.sre}) - ${activeSchool.id}`
                                   : 'Selecione uma escola...'}
                               </span>
                               <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
@@ -2689,14 +2928,11 @@ export default function App() {
 
                             {isSelectorOpen && (
                               <>
-                                {/* Invisible overlay for clicking outside to close */}
-                                <div 
-                                  className="fixed inset-0 z-40 cursor-default" 
-                                  onClick={() => setIsSelectorOpen(false)} 
+                                <div
+                                  className="fixed inset-0 z-40 cursor-default"
+                                  onClick={() => setIsSelectorOpen(false)}
                                 />
-                                
                                 <div className="absolute right-0 top-full mt-1.5 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-hidden flex flex-col z-50 animate-fade-in shadow-xl">
-                                  {/* Search input */}
                                   <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
                                     <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                     <input
@@ -2717,8 +2953,6 @@ export default function App() {
                                       </button>
                                     )}
                                   </div>
-
-                                  {/* Filtered results */}
                                   <div className="overflow-y-auto max-h-48 divide-y divide-slate-105">
                                     {(() => {
                                       const searchLower = schoolSearchQuery.toLowerCase().trim();
@@ -2731,7 +2965,6 @@ export default function App() {
                                           s.id.toLowerCase().includes(searchLower)
                                         );
                                       });
-
                                       if (filteredList.length === 0) {
                                         return (
                                           <div className="p-3 text-xs text-slate-405 text-center font-sans font-medium">
@@ -2739,7 +2972,6 @@ export default function App() {
                                           </div>
                                         );
                                       }
-
                                       return filteredList.map(s => {
                                         const isCurrent = s.id === activeSchoolId;
                                         return (

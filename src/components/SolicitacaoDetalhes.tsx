@@ -1340,7 +1340,7 @@ ${totalPendencias > 0
   return (
     <div className="space-y-6">
       {/* Botão de Retorno e Resumo da Escola - PROFESSIONAL POLISH */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      {activeSubTask !== 'conclusao' && <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-start gap-4">
           {!hideVoltar && (
             <button 
@@ -1415,7 +1415,7 @@ ${totalPendencias > 0
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* STEPPER SUPERIOR - INDICANDO ETAPA DO PROCESSO (PROFESSIONAL POLISH) */}
       {!hideStepper && (
@@ -1512,7 +1512,84 @@ ${totalPendencias > 0
       )}
 
       {/* FICHA TÉCNICA DA DEMANDA (CODESC E EXTENSÕES) */}
-      {activeSubTask !== 'analise' && (
+      {activeSubTask === 'conclusao' && (
+        <div className="bg-white rounded-xl border border-emerald-200/70 p-5 shadow-xs">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-wrap gap-2 mb-4">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+              <HardHat className="w-4 h-4 text-emerald-600" />
+              Resumo da Obra — Encerramento
+            </h2>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+              solicitacao.statusObra === 'Concluída'
+                ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              {solicitacao.statusObra || 'Em Andamento'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-xs font-sans">
+            <div>
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">ID / PAF</span>
+              <span className="text-slate-800 font-mono font-bold">{solicitacao.id}</span>
+              {solicitacao.numeroPAF && <span className="text-[10px] text-slate-500 block font-mono">PAF {solicitacao.numeroPAF}</span>}
+            </div>
+            <div>
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">CODESC</span>
+              <span className="text-slate-800 font-semibold">{solicitacao.codesc}</span>
+            </div>
+            <div className="md:col-span-2">
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Escola</span>
+              <span className="text-slate-800 font-semibold leading-tight block">{solicitacao.nomeEscola}</span>
+              <span className="text-[10px] text-slate-500">{solicitacao.municipio} · {solicitacao.sre}</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Tipo de Obra</span>
+              <span className="text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded text-[11px] font-semibold inline-block">
+                {solicitacao.tipoObra || solicitacao.tipo}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Progresso Físico</span>
+              <div className="flex items-center gap-1.5">
+                <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(100, progressoTotalObra)}%` }} />
+                </div>
+                <span className="font-bold text-slate-700 font-mono text-[11px]">{progressoTotalObra}%</span>
+              </div>
+            </div>
+            {solicitacao.empresaContratada && (
+              <div className="md:col-span-2">
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Empresa Contratada</span>
+                <span className="text-slate-800 font-semibold block">{solicitacao.empresaContratada}</span>
+                {solicitacao.cnpjEmpresa && <span className="text-[10px] text-slate-500 font-mono">{solicitacao.cnpjEmpresa}</span>}
+              </div>
+            )}
+            <div>
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Valor do Contrato</span>
+              <span className="text-emerald-700 font-bold font-mono">
+                R$ {valorContratoAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Total Medido</span>
+              <span className="text-slate-800 font-bold font-mono">
+                R$ {totalMedido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+            {solicitacao.dataOrdemInicio && (
+              <div>
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Início / Previsão</span>
+                <span className="text-slate-700 font-semibold block">{new Date(solicitacao.dataOrdemInicio + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                {solicitacao.previsaoTerminoObra && (
+                  <span className="text-[10px] text-slate-500">até {new Date(solicitacao.previsaoTerminoObra + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeSubTask !== 'analise' && activeSubTask !== 'conclusao' && (
         <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-xs space-y-5">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-wrap gap-2">
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -1646,170 +1723,6 @@ ${totalPendencias > 0
             <p className="text-slate-600 text-xs leading-relaxed font-sans max-w-5xl bg-slate-50 p-3 rounded-lg border border-slate-100">{solicitacao.descricaoFolhaRosto}</p>
           </div>
         )}
-
-        {/* PAINEL INTERATIVO DE VERIFICAÇÃO DE ENGENHARIA DA FICHA */}
-        <div className="pt-4 border-t border-slate-200 text-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Verificação de Conformidade Cadastral (DORE)
-            </h3>
-          </div>
-
-          {solicitacao.fichaVerificada === true ? (
-            <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-3xs">
-              <div className="flex items-start gap-2.5">
-                <span className="text-emerald-600 text-[18px] select-none">✅</span>
-                <div className="space-y-1">
-                  <p className="font-extrabold text-emerald-950 text-xs text-left">
-                    Ficha Cadastral Verificada e Aprovada por Engenharia DORE
-                  </p>
-                  <p className="text-[11px] text-emerald-700 text-left">
-                    Atestada por: <strong className="font-bold">{solicitacao.fichaVerificadaPor}</strong> em {solicitacao.fichaVerificadaData}
-                  </p>
-                  {solicitacao.observacoesFicha && (
-                    <p className="text-[11px] text-emerald-900 bg-emerald-100/50 p-2 rounded border border-emerald-200 italic mt-1 font-sans text-left">
-                      <strong>Parecer de conformidade:</strong> "{solicitacao.observacoesFicha}"
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUpdate({
-                      ...solicitacao,
-                      fichaVerificada: undefined,
-                      fichaVerificadaPor: undefined,
-                      fichaVerificadaData: undefined,
-                      observacoesFicha: undefined
-                    });
-                  }}
-                  className="px-2.5 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100/35 text-emerald-800 rounded-lg text-[10.5px] font-bold cursor-pointer transition shrink-0"
-                >
-                  Refazer Análise
-                </button>
-              )}
-            </div>
-          ) : solicitacao.fichaVerificada === false ? (
-            <div className="bg-red-50 border border-red-250 text-red-800 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-3xs">
-              <div className="flex items-start gap-2.5">
-                <span className="text-red-600 text-[18px] select-none">❌</span>
-                <div className="space-y-1">
-                  <p className="font-extrabold text-red-950 text-xs text-left">
-                    Inconsistências Identificadas na Ficha da Solicitação!
-                  </p>
-                  <p className="text-[11px] text-red-700 text-left">
-                    Sinalizado por: <strong className="font-bold">{solicitacao.fichaVerificadaPor}</strong> em {solicitacao.fichaVerificadaData}
-                  </p>
-                  <p className="text-xs text-red-950 bg-red-100/50 p-2.5 rounded-lg border border-red-200 mt-2 font-medium leading-relaxed text-left">
-                    <strong>Motivo da Inadequação:</strong> "{solicitacao.observacoesFicha || 'Inconsistência genérica nos dados cadastrais cadastrados pela infraestrutura SRE.'}"
-                  </p>
-                  <p className="text-[10px] text-red-400 italic block mt-1 text-left">
-                    🚨 O técnico de infraestrutura da SRE precisará retificar as informações antes de prosseguir com aprovação.
-                  </p>
-                </div>
-              </div>
-
-              {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUpdate({
-                      ...solicitacao,
-                      fichaVerificada: undefined,
-                      fichaVerificadaPor: undefined,
-                      fichaVerificadaData: undefined,
-                      observacoesFicha: undefined
-                    });
-                  }}
-                  className="px-2.5 py-1.5 bg-white border border-red-300 hover:bg-red-105 text-red-800 rounded-lg text-[10.5px] font-bold cursor-pointer transition shrink-0"
-                >
-                  Refazer Análise
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-4">
-              <div className="flex items-start gap-2 text-slate-600">
-                <span className="text-[16px]">⏳</span>
-                <div>
-                  <p className="font-semibold text-slate-800">Conformidade Cadastral Pendente de Confirmação</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Nenhum engenheiro avaliou a integridade destas informações cadastrais da escola cooperadora ainda.</p>
-                </div>
-              </div>
-
-              {/* Controles ativos de edição para o engenheiro logado */}
-              {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
-                <div className="bg-white border border-indigo-150 p-4 rounded-xl space-y-3/2 text-left">
-                  <div className="flex items-center gap-1.5 text-indigo-900 font-bold">
-                    <UserCheck className="w-4 h-4 text-indigo-600" />
-                    <span>Painel de Avaliação Cadastral (Engenheiro DORE)</span>
-                  </div>
-                  <p className="text-[11px] text-neutral-500">
-                    Como engenheiro responsável, verifique se todos os parâmetros digitados pelo técnico (Ex: Tipo de obra: {solicitacao.tipoObra || solicitacao.tipo}, Valor Estimado: {solicitacao.valorPlanilha ? `R$ ${solicitacao.valorPlanilha.toLocaleString('pt-BR')}` : 'Não informado'}) estão consistentes com as peças técnicas enviadas.
-                  </p>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] uppercase font-bold text-slate-500">Parecer Técnico da Ficha (Exigido em caso de inconsistência)</label>
-                    <textarea
-                      id="obs-ficha-input"
-                      placeholder="Ex: Dados checados. Valor estimado está condizente com as medições iniciais."
-                      className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-indigo-100"
-                      rows={2}
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 text-xs pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const input = document.getElementById('obs-ficha-input') as HTMLTextAreaElement | null;
-                        const msg = input?.value || '';
-                        if (!msg.trim()) {
-                          alert('Justificativa técnica detalhada sobre a inconsistência é obrigatória para recusar a ficha.');
-                          return;
-                        }
-                        const name = currentUserNome || perfilUsuario;
-                        onUpdate({
-                          ...solicitacao,
-                          fichaVerificada: false,
-                          fichaVerificadaPor: `${name} (Analista DORE)`,
-                          fichaVerificadaData: new Date().toISOString().split('T')[0],
-                          observacoesFicha: msg
-                        });
-                        alert('Inconsistência registrada na ficha!');
-                      }}
-                      className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg cursor-pointer"
-                    >
-                      Apontar Inconsistência
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const input = document.getElementById('obs-ficha-input') as HTMLTextAreaElement | null;
-                        const msg = input?.value || '';
-                        const name = currentUserNome || perfilUsuario;
-                        onUpdate({
-                          ...solicitacao,
-                          fichaVerificada: true,
-                          fichaVerificadaPor: `${name} (Analista DORE)`,
-                          fichaVerificadaData: new Date().toISOString().split('T')[0],
-                          observacoesFicha: msg || 'Dados avaliados e condizentes com as peças técnicas regimentais.'
-                        });
-                        alert('Conformidade cadastral da ficha validada e atestada com sucesso!');
-                      }}
-                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer"
-                    >
-                      Atestar Conformidade Cadastral
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
         </div>
       )}
 
@@ -5213,25 +5126,103 @@ ${totalPendencias > 0
         )}
 
         {/* CONTEÚDO DA ABA 7: CONCLUSÃO DE OBRA */}
-        {activeTab === 'conclusao' && (
-          <form onSubmit={salvarConclusaoObra} className="space-y-6 animate-fadeIn font-sans text-left">
-            <div className="flex justify-between items-center bg-emerald-50 border border-emerald-100 p-5 rounded-xl">
-              <div>
-                <h2 className="text-sm font-bold text-neutral-800 flex items-center gap-1.5">
-                  <CheckCircle className="w-5 h-5 text-emerald-600 animate-pulse" />
-                  Módulo de Conclusão e Encerramento de Obra
-                </h2>
-                <p className="text-[11px] text-neutral-500 mt-1 font-sans">
-                  Preenchimento do termo de conclusão física integral, com anexação obrigatória das peças técnicas de encerramento da execução.
-                </p>
+        {activeTab === 'conclusao' && (() => {
+          // ── Checklist automático baseado nos dados do sistema ──
+          const checkContratoEncerrado = !!solicitacao.empresaContratada && !!solicitacao.contratoDataAssinatura;
+
+          const checkMedicoesAprovadas = solicitacao.medicoes.length > 0 && progressoTotalObra >= 100;
+
+          const docsObrigatoriosPendentes = solicitacao.documentos.filter(
+            d => d.obrigatorio && (d.status === 'pendente' || d.status === 'recusado')
+          );
+          const checkFiscalizacaoOk = docsObrigatoriosPendentes.length === 0;
+
+          const aditivosPendentes = solicitacao.aditivos.filter(a => a.status === 'Pendente');
+          const checkAditivosConcluidos = aditivosPendentes.length === 0;
+
+          const ajustesPendentes = (solicitacao.ajustes || []).filter(a => a.status !== 'validado');
+          const checkAjustesConcluidos = ajustesPendentes.length === 0;
+
+          const checkOutrosProcessos = !!solicitacao.numeroPAF && solicitacao.statusPAF === 'Pago e Liberado';
+
+          const todosItensOk = checkContratoEncerrado && checkMedicoesAprovadas && checkFiscalizacaoOk && checkAditivosConcluidos && checkAjustesConcluidos && checkOutrosProcessos;
+
+          const ChecklistItem = ({ ok, label, desc }: { ok: boolean; label: string; desc: string }) => (
+            <div className={`flex items-start gap-3 p-3 rounded-lg border ${ok ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+              <span className={`shrink-0 mt-0.5 text-base font-bold ${ok ? 'text-emerald-600' : 'text-red-500'}`}>{ok ? '✔' : '✘'}</span>
+              <div className="min-w-0 flex-1">
+                <span className={`text-xs font-bold block ${ok ? 'text-emerald-800' : 'text-red-800'}`}>{label}</span>
+                <span className={`text-[10.5px] leading-tight block mt-0.5 ${ok ? 'text-emerald-600' : 'text-red-500'}`}>{desc}</span>
               </div>
-              <span className={`text-xs font-extrabold px-3 py-1 rounded-lg border ${
-                solicitacao.statusObra === 'Concluída'
-                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                  : 'bg-white text-slate-700 border-slate-200'
-              }`}>
-                Dossiê Final: {solicitacao.statusObra === 'Concluída' ? 'CONCLUÍDO' : 'EM EXECUÇÃO'}
+              <span className={`shrink-0 self-center text-[10px] font-bold px-1.5 py-0.5 rounded border ${ok ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
+                {ok ? 'OK' : 'PENDENTE'}
               </span>
+            </div>
+          );
+
+          return (
+          <form onSubmit={salvarConclusaoObra} className="space-y-6 animate-fadeIn font-sans text-left">
+
+            {/* CHECKLIST AUTOMÁTICO DE PENDÊNCIAS */}
+            <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-3">
+              <div className="flex justify-between items-center border-b border-neutral-100 pb-3">
+                <h3 className="font-bold text-xs uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-slate-500" />
+                  Checklist de Pendências da Obra
+                </h3>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${todosItensOk ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                  {todosItensOk ? 'TUDO LIBERADO' : 'PENDÊNCIAS ABERTAS'}
+                </span>
+              </div>
+              <div className="space-y-2">
+                <ChecklistItem
+                  ok={checkContratoEncerrado}
+                  label="Contrato encerrado"
+                  desc={checkContratoEncerrado
+                    ? `${solicitacao.empresaContratada} — contrato de ${new Date(solicitacao.contratoDataAssinatura! + 'T00:00:00').toLocaleDateString('pt-BR')}${solicitacao.contratoFimVigencia ? ` até ${new Date(solicitacao.contratoFimVigencia + 'T00:00:00').toLocaleDateString('pt-BR')}` : ''}`
+                    : 'Nenhum contrato registrado para esta obra. Registre a empresa e os dados contratuais.'}
+                />
+                <ChecklistItem
+                  ok={checkMedicoesAprovadas}
+                  label="Medições aprovadas"
+                  desc={checkMedicoesAprovadas
+                    ? `${solicitacao.medicoes.length} medição(ões) — progresso físico: ${progressoTotalObra}% concluído.`
+                    : `Progresso físico: ${progressoTotalObra}% (necessário 100%). ${solicitacao.medicoes.length === 0 ? 'Nenhuma medição registrada.' : `${solicitacao.medicoes.length} medição(ões) registrada(s).`}`}
+                />
+                <ChecklistItem
+                  ok={checkFiscalizacaoOk}
+                  label="Pendências de fiscalização"
+                  desc={checkFiscalizacaoOk
+                    ? 'Todos os documentos obrigatórios aprovados ou dispensados.'
+                    : `${docsObrigatoriosPendentes.length} documento(s) obrigatório(s) ainda pendente(s) ou recusado(s): ${docsObrigatoriosPendentes.map(d => d.nome).join(', ')}.`}
+                />
+                <ChecklistItem
+                  ok={checkAditivosConcluidos}
+                  label="Aditivos concluídos"
+                  desc={checkAditivosConcluidos
+                    ? (solicitacao.aditivos.length === 0 ? 'Sem aditivos registrados.' : `${solicitacao.aditivos.length} aditivo(s) — todos com status final (Aprovado/Recusado).`)
+                    : `${aditivosPendentes.length} aditivo(s) ainda com status Pendente. Finalize-os antes de encerrar.`}
+                />
+                <ChecklistItem
+                  ok={checkAjustesConcluidos}
+                  label="Ajustes concluídos"
+                  desc={checkAjustesConcluidos
+                    ? ((solicitacao.ajustes || []).length === 0 ? 'Sem ajustes de planilha registrados.' : `${(solicitacao.ajustes || []).length} ajuste(s) — todos validados.`)
+                    : `${ajustesPendentes.length} ajuste(s) de planilha ainda não validado(s) pela DORE.`}
+                />
+                <ChecklistItem
+                  ok={checkOutrosProcessos}
+                  label="Outros processos"
+                  desc={checkOutrosProcessos
+                    ? `PAF ${solicitacao.numeroPAF} — pago e liberado.`
+                    : !solicitacao.numeroPAF ? 'PAF não gerado para esta obra.' : `PAF ${solicitacao.numeroPAF} — status: ${solicitacao.statusPAF || 'não informado'}. Aguardando pagamento e liberação.`}
+                />
+              </div>
+              {!todosItensOk && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 font-medium mt-2">
+                  Resolva todas as pendências acima antes de protocolar o encerramento da obra.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -5513,14 +5504,23 @@ ${totalPendencias > 0
                   </div>
 
                   {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
-                    <div className="flex justify-end pt-3 border-t border-neutral-100">
-                      <button
-                        type="submit"
-                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer transition shadow-xs flex items-center gap-1.5"
-                      >
-                        <CheckCircle className="w-4 h-4 text-white" />
-                        Salvar e Protocolar Conclusão da Obra
-                      </button>
+                    <div className="flex flex-col gap-2 pt-3 border-t border-neutral-100">
+                      {!todosItensOk && (
+                        <p className="text-[10.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-medium text-right">
+                          O botão será liberado após resolver todas as pendências do checklist.
+                        </p>
+                      )}
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={!todosItensOk}
+                          title={!todosItensOk ? 'Resolva todas as pendências do checklist antes de concluir.' : 'Protocolar conclusão e alterar status da obra para Concluída'}
+                          className={`px-6 py-2.5 text-white text-xs font-extrabold rounded-lg transition shadow-sm flex items-center gap-2 tracking-wide ${todosItensOk ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer' : 'bg-slate-300 cursor-not-allowed opacity-50'}`}
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Concluir Obra
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -5581,7 +5581,8 @@ ${totalPendencias > 0
               </div>
             </div>
           </form>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
