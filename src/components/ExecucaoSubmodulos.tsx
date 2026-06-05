@@ -620,19 +620,15 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
   // Complementary Obra fields
   const [classeObra, setClasseObra] = useState('Pequeno Porte');
   const [pontuacaoComplexidade, setPontuacaoComplexidade] = useState(2);
-  const [fiscalObraAtribuido, setFiscalObraAtribuido] = useState('Eng. Roberto Mendes');
+  const [fiscalObraAtribuido, setFiscalObraAtribuido] = useState('');
   const [empresaInput, setEmpresaInput] = useState('');
   const [cnpjInput, setCnpjInput] = useState('');
   const [valorHomologadoInput, setValorHomologadoInput] = useState('');
 
   // Schedule fields
-  const [dataInicioInput, setDataInicioInput] = useState(() => new Date().toISOString().split('T')[0]);
-  const [duracaoMeses, setDuracaoMeses] = useState('6');
-  const [dataTerminoInput, setDataTerminoInput] = useState(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() + 6);
-    return d.toISOString().split('T')[0];
-  });
+  const [dataInicioInput, setDataInicioInput] = useState('');
+  const [duracaoMeses, setDuracaoMeses] = useState('');
+  const [dataTerminoInput, setDataTerminoInput] = useState('');
 
   // Automatic technical complexity calculation details (from image parameters)
   const getValorScore = (valor: number): { score: number; label: string } => {
@@ -1209,6 +1205,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                     onChange={(e) => setFiscalObraAtribuido(e.target.value)}
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden"
                   >
+                    <option value="">Selecione o fiscal...</option>
+                    <option value="João Paulo Penfield">João Paulo Penfield (Téc. Infraestrutura SRE)</option>
                     <option value="Eng. Roberto Mendes">Eng. Roberto Mendes (CREA 142.532/D)</option>
                     <option value="Arq. Patrícia Silveira">Arq. Patrícia Silveira (CAU A44.120-3)</option>
                     <option value="Eng. Marcos Pontes">Eng. Marcos Pontes (CREA 95.841/D)</option>
@@ -1752,10 +1750,22 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
     }
   }, [currentSol.id, currentSol.fiscalObraAtribuido]);
 
-  const sumMedicoes = currentSol.medicoes?.reduce((sum, m) => sum + m.valor, 0) || 0;
-  const originalBudget = currentSol.valorPlanilha || currentSol.valorHomologadoContratacao || 1;
-  const currentPercent = originalBudget > 0 ? (sumMedicoes / originalBudget) * 105 : 0;
-  const safePercent = Math.min(100, Math.max(0, currentPercent));
+  // Cálculo acumulado de todas as empresas (base monetária)
+  const _cnpjAtual = currentSol.cnpjEmpresa || '';
+  const _cnpjsAnteriores = new Set((currentSol.empresasAnteriores || []).map(e => e.cnpj).filter(Boolean));
+  const _medEmpresaAtual = (currentSol.medicoes || []).filter(m =>
+    _cnpjAtual ? m.empresaCnpj === _cnpjAtual : !_cnpjsAnteriores.has(m.empresaCnpj || '')
+  );
+  const _contratoAtual = currentSol.contratoValorInicial || currentSol.valorHomologadoContratacao || currentSol.valorPlanilha || 1;
+  const _valorExecAtual = _medEmpresaAtual.reduce((s, m) => s + m.valor, 0);
+  const _valorExecAnteriores = (currentSol.empresasAnteriores || []).reduce((s, e) => s + (e.valorExecutado ?? 0), 0);
+  const _contratoAnteriores = (currentSol.empresasAnteriores || []).reduce((s, e) => s + (e.contratoValorInicial ?? 0), 0);
+  const sumMedicoes = _valorExecAnteriores + _valorExecAtual;
+  const originalBudget = _contratoAnteriores + _contratoAtual;
+  const safePercent = originalBudget > 0 ? Math.min(100, Math.max(0, (sumMedicoes / originalBudget) * 100)) : 0;
+  // Avanço da empresa atual individualmente
+  const _fisicoEmpresaAtual = _contratoAtual > 0 ? Math.min(100, (_valorExecAtual / _contratoAtual) * 100) : 0;
+  const _temEmpresas = (currentSol.empresasAnteriores || []).length > 0;
 
   // Default values lazily resolved for rendering if not initialized on Solicitacao
   const listDiarios = currentSol.diariosObra || [
@@ -1998,16 +2008,20 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
               </div>
 
               <div className="py-6 flex flex-col items-center justify-center space-y-4 bg-slate-50/40 rounded-xl border border-slate-100">
+                {/* Indicador circular — Avanço Acumulado da Obra */}
                 <div className="relative w-40 h-40">
                   <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                     <circle cx="50" cy="50" r="40" stroke="#f1f5f9" strokeWidth="8" fill="transparent" />
-                    <circle 
-                      cx="50" 
-                      cy="50" 
-                      r="40" 
-                      stroke="#2563eb" 
-                      strokeWidth="8" 
-                      fill="transparent" 
+                    {/* Anel das empresas anteriores (cinza) */}
+                    {_temEmpresas && (
+                      <circle cx="50" cy="50" r="40" stroke="#94a3b8" strokeWidth="8" fill="transparent"
+                        strokeDasharray="251.2"
+                        strokeDashoffset={251.2 - (251.2 * Math.min(100, (_valorExecAnteriores / originalBudget) * 100)) / 100}
+                        strokeLinecap="butt"
+                      />
+                    )}
+                    {/* Anel da empresa atual (azul) */}
+                    <circle cx="50" cy="50" r="40" stroke="#2563eb" strokeWidth="8" fill="transparent"
                       strokeDasharray="251.2"
                       strokeDashoffset={251.2 - (251.2 * safePercent) / 100}
                       strokeLinecap="round"
@@ -2017,15 +2031,44 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                     <span className="text-3xl font-black text-slate-800 font-mono tracking-tighter">
                       {safePercent.toFixed(1)}%
                     </span>
-                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">Executado</span>
+                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider">Acumulado</span>
                   </div>
                 </div>
 
-                <div className="text-center">
-                  <span className="text-[9.5px] uppercase font-bold text-slate-400 block tracking-wider">Total Medido Acumulado</span>
-                  <p className="text-sm font-black text-slate-800 font-mono mt-0.5">
-                    R$ {sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </p>
+                <div className="w-full space-y-2 px-2">
+                  {/* Avanço acumulado da obra */}
+                  <div className="text-center">
+                    <span className="text-[9.5px] uppercase font-bold text-slate-400 block tracking-wider">Total Executado (Obra)</span>
+                    <p className="text-sm font-black text-slate-800 font-mono mt-0.5">
+                      R$ {sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      <span className="text-[9px] text-slate-400 font-normal ml-1">
+                        / R$ {originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Indicador da empresa atual (separado) */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-center">
+                    <span className="text-[9px] uppercase font-bold text-blue-600 block tracking-wider">Avanço da Empresa Atual</span>
+                    <p className="text-base font-black text-blue-800 font-mono mt-0.5">{_fisicoEmpresaAtual.toFixed(1)}%</p>
+                    <div className="w-full bg-blue-100 h-1 rounded-full mt-1 overflow-hidden">
+                      <div className="bg-blue-600 h-full rounded-full transition-all" style={{ width: `${_fisicoEmpresaAtual}%` }} />
+                    </div>
+                    <p className="text-[9px] text-blue-500 mt-0.5">
+                      R$ {_valorExecAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} / R$ {_contratoAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+
+                  {/* Empresas anteriores, se houver */}
+                  {_temEmpresas && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-center">
+                      <span className="text-[9px] uppercase font-bold text-slate-500 block tracking-wider">Empresas Anteriores ({(currentSol.empresasAnteriores || []).length})</span>
+                      <p className="text-base font-black text-slate-700 font-mono mt-0.5">
+                        {(_valorExecAnteriores / originalBudget * 100).toFixed(1)}%
+                        <span className="text-[9px] text-slate-400 font-normal ml-1">(contribuição acumulada)</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2040,7 +2083,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                 {(() => {
                   const statusInfo = computeStatusObra(currentSol);
                   const isParalisada = statusInfo.label === 'Paralisada';
-                  const podeParalisar = ['Não iniciada', 'Em execução'].includes(statusInfo.label);
+                  const podeParalisar = statusInfo.label === 'Em execução';
                   return (
                     <div className="space-y-4">
                       {/* Status computado */}
@@ -3197,28 +3240,47 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
   const podeRegistrarMedicao = isEmExecucao && !isDistratada;
   const currentCnpj = currentSol.cnpjEmpresa || '';
 
-  // Financial: soma todas as medições de todas as empresas
-  const sumMedicoes = (currentSol.medicoes || []).reduce((sum, m) => sum + m.valor, 0);
-  const originalBudget = currentSol.valorPlanilha || currentSol.valorHomologadoContratacao || 1;
-  const leftOver = Math.max(0, originalBudget - sumMedicoes);
-  const percentualFinanceiroAcumulado = (sumMedicoes / originalBudget) * 100;
-
-  // Physical: separado por empresa
-  const frozenFisico = (currentSol.empresasAnteriores || []).reduce(
-    (sum, e) => sum + (e.avancoFisicoOriginal || 0), 0
-  );
+  // Separação de medições por empresa
   const allCnpjsAnteriores = new Set(
     (currentSol.empresasAnteriores || []).map(e => e.cnpj).filter(Boolean)
   );
   const medicoesDaEmpresaAtual = (currentSol.medicoes || []).filter(m =>
     currentCnpj ? m.empresaCnpj === currentCnpj : !allCnpjsAnteriores.has(m.empresaCnpj || '')
   );
-  const fisicoEmpresaAtual = medicoesDaEmpresaAtual.reduce((sum, m) =>
-    sum + (m.porcentagemFisica !== undefined ? m.porcentagemFisica : m.porcentagem), 0
+
+  // Valores financeiros — empresa atual
+  const contratoEmpresaAtual = currentSol.contratoValorInicial || currentSol.valorHomologadoContratacao || currentSol.valorPlanilha || 1;
+  const sumMedicoesEmpresaAtual = medicoesDaEmpresaAtual.reduce((sum, m) => sum + m.valor, 0);
+  const restanteEmpresaAtual = Math.max(0, contratoEmpresaAtual - sumMedicoesEmpresaAtual);
+
+  // Valores financeiros — empresas anteriores (acumulado histórico)
+  const valorExecutadoAnteriores = (currentSol.empresasAnteriores || []).reduce(
+    (sum, e) => sum + (e.valorExecutado ?? 0), 0
   );
-  // Total acumulado da obra (congelado + empresa atual), cap em 100%
-  const percentualFisicoAcumulado = Math.min(100, frozenFisico + fisicoEmpresaAtual);
-  const fisicoDisponivel = Math.max(0, 100 - percentualFisicoAcumulado);
+  const contratoTotalAnteriores = (currentSol.empresasAnteriores || []).reduce(
+    (sum, e) => sum + (e.contratoValorInicial ?? 0), 0
+  );
+
+  // Totais da obra (todas as empresas)
+  const sumMedicoes = valorExecutadoAnteriores + sumMedicoesEmpresaAtual;
+  const originalBudget = contratoTotalAnteriores + contratoEmpresaAtual;
+  const leftOver = restanteEmpresaAtual;
+
+  // Avanço físico — empresa atual (base: contrato desta empresa)
+  const fisicoEmpresaAtual = contratoEmpresaAtual > 0
+    ? Math.min(100, (sumMedicoesEmpresaAtual / contratoEmpresaAtual) * 100)
+    : 0;
+
+  // Avanço físico acumulado da obra (base monetária: total executado / total contratado)
+  // Exemplo: Emp1 executou R$400k de R$1M (40%) + Emp2 executou R$300k de R$600k (50%)
+  //          Acumulado = (400k+300k)/(1M+600k) = 43,75%
+  const percentualFisicoAcumulado = originalBudget > 0
+    ? Math.min(100, (sumMedicoes / originalBudget) * 100)
+    : 0;
+  const percentualFinanceiroAcumulado = percentualFisicoAcumulado;
+
+  // Disponível para medição da empresa atual (até atingir 100% do seu contrato)
+  const fisicoDisponivel = Math.max(0, 100 - fisicoEmpresaAtual);
 
   // Sync state on school/project change or when measurements list size changes
   useEffect(() => {
@@ -3283,23 +3345,17 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
       return;
     }
 
-    if (v + sumMedicoes > originalBudget) {
+    // Valida contra o orçamento da empresa atual (não o total da obra)
+    if (v + sumMedicoesEmpresaAtual > contratoEmpresaAtual) {
       setErrorMessage(
-        `Impossível Registrar: O valor desta medição (R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) somado ao total medido acumulado (R$ ${sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o limite contratual de R$ ${originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+        `Impossível Registrar: O valor desta medição (R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) somado ao total medido por esta empresa (R$ ${sumMedicoesEmpresaAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o valor do contrato desta empresa de R$ ${contratoEmpresaAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
       );
       return;
     }
 
-    const pFinanceira = porcentagemM ? parseFloat(porcentagemM) : (v / originalBudget) * 100;
+    // Percentual financeiro e físico desta medição (base: contrato desta empresa)
+    const pFinanceira = porcentagemM ? parseFloat(porcentagemM) : (v / contratoEmpresaAtual) * 100;
     const pFisica = porcentagemFisicaM ? parseFloat(porcentagemFisicaM) : pFinanceira;
-
-    // Validação do cap físico de 100% considerando empresas anteriores
-    if (frozenFisico + fisicoEmpresaAtual + pFisica > 100) {
-      setErrorMessage(
-        `O percentual físico desta medição (${pFisica.toFixed(2)}%) somado ao avanço acumulado da obra (${percentualFisicoAcumulado.toFixed(2)}%) ultrapassaria 100%. Disponível para esta empresa: ${fisicoDisponivel.toFixed(2)}%.`
-      );
-      return;
-    }
 
     if (!relatorioFileName || !boletimFileName) {
       setErrorMessage('Atenção: Os documentos "Relatório de Fiscalização" e "Boletim de Medição" são obrigatórios para aprovar a medição.');
@@ -3411,63 +3467,65 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
           )}
 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5 mb-5">
+            {/* Contrato empresa atual */}
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-left">
-              <span className="text-[9px] uppercase font-bold text-slate-400 block">Total do Contrato</span>
+              <span className="text-[9px] uppercase font-bold text-slate-400 block">Contrato Atual</span>
               <span className="text-xs font-black text-slate-800 font-mono block mt-0.5 truncate">
-                R$ {originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {contratoEmpresaAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
 
+            {/* Medido pela empresa atual */}
             <div className="p-3 bg-emerald-50/50 border border-emerald-200/40 rounded-xl text-left">
-              <span className="text-[9px] uppercase font-bold text-emerald-600 block">Total Medido</span>
+              <span className="text-[9px] uppercase font-bold text-emerald-600 block">Medido (Empresa)</span>
               <span className="text-xs font-black text-emerald-700 font-mono block mt-0.5 truncate">
-                R$ {sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {sumMedicoesEmpresaAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
 
+            {/* Saldo restante para esta empresa */}
             <div className="p-3 bg-slate-50/70 border border-slate-200/40 rounded-xl text-left">
-              <span className="text-[9px] uppercase font-bold text-slate-500 block">Saldo Restante</span>
+              <span className="text-[9px] uppercase font-bold text-slate-500 block">Saldo da Empresa</span>
               <span className="text-xs font-black text-slate-600 font-mono block mt-0.5 truncate">
-                R$ {leftOver.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R$ {restanteEmpresaAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </div>
 
+            {/* Avanço físico da empresa atual */}
             <div className="p-3 bg-blue-50/60 border border-blue-200/30 rounded-xl text-left">
               <span className="text-[9px] uppercase font-extrabold text-blue-600 block flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
-                {frozenFisico > 0 ? 'Físico Total da Obra' : 'Físico Acumulado'}
+                Avan. Empresa Atual
               </span>
               <span className="text-base font-black text-blue-700 font-mono block mt-0.5">
+                {fisicoEmpresaAtual.toFixed(2)}%
+              </span>
+              <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                <div className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${fisicoEmpresaAtual}%` }} />
+              </div>
+              <p className="text-[9px] text-blue-500 mt-1 font-medium">
+                Disponível: {fisicoDisponivel.toFixed(1)}%
+              </p>
+            </div>
+
+            {/* Avanço acumulado da obra (todas as empresas, base monetária) */}
+            <div className="p-3 bg-teal-50/60 border border-teal-200/30 rounded-xl text-left">
+              <span className="text-[9px] uppercase font-extrabold text-teal-700 block flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span> Acumulado Obra
+              </span>
+              <span className="text-base font-black text-teal-800 font-mono block mt-0.5">
                 {percentualFisicoAcumulado.toFixed(2)}%
               </span>
               <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                {frozenFisico > 0 && (
-                  <div className="bg-slate-400 h-full rounded-l-full transition-all duration-500 float-left"
-                    style={{ width: `${Math.min(100, frozenFisico)}%` }} title={`Congelado: ${frozenFisico.toFixed(1)}%`} />
-                )}
-                <div className="bg-blue-600 h-full transition-all duration-500 float-left"
-                  style={{ width: `${Math.min(100 - frozenFisico, fisicoEmpresaAtual)}%` }} />
+                <div className="bg-teal-600 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${percentualFisicoAcumulado}%` }} />
               </div>
-              {frozenFisico > 0 && (
+              {(currentSol.empresasAnteriores || []).length > 0 && (
                 <p className="text-[9px] text-slate-500 mt-1 font-medium">
-                  Congelado: {frozenFisico.toFixed(1)}% | Atual: {fisicoEmpresaAtual.toFixed(1)}%
+                  {(currentSol.empresasAnteriores || []).length} contrato(s) anterior(es)
                 </p>
               )}
-            </div>
-
-            <div className="p-3 bg-teal-50/60 border border-teal-200/30 rounded-xl text-left">
-              <span className="text-[9px] uppercase font-extrabold text-teal-650 block flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-teal-550"></span> Financ. Acumulado
-              </span>
-              <span className="text-base font-black text-teal-700 font-mono block mt-0.5">
-                {percentualFinanceiroAcumulado.toFixed(2)}%
-              </span>
-              <div className="w-full bg-slate-200 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                <div
-                  className="bg-teal-600 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, percentualFinanceiroAcumulado)}%` }}
-                ></div>
-              </div>
             </div>
           </div>
 
@@ -3979,36 +4037,51 @@ function SubContratos({
   // Sync logic when currentSol changes
   useEffect(() => {
     if (currentSol) {
-      const matched = empresasSeguranca.find(e => e.nome === currentSol.empresaContratada);
-      setSelectedEmpresaId(matched ? matched.id : '');
-      setEmpresaInput(currentSol.empresaContratada || '');
-      setCnpjInput(currentSol.cnpjEmpresa || '');
-      setTipoAcaoInput(currentSol.statusContratoEmpresa === 'Distratada' ? 'distrato' : 'alteracao');
-      setDuracaoInput(currentSol.duracaoObraMeses?.toString() || '6');
-      
-      // Valor homologado (certame) — nunca substituir pelo valor autorizado do atendimento
-      const valInitial = currentSol.contratoValorInicial ?? 0;
-      setValorInicialInput(valInitial.toString());
-      
-      setDataAssinaturaInput(currentSol.contratoDataAssinatura || '');
-      setInicioVigenciaInput(currentSol.contratoInicioVigencia || currentSol.dataOrdemInicio || '');
-      setFimVigenciaInput(currentSol.contratoFimVigencia || currentSol.previsaoTerminoObra || '');
-      setGarantiaExigidaInput(currentSol.garantiaExigida || 'Sem Garantia');
-      setGarantiaValorInput((currentSol.garantiaValor || 0).toString());
-      setGarantiaTipoInput(currentSol.garantiaTipo || '');
-      setGarantiaValidadeInput(currentSol.garantiaValidade || '');
+      const foiDistratada = currentSol.statusContratoEmpresa === 'Distratada';
+
+      if (foiDistratada) {
+        // Após distrato: campos de nova contratação chegam em branco
+        setSelectedEmpresaId('');
+        setEmpresaInput('');
+        setCnpjInput('');
+        setTipoAcaoInput('alteracao');
+        setDuracaoInput('');
+        setValorInicialInput('');
+        setDataAssinaturaInput('');
+        setInicioVigenciaInput('');
+        setFimVigenciaInput('');
+        setGarantiaExigidaInput('Sem Garantia');
+        setGarantiaValorInput('');
+        setGarantiaTipoInput('');
+        setGarantiaValidadeInput('');
+      } else {
+        const matched = empresasSeguranca.find(e => e.nome === currentSol.empresaContratada);
+        setSelectedEmpresaId(matched ? matched.id : '');
+        setEmpresaInput(currentSol.empresaContratada || '');
+        setCnpjInput(currentSol.cnpjEmpresa || '');
+        setTipoAcaoInput('alteracao');
+        setDuracaoInput(currentSol.duracaoObraMeses?.toString() || '');
+        setValorInicialInput((currentSol.contratoValorInicial ?? '').toString());
+        setDataAssinaturaInput(currentSol.contratoDataAssinatura || '');
+        setInicioVigenciaInput(currentSol.contratoInicioVigencia || '');
+        setFimVigenciaInput(currentSol.contratoFimVigencia || '');
+        setGarantiaExigidaInput(currentSol.garantiaExigida || 'Sem Garantia');
+        setGarantiaValorInput((currentSol.garantiaValor || 0).toString());
+        setGarantiaTipoInput(currentSol.garantiaTipo || '');
+        setGarantiaValidadeInput(currentSol.garantiaValidade || '');
+      }
     } else {
       setSelectedEmpresaId('');
       setEmpresaInput('');
       setCnpjInput('');
       setTipoAcaoInput('alteracao');
-      setDuracaoInput('6');
-      setValorInicialInput('0');
+      setDuracaoInput('');
+      setValorInicialInput('');
       setDataAssinaturaInput('');
       setInicioVigenciaInput('');
       setFimVigenciaInput('');
       setGarantiaExigidaInput('Sem Garantia');
-      setGarantiaValorInput('0');
+      setGarantiaValorInput('');
       setGarantiaTipoInput('');
       setGarantiaValidadeInput('');
     }
@@ -4286,6 +4359,8 @@ function SubContratos({
       return;
     }
 
+    const isNovaEmpresaPosDistrato = currentSol.statusContratoEmpresa === 'Distratada';
+
     const updated = {
       ...currentSol,
       empresaContratada: empresaInput,
@@ -4300,11 +4375,22 @@ function SubContratos({
       garantiaValor: parseFloat(garantiaValorInput) || 0,
       garantiaTipo: garantiaTipoInput,
       garantiaValidade: garantiaValidadeInput,
+      ...(isNovaEmpresaPosDistrato ? {
+        statusObra: 'Não Iniciada' as const,
+        dataOrdemInicio: undefined,
+        previsaoTerminoObra: undefined,
+        fiscalObraAtribuido: undefined,
+        cadastroObraConfirmado: false,
+        classeObra: undefined,
+        pontuacaoComplexidade: undefined,
+      } : {}),
     };
 
     onUpdate(updated);
     setModalCadastroAberto(false);
-    alert('Contrato cadastrado com sucesso!');
+    alert(isNovaEmpresaPosDistrato
+      ? 'Nova empresa cadastrada! É necessário realizar nova Ordem de Início antes de registrar medições.'
+      : 'Contrato cadastrado com sucesso!');
   };
 
   const selectCompanyFromSeguranca = (empId: string) => {
@@ -4569,7 +4655,23 @@ function SubContratos({
             {!currentSol.contratoDataAssinatura || currentSol.statusContratoEmpresa === 'Distratada' ? (
               <button
                 type="button"
-                onClick={() => setModalCadastroAberto(true)}
+                onClick={() => {
+                  // Sempre resetar campos ao abrir modal para novo contrato
+                  setSelectedEmpresaId('');
+                  setEmpresaInput('');
+                  setCnpjInput('');
+                  setTipoAcaoInput('alteracao');
+                  setDuracaoInput('');
+                  setValorInicialInput('');
+                  setDataAssinaturaInput('');
+                  setInicioVigenciaInput('');
+                  setFimVigenciaInput('');
+                  setGarantiaExigidaInput('Sem Garantia');
+                  setGarantiaValorInput('');
+                  setGarantiaTipoInput('');
+                  setGarantiaValidadeInput('');
+                  setModalCadastroAberto(true);
+                }}
                 className="w-full py-3 px-4 rounded-xl border font-black text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer bg-emerald-50/50 hover:bg-emerald-100/60 text-emerald-700 border-emerald-200 hover:border-emerald-300"
               >
                 <Plus className="w-4 h-4" /> Cadastrar Contrato
@@ -5199,14 +5301,24 @@ function SubContratos({
                   const jaArquivada = updatedAnteriores.some(e => e.cnpj === currentSol.cnpjEmpresa);
                   if (!jaArquivada && currentSol.empresaContratada) {
                     const cnpjAtual = currentSol.cnpjEmpresa || '';
-                    const fisicoAtual = (currentSol.medicoes || [])
+                    const contratoValor = currentSol.contratoValorInicial || currentSol.valorHomologadoContratacao || 0;
+                    const valorExecutado = (currentSol.medicoes || [])
                       .filter(m => cnpjAtual ? m.empresaCnpj === cnpjAtual : true)
-                      .reduce((sum, m) => sum + (m.porcentagemFisica !== undefined ? m.porcentagemFisica : m.porcentagem), 0);
+                      .reduce((sum, m) => sum + m.valor, 0);
+                    const avancoFisico = contratoValor > 0 ? (valorExecutado / contratoValor) * 100 : 0;
                     updatedAnteriores.push({
                       id: `prev_${Date.now()}`,
                       nome: currentSol.empresaContratada,
                       cnpj: cnpjAtual,
-                      avancoFisicoOriginal: fisicoAtual,
+                      contratoValorInicial: contratoValor,
+                      valorExecutado,
+                      avancoFisicoOriginal: avancoFisico,
+                      fiscalObraAtribuido: currentSol.fiscalObraAtribuido,
+                      dataOrdemInicio: currentSol.dataOrdemInicio,
+                      previsaoTerminoObra: currentSol.previsaoTerminoObra,
+                      duracaoObraMeses: currentSol.duracaoObraMeses,
+                      classeObra: currentSol.classeObra,
+                      pontuacaoComplexidade: currentSol.pontuacaoComplexidade,
                       dataDistrato: distratoData,
                       justificativaDistrato: distratoJustificativa,
                       documentoDistratoFileName: distratoFile?.name,

@@ -307,7 +307,7 @@ export function NovoAtendimentoPanel({
       if (doc.id === docId) {
         return {
           ...doc,
-          status: 'aprovado' as const,
+          status: 'pendente' as const,
           fileName: file.name,
           fileSize: file.size > 1024 * 1024 
             ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
@@ -325,7 +325,7 @@ export function NovoAtendimentoPanel({
       if (doc.id === docId) {
         return {
           ...doc,
-          status: 'aprovado' as const,
+          status: 'pendente' as const,
           fileName: customName,
           fileSize: '1.2 MB',
           uploadedAt: new Date().toISOString().split('T')[0]
@@ -370,7 +370,7 @@ export function NovoAtendimentoPanel({
       if (doc.id === docId) {
         return {
           ...doc,
-          status: 'aprovado' as const,
+          status: 'pendente' as const,
           fileName: `outro_doc_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`,
           fileSize: '750 KB',
           uploadedAt: new Date().toISOString().split('T')[0]
@@ -387,7 +387,7 @@ export function NovoAtendimentoPanel({
       if (doc.id === docId) {
         return {
           ...doc,
-          status: 'aprovado' as const,
+          status: 'pendente' as const,
           fileName: file.name,
           fileSize: file.size > 1024 * 1024 
             ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
@@ -414,7 +414,7 @@ export function NovoAtendimentoPanel({
     ];
     setDocumentosChecklist(prev => prev.map((doc, idx) => ({
       ...doc,
-      status: 'aprovado' as const,
+      status: 'pendente' as const,
       fileName: mockFiles[idx] || 'laudo_tecnico.pdf',
       fileSize: '1.4 MB',
       uploadedAt: new Date().toISOString().split('T')[0]
@@ -550,7 +550,7 @@ export function NovoAtendimentoPanel({
       if (doc.id === docId) {
         return {
           ...doc,
-          status: 'aprovado' as const,
+          status: 'pendente' as const,
           fileName: nomeArquivo,
           uploadedAt: new Date().toISOString().split('T')[0],
           fileSize: '1.2 MB'
@@ -559,6 +559,29 @@ export function NovoAtendimentoPanel({
       return doc;
     });
 
+    setSelectedAtendimentoForEdit({
+      ...selectedAtendimentoForEdit,
+      documentos: novosDocumentos
+    });
+  };
+
+  const handleUploadDocReal = (docId: string, file: File) => {
+    if (!selectedAtendimentoForEdit) return;
+    const fileSize = file.size < 1024 * 1024
+      ? `${(file.size / 1024).toFixed(0)} KB`
+      : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+    const novosDocumentos = selectedAtendimentoForEdit.documentos.map(doc => {
+      if (doc.id === docId) {
+        return {
+          ...doc,
+          status: 'pendente' as const,
+          fileName: file.name,
+          uploadedAt: new Date().toISOString().split('T')[0],
+          fileSize
+        };
+      }
+      return doc;
+    });
     setSelectedAtendimentoForEdit({
       ...selectedAtendimentoForEdit,
       documentos: novosDocumentos
@@ -1485,14 +1508,12 @@ export function NovoAtendimentoPanel({
         // Marca o grupo de validação como 'editado' após correção do técnico
         const markEditado = (campo: string) => isCorrecao ? { [campo]: 'editado' } : {};
 
-        // Comentários do analista por grupo
-        const comentariosAnalista = isCorrecao ? [
-          { label: 'Identificação Escolar', motivo: sol.motivoNaoValidacaoEscolar, valida: sol.validacaoEscolar },
-          { label: 'Patrimônio / Tombamento', motivo: sol.motivoNaoValidacaoPatrimonial, valida: sol.validacaoPatrimonial },
-          { label: 'Detalhamento Técnico', motivo: sol.motivoNaoValidacaoTecnica, valida: sol.validacaoTecnica },
-          { label: 'Referência de Dotação', motivo: sol.motivoNaoValidacaoReferenciaDotacao, valida: sol.validacaoReferenciaDotacao },
-          { label: 'Observações Gerais', motivo: sol.observacoesAnalistaDadosGerais, valida: undefined },
-        ].filter(c => c.motivo) : [];
+        const historicoCorrecoes = sol.historicoCorrecoes || [];
+        const ultimaDevolucao = historicoCorrecoes.length > 0
+          ? historicoCorrecoes[historicoCorrecoes.length - 1]
+          : null;
+        const comentarioInline = (campo: string) =>
+          ultimaDevolucao?.motivos.find(m => m.campo === campo)?.motivo || null;
 
         const docsRecusados = isCorrecao
           ? (sol.documentos || []).filter(d => d.status === 'recusado' && d.justificativa)
@@ -1523,29 +1544,44 @@ export function NovoAtendimentoPanel({
             </button>
           </div>
 
-          {/* Painel de comentários do analista */}
-          {isCorrecao && (comentariosAnalista.length > 0 || docsRecusados.length > 0) && (
-            <div className="mb-6 bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-3">
+          {/* Painel histórico de devoluções */}
+          {isCorrecao && historicoCorrecoes.length > 0 && (
+            <div className="mb-6 bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-4">
               <h4 className="text-[10px] font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-                <AlertCircle className="w-4 h-4" /> Parecer do Analista DORE — Itens a Corrigir
+                <AlertCircle className="w-4 h-4" /> Parecer do Analista DORE — Histórico de Devoluções
               </h4>
-              {comentariosAnalista.map((c, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${c.valida === 'nao_validado' ? 'bg-rose-200 text-rose-800' : 'bg-slate-200 text-slate-600'}`}>{c.label}</span>
-                  <p className="text-rose-900 font-medium leading-relaxed">{c.motivo}</p>
-                </div>
-              ))}
-              {docsRecusados.length > 0 && (
-                <div className="space-y-1.5 border-t border-rose-200 pt-2 mt-2">
-                  <span className="text-[9px] font-black uppercase text-rose-700 block">Documentos Recusados</span>
-                  {docsRecusados.map(d => (
-                    <div key={d.id} className="flex items-start gap-2 text-xs">
-                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-200 text-rose-800">{d.nome}</span>
-                      <p className="text-rose-900 font-medium leading-relaxed">{d.justificativa}</p>
+              {historicoCorrecoes.map((round) => {
+                const ordinal = round.contador === 1 ? '1ª' : round.contador === 2 ? '2ª' : round.contador === 3 ? '3ª' : `${round.contador}ª`;
+                const isUltima = round.contador === historicoCorrecoes.length;
+                return (
+                  <div key={round.contador} className={`rounded-lg border p-3 space-y-2 ${isUltima ? 'border-rose-300 bg-white' : 'border-rose-200/60 bg-rose-50/40'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${isUltima ? 'bg-rose-600 text-white' : 'bg-rose-200 text-rose-800'}`}>
+                        {ordinal} Devolução
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-mono">{round.data}</span>
+                      {isUltima && <span className="text-[9px] text-rose-600 font-bold">(atual — corrija estes itens)</span>}
                     </div>
-                  ))}
-                </div>
-              )}
+                    {round.motivos.map((m, i) => (
+                      <div key={i} className="flex items-start gap-2 text-xs">
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-200 text-rose-800">{m.label}</span>
+                        <p className="text-rose-900 font-medium leading-relaxed">{m.motivo}</p>
+                      </div>
+                    ))}
+                    {round.docsRecusados.length > 0 && (
+                      <div className="space-y-1.5 border-t border-rose-200/60 pt-2">
+                        <span className="text-[9px] font-black uppercase text-rose-700 block">Documentos Recusados</span>
+                        {round.docsRecusados.map((d, i) => (
+                          <div key={i} className="flex items-start gap-2 text-xs">
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-200 text-rose-800">{d.nome}</span>
+                            <p className="text-rose-900 font-medium leading-relaxed">{d.justificativa}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -1555,6 +1591,21 @@ export function NovoAtendimentoPanel({
                 <span>Informações Gerais da Solicitação</span>
                 <span className="text-[10px] text-slate-400 font-mono lower">Criado em: {selectedAtendimentoForEdit.dataCriacao}</span>
               </div>
+
+              {/* Comentários da última análise — todos os motivos de não validação dos Dados Gerais */}
+              {isCorrecao && ultimaDevolucao && ultimaDevolucao.motivos.length > 0 && (
+                <div className="sm:col-span-3 bg-rose-50 border border-rose-200 rounded-lg p-3 space-y-2">
+                  <p className="text-[9px] font-black uppercase text-rose-700 tracking-wider flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" /> Comentários do Analista — {ultimaDevolucao.contador === 1 ? '1ª' : ultimaDevolucao.contador === 2 ? '2ª' : ultimaDevolucao.contador === 3 ? '3ª' : `${ultimaDevolucao.contador}ª`} Devolução
+                  </p>
+                  {ultimaDevolucao.motivos.map((m, i) => (
+                    <div key={i} className="flex items-start gap-2 text-[10px]">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-200 text-rose-800">{m.label}</span>
+                      <p className="text-rose-900 font-medium leading-relaxed">{m.motivo}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* CODESC / Escola / Município / SRE — grupo validacaoEscolar */}
               {isCorrecao && vLocked(sol.validacaoEscolar) && (
@@ -1737,7 +1788,7 @@ export function NovoAtendimentoPanel({
                 />
               </div>
 
-               {/* Tombamento — grupo validacaoTombamento */}
+              {/* Tombamento — grupo validacaoTombamento */}
               {isCorrecao && vLocked(sol.validacaoTombamento) && (
                 <div className="flex items-center gap-2 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 font-bold">
                   <CheckCircle className="w-3.5 h-3.5 shrink-0" /> Tombamento validado — bloqueado.
@@ -1866,27 +1917,6 @@ export function NovoAtendimentoPanel({
                 )}
               </div>
 
-              {/* Etapa — oculta em modo correção (o técnico não pode alterar a etapa manualmente) */}
-              {!isCorrecao && (
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Fase / Etapa de Fluxo
-                </label>
-                <select
-                  value={sol.etapaAtual}
-                  onChange={(e) => setSelectedAtendimentoForEdit({ ...sol, etapaAtual: e.target.value as EtapaProcesso })}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-bold text-blue-750"
-                >
-                  <option value="cadastro">INSTRUCÃO DOCUMENTAL</option>
-                  <option value="analise">ANÁLISE ENGENHARIA DORE</option>
-                  <option value="correcao">CORRECÃO EXIGIDA</option>
-                  <option value="paf_autorizacao">AUTORIZACÃO FINANCEIRA</option>
-                  <option value="paf">HOMOLOGACÃO & GERAÇÃO PAF</option>
-                  <option value="ordem_inicio">OBRAS (ORDEM DE INÍCIO)</option>
-                  <option value="execucao">OBRAS EM EXECUCÃO</option>
-                </select>
-              </div>
-              )}
 
               {/* Descrição folha do rosto — parte de validacaoTecnica */}
               <div className="sm:col-span-3">
@@ -1928,8 +1958,8 @@ export function NovoAtendimentoPanel({
 
               <div className="space-y-2.5">
                 {sol.documentos.map((doc) => (
-                  <div key={doc.id} className="bg-white p-3 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
-                    <div className="space-y-1">
+                  <div key={doc.id} className={`bg-white p-3 border rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs ${isCorrecao && doc.status === 'recusado' && doc.justificativa ? 'border-rose-300' : 'border-slate-200'}`}>
+                    <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-800">{doc.nome}</span>
                         {doc.obrigatorio ? (
@@ -1945,30 +1975,27 @@ export function NovoAtendimentoPanel({
                           <span className="text-slate-400 font-medium">({doc.fileSize} - Enviado em {doc.uploadedAt})</span>
                         </p>
                       )}
+                      {isCorrecao && doc.status === 'recusado' && doc.justificativa && (
+                        <div className="flex items-start gap-1.5 mt-1.5 bg-rose-50 border border-rose-200 rounded px-2 py-1.5">
+                          <AlertCircle className="w-3 h-3 shrink-0 text-rose-500 mt-0.5" />
+                          <p className="text-[10px] text-rose-800 font-medium leading-relaxed"><strong>Analista:</strong> {doc.justificativa}</p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      {/* Interactive upload trigger */}
-                      {!doc.fileName && (
-                        <button
-                          type="button"
-                          onClick={() => handleSimularUploadDoc(doc.id, `ANEXO_${doc.nome.toUpperCase().replace(/\s+/g, '_')}_Aprovados.xlsx`)}
-                          className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-150 rounded text-[11px] font-extrabold hover:bg-blue-100 cursor-pointer transition-colors"
-                        >
-                          Simular Upload
-                        </button>
-                      )}
-
-                      <select
-                        value={doc.status}
-                        onChange={(e) => handleChangeDocStatus(doc.id, e.target.value as any)}
-                        className="text-[10px] px-2 py-1 border border-slate-200 rounded font-bold cursor-pointer bg-white"
-                      >
-                        <option value="pendente">🔴 PENDENTE</option>
-                        <option value="aprovado">🟢 APROVADO</option>
-                        <option value="recusado">🟡 CORREÇÃO</option>
-                        <option value="nao_se_aplica">⚪ NÃO SE APLICA</option>
-                      </select>
+                      <label className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-150 rounded text-[11px] font-extrabold hover:bg-blue-100 cursor-pointer transition-colors">
+                        {doc.fileName ? 'Substituir Documento' : 'Anexar Documento'}
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadDocReal(doc.id, file);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
                     </div>
                   </div>
                 ))}

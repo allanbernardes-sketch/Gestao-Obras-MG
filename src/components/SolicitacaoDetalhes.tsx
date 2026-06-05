@@ -213,7 +213,7 @@ Plataforma e-SGO - SEE-MG`;
   const [justificativaParalizacaoInput, setJustificativaParalizacaoInput] = useState(solicitacao.justificativaParalizacao || 'Aguardando diretor da cx escolar realizar notificação empresa');
 
   // State for Fiscal assigned in Ordem de Início
-  const [fiscalObraAtribuidoInput, setFiscalObraAtribuidoInput] = useState(solicitacao.fiscalObraAtribuido || '');
+  const [fiscalObraAtribuidoInput, setFiscalObraAtribuidoInput] = useState(solicitacao.cadastroObraConfirmado ? (solicitacao.fiscalObraAtribuido || '') : '');
 
   // File Input Ref for Distrato document
   const distratoInputRef = useRef<HTMLInputElement | null>(null);
@@ -508,12 +508,25 @@ ${totalPendencias > 0
   };
 
   const enviarReprovacaoFinal = () => {
+    const contador = (solicitacao.historicoCorrecoes?.length || 0) + 1;
+    const hoje = new Date().toISOString().split('T')[0];
+    const motivosAtivos = [
+      { label: 'Identificação Escolar',    campo: 'escolar',           motivo: solicitacao.motivoNaoValidacaoEscolar || '' },
+      { label: 'Patrimônio / Tombamento',  campo: 'patrimonial',       motivo: solicitacao.motivoNaoValidacaoPatrimonial || '' },
+      { label: 'Detalhamento Técnico',     campo: 'tecnica',           motivo: solicitacao.motivoNaoValidacaoTecnica || '' },
+      { label: 'Referência de Dotação',    campo: 'referenciaDotacao', motivo: solicitacao.motivoNaoValidacaoReferenciaDotacao || '' },
+    ].filter(m => m.motivo.trim());
+    const docsRecusados = (solicitacao.documentos || [])
+      .filter(d => d.status === 'recusado' && d.justificativa)
+      .map(d => ({ nome: d.nome, id: d.id, justificativa: d.justificativa || '' }));
+    const novaEntrada = { contador, data: hoje, motivos: motivosAtivos, docsRecusados };
     onUpdate({
       ...solicitacao,
       etapaAtual: 'correcao',
+      historicoCorrecoes: [...(solicitacao.historicoCorrecoes || []), novaEntrada],
       historicoEtapas: [
         ...solicitacao.historicoEtapas,
-        { etapa: 'correcao', data: new Date().toISOString().split('T')[0], responsavel: `${currentUserNome || perfilUsuario} (Reprovação)` }
+        { etapa: 'correcao', data: hoje, responsavel: `${currentUserNome || perfilUsuario} (Reprovação)` }
       ]
     });
   };
@@ -580,6 +593,15 @@ ${totalPendencias > 0
       pago: pagoPAFInput,
       statusPAF: pagoPAFInput ? 'Pago e Liberado' : 'Aguardando Pagamento',
       etapaAtual: 'ordem_inicio',
+      // Limpa campos do cadastro de obras para chegarem em branco
+      cadastroObraConfirmado: false,
+      fiscalObraAtribuido: undefined,
+      dataOrdemInicio: undefined,
+      previsaoTerminoObra: undefined,
+      duracaoObraMeses: undefined,
+      valorHomologadoContratacao: undefined,
+      classeObra: undefined,
+      pontuacaoComplexidade: undefined,
       historicoEtapas: [
         ...solicitacao.historicoEtapas,
         { etapa: 'ordem_inicio', data: new Date().toISOString().split('T')[0], responsavel: 'Administrativo DORE (Rui Lages - Homologado e Avançado)' }
@@ -632,9 +654,9 @@ ${totalPendencias > 0
 
   // ORDEM DE INÍCIO PROCESSORS
   const cronogramaInputRef = useRef<HTMLInputElement | null>(null);
-  const [dataOrdemInicioInput, setDataOrdemInicioInput] = useState(solicitacao.dataOrdemInicio || '');
-  const [previsaoTerminoInput, setPrevisaoTerminoInput] = useState(solicitacao.previsaoTerminoObra || '');
-  const [valorHomologadoContratacaoInput, setValorHomologadoContratacaoInput] = useState(solicitacao.valorHomologadoContratacao?.toString() || '');
+  const [dataOrdemInicioInput, setDataOrdemInicioInput] = useState(solicitacao.cadastroObraConfirmado ? (solicitacao.dataOrdemInicio || '') : '');
+  const [previsaoTerminoInput, setPrevisaoTerminoInput] = useState(solicitacao.cadastroObraConfirmado ? (solicitacao.previsaoTerminoObra || '') : '');
+  const [valorHomologadoContratacaoInput, setValorHomologadoContratacaoInput] = useState(solicitacao.cadastroObraConfirmado ? (solicitacao.valorHomologadoContratacao?.toString() || '') : '');
   const [tipoObraInput, setTipoObraInput] = useState(solicitacao.tipoObra || solicitacao.tipo || 'Reforma');
 
   // CONCLUSÃO DE OBRA STATES & REFS
@@ -666,11 +688,19 @@ ${totalPendencias > 0
 
   // Keep state in sync with parent updates
   useEffect(() => {
-    setDataOrdemInicioInput(solicitacao.dataOrdemInicio || '');
-    setPrevisaoTerminoInput(solicitacao.previsaoTerminoObra || '');
-    setValorHomologadoContratacaoInput(solicitacao.valorHomologadoContratacao?.toString() || '');
+    // Só preenche campos do cadastro de obra se o fiscal já confirmou o cadastro oficialmente
+    if (solicitacao.cadastroObraConfirmado) {
+      setDataOrdemInicioInput(solicitacao.dataOrdemInicio || '');
+      setPrevisaoTerminoInput(solicitacao.previsaoTerminoObra || '');
+      setValorHomologadoContratacaoInput(solicitacao.valorHomologadoContratacao?.toString() || '');
+      setFiscalObraAtribuidoInput(solicitacao.fiscalObraAtribuido || '');
+    } else {
+      setDataOrdemInicioInput('');
+      setPrevisaoTerminoInput('');
+      setValorHomologadoContratacaoInput('');
+      setFiscalObraAtribuidoInput('');
+    }
     setTipoObraInput(solicitacao.tipoObra || solicitacao.tipo || 'Reforma');
-    setFiscalObraAtribuidoInput(solicitacao.fiscalObraAtribuido || '');
 
     setEmpresaInput(solicitacao.empresaContratada || '');
     setCnpjInput(solicitacao.cnpjEmpresa || '');
@@ -712,17 +742,18 @@ ${totalPendencias > 0
     setDataFinHomologacaoInput(solicitacao.dataFinHomologacao || solicitacao.dataHomologacao || new Date().toISOString().split('T')[0]);
     setPagoPAFInput(solicitacao.pago || solicitacao.statusPAF === 'Pago e Liberado');
   }, [
-    solicitacao.id, 
+    solicitacao.id,
+    solicitacao.cadastroObraConfirmado,
     solicitacao.numeroPAF,
     solicitacao.dataHomologacao,
     solicitacao.dataVigenciaPAF,
     solicitacao.dataFinHomologacao,
     solicitacao.pago,
     solicitacao.statusPAF,
-    solicitacao.dataOrdemInicio, 
-    solicitacao.previsaoTerminoObra, 
-    solicitacao.valorHomologadoContratacao, 
-    solicitacao.tipoObra, 
+    solicitacao.dataOrdemInicio,
+    solicitacao.previsaoTerminoObra,
+    solicitacao.valorHomologadoContratacao,
+    solicitacao.tipoObra,
     solicitacao.tipo,
     solicitacao.fiscalObraAtribuido,
     solicitacao.empresaContratada,
@@ -786,7 +817,8 @@ ${totalPendencias > 0
       duracaoObraMeses: meses,
       classeObra: comp.classe,
       pontuacaoComplexidade: comp.pontuacao,
-      fiscalObraAtribuido: fiscalObraAtribuidoInput
+      fiscalObraAtribuido: fiscalObraAtribuidoInput,
+      cadastroObraConfirmado: true
     });
     alert('Dados da Ordem de Início salvos com sucesso!');
   };
