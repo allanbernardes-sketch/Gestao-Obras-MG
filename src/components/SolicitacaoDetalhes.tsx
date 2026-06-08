@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao, Aditivo, AjustePlanilha, UsuarioSistema } from '../types';
+import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, ParcelaPAF } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { gerarParecerIA } from './GeradorParecerIA';
 import ProcessAnalysisPanel from './ProcessAnalysisPanel';
@@ -9,6 +9,19 @@ import {
   ChevronRight, RefreshCw, Layers, Shield, FileCheck, HardHat, Info, UserCheck, User, History, Paperclip, Play,
   Download
 } from 'lucide-react';
+
+const cnpjCaixaEscolarMap: Record<string, string> = {
+  '304556': '18.283.476/0001-22',
+  '201948': '23.456.789/0001-01',
+  '109923': '34.567.890/0001-12',
+  '302488': '45.678.901/0001-23',
+  '315664': '56.789.012/0001-34',
+  '145236': '12.283.476/0001-55',
+  '102547': '01.234.567/0001-78',
+  '128914': '32.145.678/0001-90',
+  '189652': '65.432.190/0001-44',
+  '154784': '76.543.210/0001-67',
+};
 
 const getValorScore = (valor: number): { score: number; label: string } => {
   if (valor > 2000000) return { score: 5, label: 'Acima de R$ 2.000.000 (Peso 5)' };
@@ -550,7 +563,15 @@ ${totalPendencias > 0
 
   // Novo Bloco: Financeiro
   const [dataFinHomologacaoInput, setDataFinHomologacaoInput] = useState(solicitacao.dataFinHomologacao || solicitacao.dataHomologacao || new Date().toISOString().split('T')[0]);
-  const [pagoPAFInput, setPagoPAFInput] = useState<boolean>(solicitacao.pago || solicitacao.statusPAF === 'Pago e Liberado');
+  const [parcelasPAFInput, setParcelasPAFInput] = useState<ParcelaPAF[]>(solicitacao.parcelasPAF || []);
+
+  const cnpjCaixaAuto = cnpjCaixaEscolarMap[solicitacao.codesc || ''] || solicitacao.cnpjCaixaEscolar || '';
+  const valorPAFBase = solicitacao.valorPlanilha || solicitacao.valorHomologado || 0;
+  const totalPagoPAF = parcelasPAFInput.reduce((s, p) => s + (p.valor || 0), 0);
+  const pagoPAFDerived = valorPAFBase > 0 && totalPagoPAF >= valorPAFBase;
+  const statusPAFDerived: Solicitacao['statusPAF'] = totalPagoPAF === 0
+    ? 'Aguardando Pagamento'
+    : pagoPAFDerived ? 'Pago e Liberado' : 'Pago Parcialmente';
 
   const salvarPAF = (e: React.FormEvent) => {
     e.preventDefault();
@@ -566,8 +587,10 @@ ${totalPendencias > 0
       dataHomologacao: dataPAFInput,
       dataVigenciaPAF: dataVigenciaPAFInput,
       dataFinHomologacao: dataFinHomologacaoInput,
-      pago: pagoPAFInput,
-      statusPAF: pagoPAFInput ? 'Pago e Liberado' : 'Aguardando Pagamento',
+      pago: pagoPAFDerived,
+      statusPAF: statusPAFDerived,
+      parcelasPAF: parcelasPAFInput,
+      cnpjCaixaEscolar: cnpjCaixaAuto || undefined,
       statusObra: solicitacao.statusObra || 'Não Iniciada'
     });
   };
@@ -590,8 +613,10 @@ ${totalPendencias > 0
       dataHomologacao: dataPAFInput,
       dataVigenciaPAF: dataVigenciaPAFInput,
       dataFinHomologacao: dataFinHomologacaoInput,
-      pago: pagoPAFInput,
-      statusPAF: pagoPAFInput ? 'Pago e Liberado' : 'Aguardando Pagamento',
+      pago: pagoPAFDerived,
+      statusPAF: statusPAFDerived,
+      parcelasPAF: parcelasPAFInput,
+      cnpjCaixaEscolar: cnpjCaixaAuto || undefined,
       etapaAtual: 'ordem_inicio',
       // Limpa campos do cadastro de obras para chegarem em branco
       cadastroObraConfirmado: false,
@@ -629,8 +654,10 @@ ${totalPendencias > 0
       dataHomologacao: dataPAFInput,
       dataVigenciaPAF: dataVigenciaPAFInput,
       dataFinHomologacao: dataFinHomologacaoInput,
-      pago: pagoPAFInput,
-      statusPAF: pagoPAFInput ? 'Pago e Liberado' : 'Aguardando Pagamento',
+      pago: pagoPAFDerived,
+      statusPAF: statusPAFDerived,
+      parcelasPAF: parcelasPAFInput,
+      cnpjCaixaEscolar: cnpjCaixaAuto || undefined,
       etapaAtual: 'execucao',
       statusObra: 'Em Andamento',
       dataOrdemInicio: solicitacao.dataOrdemInicio || new Date().toISOString().split('T')[0],
@@ -740,7 +767,7 @@ ${totalPendencias > 0
     setDataPAFInput(solicitacao.dataHomologacao || initialDataCreation);
     setDataVigenciaPAFInput(solicitacao.dataVigenciaPAF || getCalculatedVigencia(solicitacao.dataHomologacao || initialDataCreation));
     setDataFinHomologacaoInput(solicitacao.dataFinHomologacao || solicitacao.dataHomologacao || new Date().toISOString().split('T')[0]);
-    setPagoPAFInput(solicitacao.pago || solicitacao.statusPAF === 'Pago e Liberado');
+    setParcelasPAFInput(solicitacao.parcelasPAF || []);
   }, [
     solicitacao.id,
     solicitacao.cadastroObraConfirmado,
@@ -748,7 +775,7 @@ ${totalPendencias > 0
     solicitacao.dataHomologacao,
     solicitacao.dataVigenciaPAF,
     solicitacao.dataFinHomologacao,
-    solicitacao.pago,
+    solicitacao.parcelasPAF,
     solicitacao.statusPAF,
     solicitacao.dataOrdemInicio,
     solicitacao.previsaoTerminoObra,
@@ -2474,38 +2501,126 @@ ${totalPendencias > 0
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
-                          Data da Homologação
+                          Data de Validação pelo DAFI
                         </label>
                         <input
                           type="date"
                           value={dataFinHomologacaoInput}
                           onChange={(e) => setDataFinHomologacaoInput(e.target.value)}
                           disabled={perfilUsuario !== 'administrativo_dore'}
-                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-800"
+                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-800 disabled:bg-neutral-100 disabled:text-neutral-500"
                         />
-                        <p className="text-[10px] text-neutral-400 mt-1">A data em que o recurso financeiro foi homologado.</p>
                       </div>
 
-                      <div className="flex flex-col justify-center">
-                        <label className="block text-xs font-semibold text-neutral-600 mb-2 uppercase tracking-wider">
-                          Situação do Pagamento
+                      <div>
+                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
+                          CNPJ da Caixa Escolar
                         </label>
-                        <div className="flex items-center">
-                          <label className="inline-flex items-center gap-3 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={pagoPAFInput}
-                              onChange={(e) => setPagoPAFInput(e.target.checked)}
-                              disabled={perfilUsuario !== 'administrativo_dore'}
-                              className="w-5 h-5 text-blue-600 bg-white border-neutral-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:cursor-not-allowed"
-                            />
-                            <span className="text-sm font-semibold text-neutral-700">
-                              O valor do PAF já foi pago
-                            </span>
-                          </label>
-                        </div>
-                        <p className="text-[10px] text-neutral-400 mt-1">Marque este campo para indicar que a dotação financeira já foi repassada/paga.</p>
+                        <input
+                          type="text"
+                          value={cnpjCaixaAuto}
+                          readOnly
+                          placeholder="—"
+                          className="w-full px-3 py-2 text-sm border border-neutral-200 bg-neutral-100 rounded-lg font-mono text-neutral-600 cursor-default select-none"
+                        />
+                        <p className="text-[10px] text-blue-600 font-bold mt-1">
+                          {cnpjCaixaAuto ? '🔒 Preenchido automaticamente pelo CODESC.' : 'CODESC não encontrado na base.'}
+                        </p>
                       </div>
+                    </div>
+
+                    {/* Registro de Pagamentos */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                          Registro de Pagamentos
+                        </label>
+                        {perfilUsuario === 'administrativo_dore' && (
+                          <button
+                            type="button"
+                            onClick={() => setParcelasPAFInput(prev => [...prev, { id: `p_${Date.now()}`, valor: 0, dataPagamento: '', ordemPagamento: '' }])}
+                            className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition cursor-pointer border border-blue-200"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Adicionar Pagamento
+                          </button>
+                        )}
+                      </div>
+
+                      {parcelasPAFInput.length === 0 ? (
+                        <p className="text-xs text-neutral-400 italic py-2">Nenhum pagamento registrado.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {parcelasPAFInput.map((parcela, idx) => (
+                            <div key={parcela.id} className="grid grid-cols-12 gap-2 items-center bg-white border border-neutral-200 rounded-lg px-3 py-2">
+                              <span className="col-span-1 text-[10px] font-black text-neutral-400 uppercase">{idx + 1}ª</span>
+                              <div className="col-span-3">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={parcela.valor || ''}
+                                  onChange={(e) => setParcelasPAFInput(prev => prev.map(p => p.id === parcela.id ? { ...p, valor: parseFloat(e.target.value) || 0 } : p))}
+                                  disabled={perfilUsuario !== 'administrativo_dore'}
+                                  placeholder="Valor (R$)"
+                                  className="w-full px-2 py-1.5 text-xs border border-neutral-300 rounded font-mono text-neutral-800 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-neutral-50 disabled:text-neutral-400"
+                                />
+                              </div>
+                              <div className="col-span-3">
+                                <input
+                                  type="date"
+                                  value={parcela.dataPagamento}
+                                  onChange={(e) => setParcelasPAFInput(prev => prev.map(p => p.id === parcela.id ? { ...p, dataPagamento: e.target.value } : p))}
+                                  disabled={perfilUsuario !== 'administrativo_dore'}
+                                  className="w-full px-2 py-1.5 text-xs border border-neutral-300 rounded font-mono text-neutral-800 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-neutral-50 disabled:text-neutral-400"
+                                />
+                              </div>
+                              <div className="col-span-4">
+                                <input
+                                  type="text"
+                                  value={parcela.ordemPagamento || ''}
+                                  onChange={(e) => setParcelasPAFInput(prev => prev.map(p => p.id === parcela.id ? { ...p, ordemPagamento: e.target.value } : p))}
+                                  disabled={perfilUsuario !== 'administrativo_dore'}
+                                  placeholder="Nº Ordem de Pagamento (opcional)"
+                                  className="w-full px-2 py-1.5 text-xs border border-neutral-300 rounded font-mono text-neutral-800 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-neutral-50 disabled:text-neutral-400"
+                                />
+                              </div>
+                              {perfilUsuario === 'administrativo_dore' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setParcelasPAFInput(prev => prev.filter(p => p.id !== parcela.id))}
+                                  className="col-span-1 flex justify-center text-neutral-400 hover:text-rose-500 transition cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Resumo de pagamento */}
+                      {valorPAFBase > 0 && (
+                        <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-neutral-200 text-xs text-neutral-600">
+                          <span>
+                            Valor PAF: <strong className="font-mono text-neutral-800">R$ {valorPAFBase.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                          </span>
+                          <span>
+                            Total Pago: <strong className={`font-mono ${pagoPAFDerived ? 'text-emerald-700' : totalPagoPAF > 0 ? 'text-amber-700' : 'text-neutral-500'}`}>
+                              R$ {totalPagoPAF.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </strong>
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            statusPAFDerived === 'Pago e Liberado'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : statusPAFDerived === 'Pago Parcialmente'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {statusPAFDerived}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2549,9 +2664,11 @@ ${totalPendencias > 0
                       <span className={`inline-block mt-1 px-2.5 py-1 rounded-full text-xs font-bold font-sans border ${
                         solicitacao.statusPAF === 'Pago e Liberado'
                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : solicitacao.statusPAF === 'Aguardando Pagamento'
+                          : solicitacao.statusPAF === 'Pago Parcialmente'
                             ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                            : solicitacao.statusPAF === 'Aguardando Pagamento'
+                              ? 'bg-orange-50 text-orange-800 border-orange-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
                       }`}>
                         {solicitacao.statusPAF || 'Aguardando Geração'}
                       </span>

@@ -43,6 +43,7 @@ export default function ProcessAnalysisPanel({
   const [opinioesAjuste, setOpinioesAjuste] = useState<{[key: string]: string}>({});
   const [showRessalvasForm, setShowRessalvasForm] = useState(false);
   const [ressalvasTexto, setRessalvasTexto] = useState('');
+  const [modalConfirmacaoTipo, setModalConfirmacaoTipo] = useState<null | 'reprovacao' | 'ressalvas'>(null);
 
   // SRE Base Dados match helper (simulated)
   const baseDadosSimulada = [
@@ -2041,13 +2042,7 @@ export default function ProcessAnalysisPanel({
                   disabled={!ressalvasTexto.trim()}
                   onClick={() => {
                     if (!ressalvasTexto.trim()) return;
-                    const fn = enviarAprovacaoFinal || finalizarAnaliseDore;
-                    if (fn) {
-                      onUpdate({ ...solicitacao, parecerConsolidado: `[APROVADO COM RESSALVAS] ${ressalvasTexto.trim()}\n\n${solicitacao.parecerConsolidado || ''}`.trim() });
-                      setTimeout(() => fn(), 0);
-                    }
-                    setShowRessalvasForm(false);
-                    setRessalvasTexto('');
+                    setModalConfirmacaoTipo('ressalvas');
                   }}
                   className={`flex items-center gap-2 px-5 py-2 text-white text-xs font-black uppercase tracking-wide rounded-lg shadow-sm transition ${
                     ressalvasTexto.trim()
@@ -2070,7 +2065,7 @@ export default function ProcessAnalysisPanel({
               <button
                 type="button"
                 disabled={!podeDevolver}
-                onClick={podeDevolver ? (enviarReprovacaoFinal || solicitarDevolucaoProcesso) : undefined}
+                onClick={podeDevolver ? () => setModalConfirmacaoTipo('reprovacao') : undefined}
                 title={!podeDevolver ? 'Analise ao menos um item antes de devolver o processo' : 'Devolver para correção'}
                 className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
                   podeDevolver
@@ -2118,6 +2113,67 @@ export default function ProcessAnalysisPanel({
               >
                 <CheckCircle className="w-4 h-4" />
                 Enviar Aprovação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação — estilo dialog simples */}
+      {modalConfirmacaoTipo !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white border border-slate-300 shadow-xl w-80 rounded-sm overflow-hidden">
+            {/* Barra de título */}
+            <div className="flex items-center justify-between bg-[#13264d] px-3 py-2">
+              <span className="text-xs font-bold text-white">
+                {modalConfirmacaoTipo === 'reprovacao' ? 'Enviar Reprovação' : 'Aprovar com Ressalvas'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setModalConfirmacaoTipo(null)}
+                className="text-white hover:text-slate-300 text-sm font-bold leading-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            {/* Corpo */}
+            <div className="px-5 py-5">
+              <p className="text-sm text-slate-800 leading-relaxed">
+                {modalConfirmacaoTipo === 'reprovacao'
+                  ? 'Confirma o envio de reprovação do processo para correção pelo técnico responsável?'
+                  : 'Confirma a aprovação do processo com as ressalvas informadas?'}
+              </p>
+            </div>
+            {/* Botões */}
+            <div className="flex justify-end gap-2 px-4 pb-4">
+              <button
+                type="button"
+                onClick={() => setModalConfirmacaoTipo(null)}
+                className="px-6 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-sm transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (modalConfirmacaoTipo === 'reprovacao') {
+                    setModalConfirmacaoTipo(null);
+                    const fn = enviarReprovacaoFinal || solicitarDevolucaoProcesso;
+                    if (fn) fn();
+                  } else {
+                    setModalConfirmacaoTipo(null);
+                    const fn = enviarAprovacaoFinal || finalizarAnaliseDore;
+                    if (fn) {
+                      onUpdate({ ...solicitacao, parecerConsolidado: `[APROVADO COM RESSALVAS] ${ressalvasTexto.trim()}\n\n${solicitacao.parecerConsolidado || ''}`.trim() });
+                      setTimeout(() => fn(), 0);
+                    }
+                    setShowRessalvasForm(false);
+                    setRessalvasTexto('');
+                  }
+                }}
+                className="px-6 py-1.5 text-xs font-semibold text-white bg-[#13264d] hover:bg-[#1a3a6e] border border-[#13264d] rounded-sm transition cursor-pointer"
+              >
+                OK
               </button>
             </div>
           </div>

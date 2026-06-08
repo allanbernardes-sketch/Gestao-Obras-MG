@@ -781,6 +781,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           ...original,
           etapaAtual: 'execucao',
           statusObra: 'Não Iniciada',
+          cadastroObraConfirmado: true,
           classeObra,
           pontuacaoComplexidade,
           fiscalObraAtribuido,
@@ -792,10 +793,10 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           duracaoObraMeses: parseInt(duracaoMeses) || 6,
           historicoEtapas: [
             ...(original.historicoEtapas || []),
-            { 
-              etapa: 'execucao', 
-              data: new Date().toISOString().split('T')[0], 
-              responsavel: 'Gestor de Obras SGO' 
+            {
+              etapa: 'execucao',
+              data: new Date().toISOString().split('T')[0],
+              responsavel: 'Gestor de Obras SGO'
             }
           ]
         };
@@ -825,6 +826,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
         fiscalObraAtribuido,
         duracaoObraMeses: parseInt(duracaoMeses) || 6,
         statusObra: 'Não Iniciada',
+        cadastroObraConfirmado: true,
         documentos: [],
         medicoes: [],
         aditivos: [],
@@ -1598,8 +1600,11 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 font-sans">
-            {/* Col 1: Escola / Identificação */}
+          {(() => {
+            const obraCadastrada = !!(currentSol.cadastroObraConfirmado || (currentSol.fiscalObraAtribuido && currentSol.classeObra));
+            return (
+          <div className={`grid gap-6 font-sans ${obraCadastrada ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-2'}`}>
+            {/* Col 1: Escola / Identificação — sempre visível */}
             <div className="space-y-3 pb-3 md:pb-0 md:border-r border-slate-100 pr-2">
               <div>
                 <span className="text-[9.5px] text-slate-500 uppercase font-extrabold block mb-0.5 font-sans">Unidade Escolar</span>
@@ -1621,67 +1626,82 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
               </div>
             </div>
 
-            {/* Col 2: Prazos e Cronograma */}
-            <div className="space-y-3 pb-3 md:pb-0 md:border-r border-slate-100 pr-2">
-              <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider block border-b border-slate-100 pb-1">Cronograma</span>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Início Real</span>
-                  <p className="font-bold text-slate-700 font-mono text-[11px]">{currentSol.dataOrdemInicio || 'Aguardando Ordem'}</p>
-                </div>
-                <div>
-                  <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Duração</span>
-                  <p className="font-bold text-slate-700 text-[11px]">{currentSol.duracaoObraMeses || 6} Meses</p>
-                </div>
-                <div>
-                  <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Previsão Término</span>
-                  <p className="font-bold text-slate-705 font-mono text-[11px]">{currentSol.previsaoTerminoObra || '180 dias'}</p>
-                </div>
-                <div>
-                  <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Classificação</span>
-                  <p className="font-bold text-slate-705 text-[11px]">{currentSol.classeObra || 'Pequeno Porte'}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Col 3: Responsabilidades e Equipes */}
-            <div className="space-y-2.5 p-3.5 bg-slate-50/80 rounded-xl border border-slate-205/60 flex flex-col justify-between">
-              <span className="text-[9.5px] text-slate-550 font-black uppercase tracking-wider block border-b border-slate-200/50 pb-1">Responsabilidade Técnica</span>
-              <div className="space-y-1.5 text-[11px] flex-1 mt-1.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-505 animate-pulse">Fiscal Responsável:</span>
-                  <span className="font-bold text-slate-800">{currentSol.fiscalObraAtribuido || 'Não Definido'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-505 block">Complexidade:</span>
-                  <span className="font-black text-amber-600 font-sans">Grau {currentSol.pontuacaoComplexidade || 2}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-505 block truncate max-w-[100px]">Empresa:</span>
-                  <span className="font-bold text-slate-700 truncate max-w-[124px]" title={currentSol.empresaContratada || 'Construtora do Estado S.A.'}>{currentSol.empresaContratada || 'Construtora do Estado S.A.'}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Col 4: Dados Financeiros / Ação Principal */}
-            <div className="space-y-2.5 p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-110/65 flex flex-col justify-between">
-              <div>
-                <span className="text-[9.5px] text-emerald-800 font-black uppercase tracking-wider block border-b border-emerald-200/40 pb-1">Dados Financeiros Vigentes</span>
-                <div className="space-y-1.5 text-[11px] mt-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-550">Valor Homologado:</span>
-                    <span className="font-bold text-emerald-800 font-mono">
-                      R$ {(currentSol.valorHomologadoContratacao || currentSol.valorPlanilha || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-555">Dotação de PAF:</span>
-                    <span className="font-bold text-indigo-700 font-mono">{currentSol.numeroPAF || 'Não Consta'}</span>
+            {obraCadastrada ? (
+              <>
+                {/* Col 2: Prazos e Cronograma */}
+                <div className="space-y-3 pb-3 md:pb-0 md:border-r border-slate-100 pr-2">
+                  <span className="text-[10px] text-slate-500 font-black uppercase tracking-wider block border-b border-slate-100 pb-1">Cronograma</span>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Início Real</span>
+                      <p className="font-bold text-slate-700 font-mono text-[11px]">{currentSol.dataOrdemInicio || 'Aguardando Ordem'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Duração</span>
+                      <p className="font-bold text-slate-700 text-[11px]">{currentSol.duracaoObraMeses ? `${currentSol.duracaoObraMeses} Meses` : '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Previsão Término</span>
+                      <p className="font-bold text-slate-705 font-mono text-[11px]">{currentSol.previsaoTerminoObra || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[8.5px] text-slate-405 uppercase block font-bold">Classificação</span>
+                      <p className="font-bold text-slate-705 text-[11px]">{currentSol.classeObra || '—'}</p>
+                    </div>
                   </div>
                 </div>
+
+                {/* Col 3: Responsabilidades e Equipes */}
+                <div className="space-y-2.5 p-3.5 bg-slate-50/80 rounded-xl border border-slate-205/60 flex flex-col justify-between">
+                  <span className="text-[9.5px] text-slate-550 font-black uppercase tracking-wider block border-b border-slate-200/50 pb-1">Responsabilidade Técnica</span>
+                  <div className="space-y-1.5 text-[11px] flex-1 mt-1.5">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-505">Fiscal Responsável:</span>
+                      <span className="font-bold text-slate-800">{currentSol.fiscalObraAtribuido || 'Não Definido'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-505 block">Complexidade:</span>
+                      <span className="font-black text-amber-600 font-sans">{currentSol.pontuacaoComplexidade ? `Grau ${currentSol.pontuacaoComplexidade}` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-505 block truncate max-w-[100px]">Empresa:</span>
+                      <span className="font-bold text-slate-700 truncate max-w-[124px]" title={currentSol.empresaContratada || '—'}>{currentSol.empresaContratada || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Col 4: Dados Financeiros */}
+                <div className="space-y-2.5 p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-110/65 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[9.5px] text-emerald-800 font-black uppercase tracking-wider block border-b border-emerald-200/40 pb-1">Dados Financeiros Vigentes</span>
+                    <div className="space-y-1.5 text-[11px] mt-1.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-550">Valor Homologado:</span>
+                        <span className="font-bold text-emerald-800 font-mono">
+                          {currentSol.valorHomologadoContratacao
+                            ? `R$ ${currentSol.valorHomologadoContratacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                            : '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-555">Dotação de PAF:</span>
+                        <span className="font-bold text-indigo-700 font-mono">{currentSol.numeroPAF || 'Não Consta'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Placeholder quando obra ainda não foi cadastrada */
+              <div className="md:col-span-1 flex flex-col items-center justify-center gap-2 p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                <AlertCircle className="w-6 h-6 text-amber-500" />
+                <p className="text-xs font-black text-amber-800 uppercase tracking-wide">Obra não cadastrada</p>
+                <p className="text-[10px] text-amber-700 leading-relaxed">Preencha os dados no formulário acima e clique em <strong>Cadastrar Obra</strong> para registrar o cronograma, fiscal e informações financeiras.</p>
               </div>
-            </div>
+            )}
           </div>
+          );
+          })()}
         </div>
       ) : (
         <div id="ficha-placeholder-card" className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-6 text-center text-slate-400 transition animate-fadeIn">
@@ -1759,9 +1779,11 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
   const _contratoAtual = currentSol.contratoValorInicial || currentSol.valorHomologadoContratacao || currentSol.valorPlanilha || 1;
   const _valorExecAtual = _medEmpresaAtual.reduce((s, m) => s + m.valor, 0);
   const _valorExecAnteriores = (currentSol.empresasAnteriores || []).reduce((s, e) => s + (e.valorExecutado ?? 0), 0);
-  const _contratoAnteriores = (currentSol.empresasAnteriores || []).reduce((s, e) => s + (e.contratoValorInicial ?? 0), 0);
   const sumMedicoes = _valorExecAnteriores + _valorExecAtual;
-  const originalBudget = _contratoAnteriores + _contratoAtual;
+  // Orçamento fixo da obra (PAF) — não soma contratos, pois cada nova empresa contrata pelo saldo restante
+  const originalBudget = currentSol.valorPlanilha || currentSol.valorHomologado
+    || (currentSol.empresasAnteriores?.[0]?.contratoValorInicial ?? 0)
+    || _contratoAtual;
   const safePercent = originalBudget > 0 ? Math.min(100, Math.max(0, (sumMedicoes / originalBudget) * 100)) : 0;
   // Avanço da empresa atual individualmente
   const _fisicoEmpresaAtual = _contratoAtual > 0 ? Math.min(100, (_valorExecAtual / _contratoAtual) * 100) : 0;
@@ -2121,19 +2143,29 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                       )}
 
                       {isParalisada && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onUpdate({ ...currentSol, statusObra: 'Em Andamento', justificativaParalizacao: undefined, dataParalizacao: undefined });
-                            setMostrarParalisacao(false);
-                            setJustificativaParalisacao('');
-                            setDataParalisacao('');
-                          }}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black border-2 border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition-all cursor-pointer"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          Retomar execução da obra
-                        </button>
+                        currentSol.statusContratoEmpresa === 'Distratada' ? (
+                          <div className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border-2 border-amber-300 bg-amber-50 text-xs text-amber-800">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                            <div>
+                              <p className="font-black uppercase tracking-wide mb-0.5">Retomada bloqueada — contrato distratado</p>
+                              <p className="font-normal leading-relaxed">Para retomar a execução é necessário: <strong>1.</strong> Cadastrar nova empresa na aba Contratos; <strong>2.</strong> Emitir nova Ordem de Início.</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onUpdate({ ...currentSol, statusObra: 'Em Andamento', justificativaParalizacao: undefined, dataParalizacao: undefined });
+                              setMostrarParalisacao(false);
+                              setJustificativaParalisacao('');
+                              setDataParalisacao('');
+                            }}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black border-2 border-blue-300 bg-white text-blue-700 hover:bg-blue-50 transition-all cursor-pointer"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Retomar execução da obra
+                          </button>
+                        )
                       )}
 
                       {/* Seção Paralisação Temporária */}
@@ -2502,6 +2534,26 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
             </div>
           </div>
 
+          {/* Bloqueio quando contrato distratado */}
+          {currentSol.statusContratoEmpresa === 'Distratada' ? (
+            <div className="flex items-start gap-4 p-5 bg-slate-50 border-2 border-slate-200 rounded-2xl">
+              <div className="p-2.5 bg-slate-200 rounded-xl shrink-0">
+                <Lock className="w-5 h-5 text-slate-500" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-black text-slate-700 uppercase tracking-wide">Ordem de Início bloqueada</p>
+                <p className="text-xs text-slate-500 font-sans leading-relaxed">
+                  A Ordem de Início da empresa anterior está encerrada e não pode ser editada após o distrato contratual.
+                  Para emitir uma nova Ordem de Início, cadastre uma nova empresa na aba <strong>Contratos</strong>.
+                </p>
+                {currentSol.dataOrdemInicio && (
+                  <p className="text-[10px] text-slate-400 font-mono mt-2">
+                    Ordem anterior emitida em: {new Date(currentSol.dataOrdemInicio).toLocaleDateString('pt-BR')}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs space-y-6">
 
             {/* Data da Ordem de Início */}
@@ -2780,6 +2832,81 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
             </div>
 
           </div>
+          )} {/* fim do ternário distratada/não-distratada */}
+
+          {/* Histórico de Ordens de Início anteriores (empresas distratadas) */}
+          {(currentSol.empresasAnteriores || []).filter(e => e.dataOrdemInicio).length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5" />
+                Histórico de Ordens de Início Anteriores
+              </h4>
+              {(currentSol.empresasAnteriores || []).filter(e => e.dataOrdemInicio).map((emp, idx) => (
+                <div key={emp.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">
+                        {idx + 1}ª Empresa — {emp.nome || emp.cnpj || 'Empresa anterior'}
+                      </span>
+                    </div>
+                    <span className="px-2.5 py-1 text-[10px] font-black uppercase tracking-wide rounded-full bg-rose-100 text-rose-700 border border-rose-200">
+                      Distratada
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block">Data Ordem de Início</span>
+                      <p className="font-mono font-bold text-slate-700">
+                        {emp.dataOrdemInicio ? new Date(emp.dataOrdemInicio).toLocaleDateString('pt-BR') : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block">Fiscal</span>
+                      <p className="font-bold text-slate-700">{emp.fiscalObraAtribuido || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block">Duração Contratada</span>
+                      <p className="font-bold text-slate-700">{emp.duracaoObraMeses ? `${emp.duracaoObraMeses} meses` : '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block">Data do Distrato</span>
+                      <p className="font-mono font-bold text-rose-700">
+                        {emp.dataDistrato ? new Date(emp.dataDistrato).toLocaleDateString('pt-BR') : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  {(emp.ataOrdemInicioFileName || emp.cronogramaFisicoFinanceiroFileName || (emp.outrosAnexosOrdemInicio || []).length > 0) && (
+                    <div className="pt-2 border-t border-slate-200 space-y-1.5">
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block">Documentos Anexados</span>
+                      <div className="flex flex-wrap gap-2">
+                        {emp.ataOrdemInicioFileName && (
+                          <span className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
+                            <FileText className="w-3 h-3 text-blue-400 shrink-0" />
+                            {emp.ataOrdemInicioFileName}
+                            {emp.ataOrdemInicioFileSize && <span className="text-slate-400 ml-0.5">({emp.ataOrdemInicioFileSize})</span>}
+                          </span>
+                        )}
+                        {emp.cronogramaFisicoFinanceiroFileName && (
+                          <span className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
+                            <FileText className="w-3 h-3 text-indigo-400 shrink-0" />
+                            {emp.cronogramaFisicoFinanceiroFileName}
+                            {emp.cronogramaFisicoFinanceiroFileSize && <span className="text-slate-400 ml-0.5">({emp.cronogramaFisicoFinanceiroFileSize})</span>}
+                          </span>
+                        )}
+                        {(emp.outrosAnexosOrdemInicio || []).filter(a => a.fileName).map(a => (
+                          <span key={a.id} className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
+                            <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
+                            {a.fileName}
+                            {a.fileSize && <span className="text-slate-400 ml-0.5">({a.fileSize})</span>}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -3257,13 +3384,13 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
   const valorExecutadoAnteriores = (currentSol.empresasAnteriores || []).reduce(
     (sum, e) => sum + (e.valorExecutado ?? 0), 0
   );
-  const contratoTotalAnteriores = (currentSol.empresasAnteriores || []).reduce(
-    (sum, e) => sum + (e.contratoValorInicial ?? 0), 0
-  );
-
   // Totais da obra (todas as empresas)
   const sumMedicoes = valorExecutadoAnteriores + sumMedicoesEmpresaAtual;
-  const originalBudget = contratoTotalAnteriores + contratoEmpresaAtual;
+  // Orçamento fixo da obra (PAF) — não soma contratos, pois cada nova empresa contrata pelo saldo restante
+  // Ex: PAF=250k, Emp1 executa 50k e distratos, Emp2 contrata 200k (saldo). Total obra = 250k.
+  const originalBudget = currentSol.valorPlanilha || currentSol.valorHomologado
+    || (currentSol.empresasAnteriores?.[0]?.contratoValorInicial ?? 0)
+    || contratoEmpresaAtual;
   const leftOver = restanteEmpresaAtual;
 
   // Avanço físico — empresa atual (base: contrato desta empresa)
@@ -3271,9 +3398,8 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
     ? Math.min(100, (sumMedicoesEmpresaAtual / contratoEmpresaAtual) * 100)
     : 0;
 
-  // Avanço físico acumulado da obra (base monetária: total executado / total contratado)
-  // Exemplo: Emp1 executou R$400k de R$1M (40%) + Emp2 executou R$300k de R$600k (50%)
-  //          Acumulado = (400k+300k)/(1M+600k) = 43,75%
+  // Avanço físico acumulado da obra (base: orçamento PAF fixo)
+  // Ex: PAF=250k, executado total=50k → 50k/250k = 20%
   const percentualFisicoAcumulado = originalBudget > 0
     ? Math.min(100, (sumMedicoes / originalBudget) * 100)
     : 0;
@@ -3334,8 +3460,17 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
       return;
     }
 
-    if (!valorM || !descricaoM || !numeroM || !periodoMInicio || !periodoMFim || !dataM || !responsavelM) {
-      setErrorMessage('Por favor, preencha todos os campos obrigatórios (*).');
+    const responsavelFinal = responsavelM || currentSol.fiscalObraAtribuido || '';
+    const camposFaltando: string[] = [];
+    if (!valorM) camposFaltando.push('Valor Medido');
+    if (!descricaoM) camposFaltando.push('Descrição');
+    if (!numeroM) camposFaltando.push('Número da Medição');
+    if (!periodoMInicio) camposFaltando.push('Período (início)');
+    if (!periodoMFim) camposFaltando.push('Período (fim)');
+    if (!dataM) camposFaltando.push('Data');
+    if (!responsavelFinal) camposFaltando.push('Responsável (defina o fiscal na aba Cadastro de Obras)');
+    if (camposFaltando.length > 0) {
+      setErrorMessage(`Campos obrigatórios não preenchidos: ${camposFaltando.join(' · ')}.`);
       return;
     }
 
@@ -3372,7 +3507,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
       empresaCnpj: currentSol.cnpjEmpresa || '01.242.000/0001-33',
       numeroMedicao: numeroM,
       periodoMedicao: `${new Date(periodoMInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(periodoMFim + 'T12:00:00').toLocaleDateString('pt-BR')}`,
-      responsavelMedicao: responsavelM,
+      responsavelMedicao: responsavelFinal,
       observacoes: observacoesM,
       porcentagemFisica: pFisica,
       relatorioFiscalizacaoFileName: relatorioFileName,
@@ -3918,7 +4053,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
             <div className="bg-slate-50 p-3 rounded-xl text-[10.5px] font-mono shadow-inner text-slate-600 block space-y-1 border border-slate-200">
               <span className="font-extrabold text-slate-700 block border-b border-slate-200 pb-1 uppercase text-[9px] tracking-wider">Detalhamento dos Limites</span>
               <div className="flex justify-between">
-                <span>Contrato Total:</span>
+                <span>Total da Obra (PAF):</span>
                 <span className="font-bold text-slate-700">R$ {originalBudget.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="flex justify-between">
@@ -4383,6 +4518,13 @@ function SubContratos({
         cadastroObraConfirmado: false,
         classeObra: undefined,
         pontuacaoComplexidade: undefined,
+        ataOrdemInicioFileName: undefined,
+        ataOrdemInicioFileSize: undefined,
+        ataOrdemInicioUploadedAt: undefined,
+        outrosAnexosOrdemInicio: undefined,
+        cronogramaFisicoFinanceiroFileName: undefined,
+        cronogramaFisicoFinanceiroFileSize: undefined,
+        cronogramaFisicoFinanceiroUploadedAt: undefined,
       } : {}),
     };
 
@@ -5315,10 +5457,15 @@ function SubContratos({
                       avancoFisicoOriginal: avancoFisico,
                       fiscalObraAtribuido: currentSol.fiscalObraAtribuido,
                       dataOrdemInicio: currentSol.dataOrdemInicio,
+                      ataOrdemInicioFileName: currentSol.ataOrdemInicioFileName,
+                      ataOrdemInicioFileSize: currentSol.ataOrdemInicioFileSize,
+                      outrosAnexosOrdemInicio: currentSol.outrosAnexosOrdemInicio,
                       previsaoTerminoObra: currentSol.previsaoTerminoObra,
                       duracaoObraMeses: currentSol.duracaoObraMeses,
                       classeObra: currentSol.classeObra,
                       pontuacaoComplexidade: currentSol.pontuacaoComplexidade,
+                      cronogramaFisicoFinanceiroFileName: currentSol.cronogramaFisicoFinanceiroFileName,
+                      cronogramaFisicoFinanceiroFileSize: currentSol.cronogramaFisicoFinanceiroFileSize,
                       dataDistrato: distratoData,
                       justificativaDistrato: distratoJustificativa,
                       documentoDistratoFileName: distratoFile?.name,

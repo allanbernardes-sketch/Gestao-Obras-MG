@@ -84,6 +84,13 @@ export interface AjustePlanilha {
   checklistDocs?: { item: string; checked: boolean }[];
 }
 
+export interface ParcelaPAF {
+  id: string;
+  valor: number;
+  dataPagamento: string;
+  ordemPagamento?: string;
+}
+
 export interface Solicitacao {
   id: string;
   nomeEscola: string;
@@ -105,6 +112,8 @@ export interface Solicitacao {
   dataVigenciaPAF?: string;
   dataFinHomologacao?: string;
   pago?: boolean;
+  parcelasPAF?: ParcelaPAF[];
+  cnpjCaixaEscolar?: string;
 
   // Novos campos do formulário
   codigoEndereco?: string;
@@ -159,6 +168,9 @@ export interface Solicitacao {
     contratoValorInicial?: number;
     valorExecutado?: number;
     dataOrdemInicio?: string;
+    ataOrdemInicioFileName?: string;
+    ataOrdemInicioFileSize?: string;
+    outrosAnexosOrdemInicio?: { id: string; nome: string; fileName?: string; fileSize?: string; uploadedAt?: string }[];
     previsaoTerminoObra?: string;
     valorHomologadoContratacao?: number;
     cronogramaFisicoFinanceiroFileName?: string;
@@ -188,7 +200,7 @@ export interface Solicitacao {
     motivos: { label: string; campo: string; motivo: string }[];
     docsRecusados: { nome: string; id: string; justificativa: string }[];
   }[];
-  statusPAF?: 'Aguardando Geração' | 'Aguardando Pagamento' | 'Pago e Liberado';
+  statusPAF?: 'Aguardando Geração' | 'Aguardando Pagamento' | 'Pago Parcialmente' | 'Pago e Liberado';
 
   // Campos específicos da Ordem de Início (Atividade 4 / Novo status)
   dataOrdemInicio?: string;
