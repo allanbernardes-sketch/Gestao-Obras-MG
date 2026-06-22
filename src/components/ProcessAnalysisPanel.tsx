@@ -20,6 +20,7 @@ interface ProcessAnalysisPanelProps {
   removerDocumento: (docId: string) => void;
   enviarAprovacaoFinal?: () => void;
   enviarReprovacaoFinal?: () => void;
+  somenteLeitura?: boolean;
 }
 
 export default function ProcessAnalysisPanel({
@@ -35,7 +36,8 @@ export default function ProcessAnalysisPanel({
   handleAISmartAnalysis,
   removerDocumento,
   enviarAprovacaoFinal,
-  enviarReprovacaoFinal
+  enviarReprovacaoFinal,
+  somenteLeitura = false
 }: ProcessAnalysisPanelProps) {
   const [subTab, setSubTab] = useState<'dados_gerais' | 'checklist'>('dados_gerais');
   const [novoCustomDocNome, setNovoCustomDocNome] = useState('');
@@ -2071,13 +2073,6 @@ export default function ProcessAnalysisPanel({
                               </span>
                               <button
                                 type="button"
-                                onClick={() => handleSimulatedUploadCustomOther(doc.id)}
-                                className="px-2.5 py-1 border border-slate-300 text-slate-700 hover:bg-slate-50 text-[10.5px] font-bold rounded-lg cursor-pointer"
-                              >
-                                Simular Envio
-                              </button>
-                              <button
-                                type="button"
                                 onClick={() => handleRemoveCustomOtherDoc(doc.id)}
                                 className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded transition cursor-pointer"
                                 title="Excluir campo"
@@ -2209,42 +2204,44 @@ export default function ProcessAnalysisPanel({
             <p className="text-[11px] text-slate-500 font-sans max-w-sm leading-relaxed">
               Ação final para o processo <strong className="text-slate-700">{solicitacao.id}</strong> — {solicitacao.nomeEscola}.
             </p>
-            <div className="flex items-center gap-3 shrink-0">
-              <button
-                type="button"
-                disabled={!podeDevolver}
-                onClick={podeDevolver ? (enviarReprovacaoFinal || solicitarDevolucaoProcesso) : undefined}
-                title={!podeDevolver ? 'Analise ao menos um item antes de devolver o processo' : 'Devolver para correção'}
-                className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
-                  podeDevolver
-                    ? 'bg-rose-600 hover:bg-rose-700 cursor-pointer'
-                    : 'bg-slate-300 cursor-not-allowed opacity-60'
-                }`}
-              >
-                <XCircle className="w-4 h-4" />
-                Enviar Reprovação
-              </button>
-              <button
-                type="button"
-                disabled={!podeAprovar}
-                onClick={podeAprovar ? (enviarAprovacaoFinal || finalizarAnaliseDore) : undefined}
-                title={
-                  !hasStartedReview ? 'Analise o processo antes de enviar aprovação' :
-                  docPendentes > 0 ? `Há ${docPendentes} documento(s) pendente(s) de análise` :
-                  camposPendentes > 0 ? `Há ${camposPendentes} campo(s) sem validação` :
-                  hasRejections ? 'Existem itens recusados — só é possível devolver para correção' :
-                  'Enviar aprovação'
-                }
-                className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
-                  podeAprovar
-                    ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
-                    : 'bg-slate-300 cursor-not-allowed opacity-60'
-                }`}
-              >
-                <CheckCircle className="w-4 h-4" />
-                Enviar Aprovação
-              </button>
-            </div>
+            {!somenteLeitura && (
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  disabled={!podeDevolver}
+                  onClick={podeDevolver ? (enviarReprovacaoFinal || solicitarDevolucaoProcesso) : undefined}
+                  title={!podeDevolver ? 'Analise ao menos um item antes de devolver o processo' : 'Devolver para correção'}
+                  className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
+                    podeDevolver
+                      ? 'bg-rose-600 hover:bg-rose-700 cursor-pointer'
+                      : 'bg-slate-300 cursor-not-allowed opacity-60'
+                  }`}
+                >
+                  <XCircle className="w-4 h-4" />
+                  Enviar Reprovação
+                </button>
+                <button
+                  type="button"
+                  disabled={!podeAprovar}
+                  onClick={podeAprovar ? (enviarAprovacaoFinal || finalizarAnaliseDore) : undefined}
+                  title={
+                    !hasStartedReview ? 'Analise o processo antes de enviar aprovação' :
+                    docPendentes > 0 ? `Há ${docPendentes} documento(s) pendente(s) de análise` :
+                    camposPendentes > 0 ? `Há ${camposPendentes} campo(s) sem validação` :
+                    hasRejections ? 'Existem itens recusados — só é possível devolver para correção' :
+                    'Enviar aprovação'
+                  }
+                  className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
+                    podeAprovar
+                      ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
+                      : 'bg-slate-300 cursor-not-allowed opacity-60'
+                  }`}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Enviar Aprovação
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

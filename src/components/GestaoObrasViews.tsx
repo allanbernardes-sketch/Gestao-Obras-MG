@@ -1128,21 +1128,6 @@ export function NovoAtendimentoPanel({
             </div>
           </div>
 
-          {/* Checklist header control shortcut */}
-          <div className="flex items-center justify-between p-3.5 mb-6 bg-blue-50/50 border border-blue-100 rounded-xl">
-            <div className="text-left">
-              <h4 className="text-xs font-extrabold text-blue-900 font-sans">Facilitador de Cadastro</h4>
-              <p className="text-[10.5px] text-blue-750 font-medium">Anexe arquivos de seu dispositivo ou utilize a simulação de carga rápida de documentos para agilizar o teste.</p>
-            </div>
-            <button
-              type="button"
-              onClick={handleAnexarTodosControle}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-lg transition-all cursor-pointer shadow-3xs"
-            >
-              Simular Carga de Todos
-            </button>
-          </div>
-
           {/* List of checklist documents inside step 2 (Categorized) */}
           <div className="space-y-6">
             
@@ -1218,15 +1203,6 @@ export function NovoAtendimentoPanel({
                             <span>{isUploaded ? 'Substituir' : 'Anexar'}</span>
                           </button>
 
-                          {!isUploaded && (
-                            <button
-                              type="button"
-                              onClick={() => handleSimularUploadDocChecklist(doc.id, `doc_analise_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`)}
-                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
-                            >
-                              Simular
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1307,15 +1283,6 @@ export function NovoAtendimentoPanel({
                             <span>{isUploaded ? 'Substituir' : 'Anexar'}</span>
                           </button>
 
-                          {!isUploaded && (
-                            <button
-                              type="button"
-                              onClick={() => handleSimularUploadDocChecklist(doc.id, `doc_analise_${doc.nome.toLowerCase().replace(/\s+/g, '_')}_v1.pdf`)}
-                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
-                            >
-                              Simular
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1421,16 +1388,6 @@ export function NovoAtendimentoPanel({
                               <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
                               <span>{isUploaded ? 'Substituir' : 'Anexar'}</span>
                             </button>
-
-                            {!isUploaded && (
-                              <button
-                                type="button"
-                                onClick={() => handleSimularUploadCustomDocStep2(doc.id)}
-                                className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-150 rounded-lg text-[10.5px] font-bold transition whitespace-nowrap cursor-pointer"
-                              >
-                                Simular
-                              </button>
-                            )}
 
                             {!isUploaded && (
                               <button
@@ -1952,7 +1909,7 @@ export function NovoAtendimentoPanel({
                 Continuação da Instrução: Checklist de Documentos Exigidos
               </h4>
               <p className="text-[11px] text-slate-500 mb-3">
-                Determine se os pareceres, projetos e planilhas exigidas estão pendentes ou simule uploads automáticos para agilizar a validação técnica.
+                Determine se os pareceres, projetos e planilhas exigidas estão pendentes e anexe os arquivos necessários para a validação técnica.
               </p>
 
               <div className="space-y-2.5">
@@ -2733,7 +2690,7 @@ export function AtribuicaoPanel({
                   : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
               }`}
             >
-              Minhas Demandas Designadas (Eng. André / Flávia)
+              Minhas Demandas Designadas
             </button>
             <button
               type="button"

@@ -11,7 +11,7 @@ const USUARIOS_DEMO = [
   { email: 'joao.paulo@sre.mg.gov.br',         senha: 'sgo@2026', perfil: 'tecnico_infra' as PerfilUsuario,     nome: 'João Paulo Penfield',  cargo: 'Técnico de Infraestrutura (SRE)' },
   { email: 'aline.davino@educacao.mg.gov.br',  senha: 'sgo@2026', perfil: 'gestor_dore' as PerfilUsuario,       nome: 'Aline Davino',         cargo: 'Gestor Atendimento (DORE)' },
   { email: 'flavia.borges@educacao.mg.gov.br', senha: 'sgo@2026', perfil: 'analista_dore' as PerfilUsuario,     nome: 'Flavia Borges',        cargo: 'Analista de Engenharia (DORE)' },
-  { email: 'silas.fagundes@paf.mg.gov.br',     senha: 'sgo@2026', perfil: 'gestor_paf' as PerfilUsuario,        nome: 'Silas Fagundes',       cargo: 'Gestor Geral (PAF)' },
+  { email: 'silas.fagundes@paf.mg.gov.br',     senha: 'sgo@2026', perfil: 'gestor_paf' as PerfilUsuario,        nome: 'Silas Fagundes',       cargo: 'Subsecretário de Administração' },
   { email: 'rui.lages@educacao.mg.gov.br',     senha: 'sgo@2026', perfil: 'administrativo_dore' as PerfilUsuario, nome: 'Rui Lages',          cargo: 'Administrativo DORE' },
 ];
 

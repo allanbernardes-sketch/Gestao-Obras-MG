@@ -130,6 +130,7 @@ interface SolicitacaoDetalhesProps {
   hideTabs?: boolean;
   activeSubTask?: string;
   usuariosSeguranca?: UsuarioSistema[];
+  somenteLeitura?: boolean;
 }
 
 export default function SolicitacaoDetalhes({
@@ -143,7 +144,8 @@ export default function SolicitacaoDetalhes({
   hideTransitionButtons = false,
   hideTabs = false,
   activeSubTask,
-  usuariosSeguranca = []
+  usuariosSeguranca = [],
+  somenteLeitura = false
 }: SolicitacaoDetalhesProps) {
   const analistas = usuariosSeguranca.filter(u => u.perfil === 'analista_dore');
   const fiscais = usuariosSeguranca.filter(u => u.perfil === 'tecnico_infra' || u.perfil === 'tecnico_infra');
@@ -1888,6 +1890,7 @@ ${totalPendencias > 0
             removerDocumento={removerDocumento}
             enviarAprovacaoFinal={enviarAprovacaoFinal}
             enviarReprovacaoFinal={enviarReprovacaoFinal}
+            somenteLeitura={somenteLeitura}
           />
         )}
 
@@ -5112,17 +5115,6 @@ ${totalPendencias > 0
 
                                       {/* Document operations */}
                                       <div className="shrink-0 flex items-center gap-2">
-                                        {/* File Simulation Button for Contractor */}
-                                        {(perfilUsuario === 'tecnico_infra') && doc.status !== 'aprovado' && (
-                                          <button
-                                            type="button"
-                                            onClick={() => anexarDocumentoAditivo(adt.id, doc.id, `parecer_aditivo_${doc.id}_v1.pdf`)}
-                                            className="px-2.5 py-1 bg-white border border-neutral-300 rounded text-[11px] hover:bg-neutral-50 cursor-pointer font-semibold"
-                                          >
-                                            Simular Upload
-                                          </button>
-                                        )}
-
                                         {/* Audit actions for assigned analysts */}
                                         {doc.status === 'pendente' && doc.fileName && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
                                           <div className="flex items-center gap-1.5">

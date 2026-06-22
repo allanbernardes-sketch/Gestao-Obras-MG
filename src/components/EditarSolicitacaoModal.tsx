@@ -658,7 +658,7 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
               <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-150 rounded-xl mb-4">
                 <div className="text-left">
                   <p className="text-xs font-extrabold text-blue-900">Gerenciamento Técnico de Anexos</p>
-                  <p className="text-[10.5px] text-blue-700">Edite o status de cada peça documental e anexe arquivos simulados ou reais no banco local.</p>
+                  <p className="text-[10.5px] text-blue-700">Edite o status de cada peça documental e anexe os arquivos no banco local.</p>
                 </div>
                 <button
                   type="button"
@@ -756,15 +756,6 @@ export default function EditarSolicitacaoModal({ solicitacao, onClose, onSave }:
                             <span>{isUploaded ? 'Substituir' : 'Anexar'}</span>
                           </button>
 
-                          {!isUploaded && (
-                            <button
-                              type="button"
-                              onClick={() => handleSimularUploadDoc(doc.id, `doc_analise_rev_${doc.nome.toLowerCase().replace(/\s+/g, '_')}.pdf`)}
-                              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-150 rounded-lg text-[10px] font-bold"
-                            >
-                              Auto-Simular
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>

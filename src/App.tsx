@@ -64,7 +64,7 @@ export default function App() {
               perfilUsuario === 'tecnico_infra' ? 'Técnico de Infraestrutura SRE' :
               perfilUsuario === 'gestor_dore' ? 'Gestor Atendimento DORE' :
               perfilUsuario === 'analista_dore' ? 'Analista de Engenharia DORE' :
-              perfilUsuario === 'gestor_paf' ? 'Gestor Geral (PAF)' :
+              perfilUsuario === 'gestor_paf' ? 'Subsecretário de Administração' :
               perfilUsuario === 'administrativo_dore' ? 'Administrativo DORE' : 'Operador',
       acao,
       detalhe,
@@ -268,7 +268,7 @@ export default function App() {
         case 'tecnico_infra': return 'Técnico de Infraestrutura (SRE)';
         case 'gestor_dore': return 'Gestor Atendimento (DORE)';
         case 'analista_dore': return 'Analista de Engenharia (DORE)';
-        case 'gestor_paf': return 'Gestor Geral (PAF)';
+        case 'gestor_paf': return 'Subsecretário de Administração';
         case 'administrativo_dore': return 'Administrativo DORE';
         case 'admin': return 'Administrador do Sistema';
         default: return perfil;
@@ -989,7 +989,9 @@ export default function App() {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  const somenteLeitura = perfilUsuario === 'administrativo_dore' && activeSubTask !== 'paf';
+  const somenteLeitura =
+    (perfilUsuario === 'administrativo_dore' && activeSubTask !== 'paf') ||
+    (perfilUsuario === 'gestor_paf' && activeSubTask !== 'paf_autorizacao');
 
   // Find currently open solicitação
   const solicitacaoAberta = solicitacoes.find(s => s.id === idSolicitacaoSelecionada) || null;
@@ -1140,7 +1142,7 @@ export default function App() {
                   {perfilUsuario === 'tecnico_infra' && 'Técnico de Infraestrutura (SRE)'}
                   {perfilUsuario === 'gestor_dore' && 'Gestor Atendimento (DORE)'}
                   {perfilUsuario === 'analista_dore' && 'Analista de Engenharia (DORE)'}
-                  {perfilUsuario === 'gestor_paf' && 'Gestor Geral (PAF)'}
+                  {perfilUsuario === 'gestor_paf' && 'Subsecretário de Administração'}
                   {perfilUsuario === 'administrativo_dore' && 'Administrativo DORE'}
                 </p>
               </div>
@@ -1189,7 +1191,7 @@ export default function App() {
 
           {/* 2. SEGURANÇA */}
           {(() => {
-            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra';
+            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 type="button"
@@ -1211,7 +1213,7 @@ export default function App() {
 
           {/* 3. ORÇAMENTO */}
           {(() => {
-            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra';
+            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 type="button"
@@ -1233,7 +1235,7 @@ export default function App() {
 
           {/* 4. IMÓVEIS */}
           {(() => {
-            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore';
+            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 type="button"
@@ -1255,7 +1257,7 @@ export default function App() {
 
           {/* 5. ABERTURA DE CHAMADOS */}
           {(() => {
-            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore';
+            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 type="button"
@@ -1276,25 +1278,30 @@ export default function App() {
           })()}
 
           {/* 6. LOG DO SISTEMA — somente gestores */}
-          {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
-            <button
-              type="button"
-              title="Log do Sistema & Auditoria"
-              onClick={() => {
-                setActiveModule('central_logs');
-                setActiveSubTask('visao_geral');
-                setIdSolicitacaoSelecionada(null);
-              }}
-              className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
-                activeModule === 'central_logs'
-                  ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-                  : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
-              }`}
-            >
-              <FileClock className="w-4 h-4 flex-shrink-0" />
-              <span className="text-[8px] font-bold tracking-tight">Logs</span>
-            </button>
-          )}
+          {(() => {
+            const bloqueado = !(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin');
+            return (
+              <button
+                type="button"
+                title={bloqueado ? 'Acesso restrito para este perfil' : 'Log do Sistema & Auditoria'}
+                onClick={bloqueado ? undefined : () => {
+                  setActiveModule('central_logs');
+                  setActiveSubTask('visao_geral');
+                  setIdSolicitacaoSelecionada(null);
+                }}
+                className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border ${
+                  bloqueado
+                    ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
+                    : activeModule === 'central_logs'
+                      ? 'bg-blue-600 text-white border-blue-500 shadow-md cursor-pointer'
+                      : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white cursor-pointer'
+                }`}
+              >
+                <FileClock className="w-4 h-4 flex-shrink-0" />
+                <span className="text-[8px] font-bold tracking-tight">Logs</span>
+              </button>
+            );
+          })()}
 
           <div className="mt-auto border-t border-slate-550/35 pt-4 w-10 flex flex-col items-center">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="SGO Online" />
@@ -1357,7 +1364,7 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'administrativo_dore' && item.id === 'novo_atendimento';
+                        const bloqueado = (perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && item.id === 'novo_atendimento';
                         return (
                           <button
                             key={item.id}
@@ -1415,7 +1422,7 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'administrativo_dore' && item.id === 'analise');
+                        const bloqueado = perfilUsuario === 'tecnico_infra' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && item.id === 'analise');
                         return (
                           <button
                             key={item.id}
@@ -1642,7 +1649,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'seguranca' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && (
+          {activeModule === 'seguranca' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-rose-600 uppercase tracking-widest block font-sans">
@@ -1688,7 +1695,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && (
+          {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-amber-600 uppercase tracking-widest block font-sans">Módulo Ativo</span>
@@ -1799,7 +1806,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && (
+          {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-teal-600 uppercase tracking-widest block font-sans">
@@ -1848,7 +1855,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && (
+          {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-purple-600 uppercase tracking-widest block font-sans">
@@ -2096,8 +2103,8 @@ export default function App() {
                     <div className="p-4 bg-amber-50 border border-amber-205 text-neutral-900 rounded-xl text-xs space-y-1.5 text-left font-sans flex items-start gap-2.5">
                       <span className="text-base select-none leading-none mt-0.5">⚠️</span>
                       <div className="space-y-0.5">
-                        <strong className="font-extrabold block text-amber-950">Ação Restrita: Controle Exclusivo do Gestor Geral (PAF)</strong>
-                        <span>O seu perfil de simulação atual é <strong>{perfilUsuario.toUpperCase()}</strong>. Para avaliar, autorizar ou rejeitar as dotações orçamentárias do PAF nesta Etapa 3, por favor mude seu perfil para <strong>Silas Fagundes (Gestor Geral (PAF))</strong> no seletor de usuário (canto superior direito).</span>
+                        <strong className="font-extrabold block text-amber-950">Ação Restrita: Controle Exclusivo do Subsecretário de Administração</strong>
+                        <span>O seu perfil atual é <strong>{perfilUsuario.toUpperCase()}</strong>. Para avaliar, autorizar ou rejeitar as dotações orçamentárias do PAF nesta Etapa 3, por favor mude seu perfil para <strong>Silas Fagundes (Subsecretário de Administração)</strong> no seletor de usuário (canto superior direito).</span>
                       </div>
                     </div>
                   )}
@@ -2212,7 +2219,7 @@ export default function App() {
                                     ) : (
                                       <div className="text-center font-sans">
                                         <span className="text-[10px] font-extrabold text-slate-400 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1 inline-flex items-center gap-1 select-none" title="Apenas o Gestor Geral Silas Fagundes possui dotação oficial para autorizar PAF nesta Etapa 3.">
-                                          🔒 Apenas Gestor Geral (PAF)
+                                          🔒 Apenas Subsecretário de Administração
                                         </span>
                                       </div>
                                     )}
@@ -3087,6 +3094,7 @@ export default function App() {
                         hideTabs={true}
                         activeSubTask={activeSubTask}
                         usuariosSeguranca={usuariosSeguranca}
+                        somenteLeitura={somenteLeitura}
                       />
                     </div>
                   ) : (
@@ -3124,6 +3132,7 @@ export default function App() {
               onUpdate={handleUpdateSolicitacao}
               activeSubTask={activeSubTask}
               usuariosSeguranca={usuariosSeguranca}
+              somenteLeitura={somenteLeitura}
             />
           ) : (
             <div className="w-full flex-1 flex flex-col">
@@ -3291,7 +3300,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'seguranca' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && (
+              {activeModule === 'seguranca' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
                 <div className="w-full flex-1 flex flex-col space-y-6 text-left">
                   
                   {/* SUBTASK CADASTRO DE USUÁRIO */}
@@ -3468,7 +3477,7 @@ export default function App() {
                                             {u.perfil === 'tecnico_infra' ? 'TÉC. INFRA' :
                                              u.perfil === 'gestor_dore' ? 'GESTOR DORE' :
                                              u.perfil === 'analista_dore' ? 'ANALISTA' :
-                                             u.perfil === 'gestor_paf' ? 'GESTOR PAF' :
+                                             u.perfil === 'gestor_paf' ? 'SUBSEC. ADM' :
                                              u.perfil === 'administrativo_dore' ? 'ADMIN DORE' :
                                              u.perfil.toUpperCase()}
                                           </span>
@@ -3708,7 +3717,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && (
+              {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
                 <OrcamentoModule
                   activeSubTask={activeSubTask}
                   setActiveSubTask={setActiveSubTask}
@@ -3717,7 +3726,7 @@ export default function App() {
                 />
               )}
 
-              {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && (
+              {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
                 <div className="w-full p-6">
                   <PatrimonioModule
                     activeSubTask={activeSubTask}
@@ -3728,7 +3737,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && (
+              {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
                 <div className="flex-1 flex flex-col items-center justify-center py-12 text-center select-none animate-in fade-in duration-200">
                   <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center border border-purple-100 mb-4 animate-bounce">
                     <Wrench className="w-8 h-8 text-purple-600" />

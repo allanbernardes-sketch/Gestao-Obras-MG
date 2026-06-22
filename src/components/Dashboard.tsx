@@ -180,7 +180,7 @@ export default function Dashboard({
     },
     { 
       id: 'gestor_paf' as PerfilUsuario, 
-      label: 'Gestor Geral (PAF) - Silas Fagundes', 
+      label: 'Subsecretário de Administração - Silas Fagundes',
       desc: 'Analisa e autoriza homologações financeiras na Etapa 3 (Autorização do PAF).', 
       icon: DollarSign,
       colorClass: 'border-cyan-200 bg-cyan-50/70 text-cyan-800'
@@ -407,7 +407,7 @@ export default function Dashboard({
                       : 'text-slate-600 hover:text-slate-900 bg-transparent'
                   }`}
                 >
-                  Minhas Análises (Eng. André)
+                  Minhas Análises
                 </button>
                 <button
                   type="button"

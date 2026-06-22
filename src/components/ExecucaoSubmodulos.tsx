@@ -2140,7 +2140,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                       </div>
 
                       {/* Botão Paralisar / Desparalisar */}
-                      {podeParalisar && !isParalisada && (
+                      {!somenteLeitura && podeParalisar && !isParalisada && (
                         <button
                           type="button"
                           onClick={() => setMostrarParalisacao(prev => !prev)}
@@ -2164,7 +2164,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                               <p className="font-normal leading-relaxed">Para retomar a execução é necessário: <strong>1.</strong> Cadastrar nova empresa na aba Contratos; <strong>2.</strong> Emitir nova Ordem de Início.</p>
                             </div>
                           </div>
-                        ) : (
+                        ) : !somenteLeitura ? (
                           <button
                             type="button"
                             onClick={() => {
@@ -2178,7 +2178,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                             <CheckCircle className="w-4 h-4" />
                             Retomar execução da obra
                           </button>
-                        )
+                        ) : null
                       )}
 
                       {/* Seção Paralisação Temporária */}

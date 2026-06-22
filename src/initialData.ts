@@ -464,7 +464,7 @@ export const LOGS_INICIAIS = [
     id: 'log-5',
     dataHora: '2026-05-29T15:20:00Z',
     usuario: 'Silas Fagundes',
-    perfil: 'Gestor Geral (PAF)',
+    perfil: 'Subsecretário de Administração',
     acao: 'Homologação do PAF',
     detalhe: 'Homologação das dotações orçamentárias concluída para a E.E. Milton Campos com dotação total R$ 145.000,00.',
     tipo: 'sucesso',
