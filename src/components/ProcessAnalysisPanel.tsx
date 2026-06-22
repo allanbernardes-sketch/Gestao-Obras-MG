@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { 
   CheckCircle, XCircle, FileText, AlertCircle, Sparkles, UploadCloud, Trash2, 
   ChevronRight, Download, Layers, Plus, Database, Check, Edit3, MessageSquare, RefreshCw 
@@ -41,9 +41,6 @@ export default function ProcessAnalysisPanel({
   const [novoCustomDocNome, setNovoCustomDocNome] = useState('');
   const [opinioesAditivo, setOpinioesAditivo] = useState<{[key: string]: string}>({});
   const [opinioesAjuste, setOpinioesAjuste] = useState<{[key: string]: string}>({});
-  const [showRessalvasForm, setShowRessalvasForm] = useState(false);
-  const [ressalvasTexto, setRessalvasTexto] = useState('');
-  const [modalConfirmacaoTipo, setModalConfirmacaoTipo] = useState<null | 'reprovacao' | 'ressalvas'>(null);
 
   // SRE Base Dados match helper (simulated)
   const baseDadosSimulada = [
@@ -232,10 +229,21 @@ export default function ProcessAnalysisPanel({
 
   // Classificação Patrimonial edits
   const handleUpdatePatrimonial = (key: keyof Solicitacao, val: any) => {
+    let extra = {};
+    if (key === 'formaOcupacao') {
+      extra = { validacaoFormaOcupacao: 'editado' as const };
+    } else if (key === 'predio') {
+      extra = { validacaoPredioEscola: 'editado' as const };
+    } else if (key === 'tombado' || key === 'orgaoTombador') {
+      extra = { validacaoTombamento: 'editado' as const };
+    } else if (key === 'coabitado' || key === 'tipoCoabitado') {
+      extra = { validacaoCoabitado: 'editado' as const };
+    }
+
     const updated: Solicitacao = {
       ...solicitacao,
       [key]: val,
-      validacaoPatrimonial: 'editado' as const,
+      ...extra,
       // Ao desmarcar tombamento, limpa o órgão tombador automaticamente
       ...(key === 'tombado' && val === 'NÃO É TOMBADO' ? { orgaoTombador: '' } : {})
     };
@@ -378,7 +386,10 @@ export default function ProcessAnalysisPanel({
   const hasRejections = solicitacao.documentos.some(d => d.status === 'recusado') || 
                         (solicitacao.outrosDocumentos || []).some(d => d.status === 'recusado') ||
                         solicitacao.validacaoEscolar === 'nao_validado' ||
-                        solicitacao.validacaoPatrimonial === 'nao_validado' ||
+                        solicitacao.validacaoFormaOcupacao === 'nao_validado' ||
+                        solicitacao.validacaoPredioEscola === 'nao_validado' ||
+                        solicitacao.validacaoTombamento === 'nao_validado' ||
+                        solicitacao.validacaoCoabitado === 'nao_validado' ||
                         solicitacao.validacaoTecnica === 'nao_validado' ||
                         solicitacao.validacaoReferenciaDotacao === 'nao_validado';
 
@@ -389,12 +400,15 @@ export default function ProcessAnalysisPanel({
   // Campos de validação técnica
   const validacaoFields = [
     solicitacao.validacaoEscolar,
-    solicitacao.validacaoPatrimonial,
+    solicitacao.validacaoFormaOcupacao,
+    solicitacao.validacaoPredioEscola,
+    solicitacao.validacaoTombamento,
+    solicitacao.validacaoCoabitado,
     solicitacao.validacaoTecnica,
     solicitacao.validacaoReferenciaDotacao,
   ];
-  // Campos ainda não analisados (somente undefined/null = nenhuma opção marcada)
-  const camposPendentes = validacaoFields.filter(v => !v).length;
+  // Campos ainda não analisados (undefined ou 'editado' = aguardando re-validação)
+  const camposPendentes = validacaoFields.filter(v => !v || v === 'editado').length;
 
   // Analista iniciou ao menos uma revisão?
   const hasStartedReview =
@@ -410,12 +424,6 @@ export default function ProcessAnalysisPanel({
   // Pode devolver: revisão iniciada (não pode devolver sem ter olhado nada)
   const podeDevolver = hasStartedReview;
 
-  // Último comentário do analista por campo (para exibir como lembrete na reanálise)
-  const historicoCorrecoes = solicitacao.historicoCorrecoes || [];
-  const ultimaCorrecao = historicoCorrecoes.length > 0 ? historicoCorrecoes[historicoCorrecoes.length - 1] : null;
-  const lembreteAnterior = (campo: string) =>
-    ultimaCorrecao?.motivos.find(m => m.campo === campo)?.motivo || null;
-
   // Classe de borda dinâmica por estado de validação de seção
   const secBorder = (v?: string) =>
     v === 'validado'     ? 'border-emerald-300 bg-emerald-50/20' :
@@ -427,7 +435,7 @@ export default function ProcessAnalysisPanel({
   const scrollToFirstIssue = () => {
     const secIds = [
       { id: 'sec-escolar',      v: solicitacao.validacaoEscolar },
-      { id: 'sec-patrimonial',  v: solicitacao.validacaoPatrimonial },
+      { id: 'sec-patrimonial',  v: [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].find(x => !x || x !== 'validado') },
       { id: 'sec-tecnico',      v: solicitacao.validacaoTecnica },
       { id: 'sec-referencia',   v: solicitacao.validacaoReferenciaDotacao },
     ];
@@ -886,16 +894,8 @@ export default function ProcessAnalysisPanel({
               </div>
             </div>
 
-            {/* Lembrete da última análise — Escolar */}
-            {perfilUsuario === 'analista_dore' && lembreteAnterior('escolar') && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900">
-                <span className="shrink-0 font-black uppercase text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded mt-0.5">Seu comentário anterior</span>
-                <p className="leading-relaxed font-medium">{lembreteAnterior('escolar')}</p>
-              </div>
-            )}
-
             {/* Ícones de Validação do Auditor */}
-            {perfilUsuario === 'analista_dore' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
               <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
                 <span className="text-xs font-bold text-slate-600">
                   Validação Geral da Escola Estadual:
@@ -955,7 +955,7 @@ export default function ProcessAnalysisPanel({
               </div>
             )}
             
-            {perfilUsuario === 'analista_dore' && solicitacao.validacaoEscolar === 'nao_validado' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && solicitacao.validacaoEscolar === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
@@ -971,27 +971,39 @@ export default function ProcessAnalysisPanel({
           </div>
 
           {/* SEÇÃO 2: Classificação Patrimonial do Imóvel */}
-          <div id="sec-patrimonial" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(solicitacao.validacaoPatrimonial)}`}>
+          <div id="sec-patrimonial" className={`p-5 rounded-xl border space-y-4 transition-colors ${
+            [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].some(v => v === 'nao_validado')
+              ? secBorder('nao_validado')
+              : [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].every(v => v === 'validado')
+                ? secBorder('validado')
+                : [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].some(v => v === 'editado')
+                  ? secBorder('editado')
+                  : secBorder(undefined)
+          }`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-705 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
                 2. Classificação Patrimonial do Imóvel
               </h4>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${
-                solicitacao.validacaoPatrimonial === 'validado'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : solicitacao.validacaoPatrimonial === 'nao_validado'
-                    ? 'bg-red-50 text-red-700 border-red-200'
-                    : 'bg-amber-50 text-amber-700 border-amber-200'
-              }`}>
-                {(solicitacao.validacaoPatrimonial || 'NÃO AVALIADO').replace(/_/g, ' ')}
-              </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Card 1: Forma de Ocupação */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Forma de Ocupação *</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Forma de Ocupação *</span>
+                  {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md border ${
+                      solicitacao.validacaoFormaOcupacao === 'validado'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : solicitacao.validacaoFormaOcupacao === 'nao_validado'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {(solicitacao.validacaoFormaOcupacao || 'PENDENTE').replace(/_/g, ' ')}
+                    </span>
+                  )}
+                </div>
                 <select
                   value={solicitacao.formaOcupacao || 'PRÓPRIO'}
                   onChange={(e) => handleUpdatePatrimonial('formaOcupacao', e.target.value)}
@@ -1003,11 +1015,161 @@ export default function ProcessAnalysisPanel({
                   <option value="CEDIDO">CEDIDO</option>
                   <option value="OUTRO">OUTRO</option>
                 </select>
+
+                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+                  <div className="pt-2.5 border-t border-slate-200/50 flex flex-col gap-1.5 text-left">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avaliação do Analista:</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoFormaOcupacao: 'validado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoFormaOcupacao === 'validado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoFormaOcupacao === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoFormaOcupacao === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Validar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoFormaOcupacao: 'nao_validado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoFormaOcupacao === 'nao_validado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoFormaOcupacao === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoFormaOcupacao === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Não Validado</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoFormaOcupacao: 'editado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoFormaOcupacao === 'editado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoFormaOcupacao === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoFormaOcupacao === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Editado</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Card 2: Tombamento */}
+              {/* Card 2: Prédio Escola */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tombamento *</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prédio Escola *</span>
+                  {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md border ${
+                      solicitacao.validacaoPredioEscola === 'validado'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : solicitacao.validacaoPredioEscola === 'nao_validado'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {(solicitacao.validacaoPredioEscola || 'PENDENTE').replace(/_/g, ' ')}
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={solicitacao.predio || 'PRINCIPAL'}
+                  onChange={(e) => handleUpdatePatrimonial('predio', e.target.value)}
+                  disabled={!isMyAssignment}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white text-slate-800 font-medium cursor-pointer"
+                >
+                  <option value="PRINCIPAL">PRINCIPAL</option>
+                  <option value="ANEXO">ANEXO</option>
+                </select>
+
+                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+                  <div className="pt-2.5 border-t border-slate-200/50 flex flex-col gap-1.5 text-left">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avaliação do Analista:</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoPredioEscola: 'validado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoPredioEscola === 'validado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPredioEscola === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoPredioEscola === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Validar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoPredioEscola: 'nao_validado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoPredioEscola === 'nao_validado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPredioEscola === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoPredioEscola === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Não Validado</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoPredioEscola: 'editado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoPredioEscola === 'editado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPredioEscola === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoPredioEscola === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Editado</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Card 3: Tombamento */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tombamento *</span>
+                  {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md border ${
+                      solicitacao.validacaoTombamento === 'validado'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : solicitacao.validacaoTombamento === 'nao_validado'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {(solicitacao.validacaoTombamento || 'PENDENTE').replace(/_/g, ' ')}
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[9px] text-slate-400 font-bold uppercase mb-1">Status</label>
@@ -1037,11 +1199,79 @@ export default function ProcessAnalysisPanel({
                     </select>
                   </div>
                 </div>
+
+                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+                  <div className="pt-2.5 border-t border-slate-200/50 flex flex-col gap-1.5 text-left">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avaliação do Analista:</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoTombamento: 'validado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoTombamento === 'validado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTombamento === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoTombamento === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Validar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoTombamento: 'nao_validado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoTombamento === 'nao_validado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTombamento === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoTombamento === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Não Validado</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoTombamento: 'editado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoTombamento === 'editado'
+                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTombamento === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoTombamento === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Editado</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Card 3: Imóvel Coabitado? */}
+              {/* Card 4: Imóvel Coabitado? */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Imóvel Coabitado? *</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Imóvel Coabitado? *</span>
+                  {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md border ${
+                      solicitacao.validacaoCoabitado === 'validado'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : solicitacao.validacaoCoabitado === 'nao_validado'
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {(solicitacao.validacaoCoabitado || 'PENDENTE').replace(/_/g, ' ')}
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[9px] text-slate-400 font-bold uppercase mb-1">Coabitado?</label>
@@ -1070,11 +1300,68 @@ export default function ProcessAnalysisPanel({
                     </select>
                   </div>
                 </div>
+
+                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+                  <div className="pt-2.5 border-t border-slate-200/50 flex flex-col gap-1.5 text-left">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avaliação do Analista:</span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoCoabitado: 'validado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoCoabitado === 'validado'
+                            ? 'bg-blue-50 border-blue-555 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoCoabitado === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoCoabitado === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Validar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoCoabitado: 'nao_validado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoCoabitado === 'nao_validado'
+                            ? 'bg-blue-50 border-blue-555 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoCoabitado === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoCoabitado === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Não Validado</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!isMyAssignment}
+                        onClick={() => onUpdate({ ...solicitacao, validacaoCoabitado: 'editado' })}
+                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                          solicitacao.validacaoCoabitado === 'editado'
+                            ? 'bg-blue-50 border-blue-555 text-blue-700 shadow-3xs'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoCoabitado === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                          {solicitacao.validacaoCoabitado === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </span>
+                        <span>Editado</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Card 4: Notificação / Órgão Regulador */}
+              {/* Card 5: Notificação / Órgão Regulador */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Há alguma notificação? *</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Há alguma notificação? *</span>
+                </div>
                 <select
                   value={solicitacao.notificacao || 'Não há notificação'}
                   onChange={(e) => handleUpdatePatrimonial('notificacao', e.target.value)}
@@ -1090,75 +1377,7 @@ export default function ProcessAnalysisPanel({
               </div>
             </div>
 
-            {/* Lembrete da última análise — Patrimonial */}
-            {perfilUsuario === 'analista_dore' && lembreteAnterior('patrimonial') && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900">
-                <span className="shrink-0 font-black uppercase text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded mt-0.5">Seu comentário anterior</span>
-                <p className="leading-relaxed font-medium">{lembreteAnterior('patrimonial')}</p>
-              </div>
-            )}
-
-            {perfilUsuario === 'analista_dore' && (
-              <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
-                <span className="text-xs font-bold text-slate-600">
-                  Validação Geral da Classificação Patrimonial:
-                </span>
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <button
-                    type="button"
-                    disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoPatrimonial: 'validado', motivoNaoValidacaoPatrimonial: '' })}
-                    className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoPatrimonial === 'validado'
-                        ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPatrimonial === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoPatrimonial === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </span>
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Validado</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoPatrimonial: 'nao_validado' })}
-                    className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoPatrimonial === 'nao_validado'
-                        ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPatrimonial === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoPatrimonial === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </span>
-                    <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                    <span>Não Validado</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoPatrimonial: 'editado' })}
-                    className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoPatrimonial === 'editado'
-                        ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPatrimonial === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoPatrimonial === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </span>
-                    <Edit3 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>Editado</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {perfilUsuario === 'analista_dore' && solicitacao.validacaoPatrimonial === 'nao_validado' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (solicitacao.validacaoFormaOcupacao === 'nao_validado' || solicitacao.validacaoPredioEscola === 'nao_validado' || solicitacao.validacaoTombamento === 'nao_validado' || solicitacao.validacaoCoabitado === 'nao_validado') && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação Patrimonial *</label>
                 <textarea
@@ -1284,24 +1503,8 @@ export default function ProcessAnalysisPanel({
               </div>
             </div>
 
-            {/* Lembrete da última análise — Técnica */}
-            {perfilUsuario === 'analista_dore' && lembreteAnterior('tecnica') && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900">
-                <span className="shrink-0 font-black uppercase text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded mt-0.5">Seu comentário anterior</span>
-                <p className="leading-relaxed font-medium">{lembreteAnterior('tecnica')}</p>
-              </div>
-            )}
-
-            {/* Lembrete da última análise — Técnica */}
-            {perfilUsuario === 'analista_dore' && lembreteAnterior('tecnica') && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900">
-                <span className="shrink-0 font-black uppercase text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded mt-0.5">Seu comentário anterior</span>
-                <p className="leading-relaxed font-medium">{lembreteAnterior('tecnica')}</p>
-              </div>
-            )}
-
             {/* Ícones de Validação do Auditor */}
-            {perfilUsuario === 'analista_dore' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
               <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
                 <span className="text-xs font-bold text-slate-600">
                   Avaliação do Detalhamento Técnico:
@@ -1361,7 +1564,7 @@ export default function ProcessAnalysisPanel({
               </div>
             )}
             
-            {perfilUsuario === 'analista_dore' && solicitacao.validacaoTecnica === 'nao_validado' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && solicitacao.validacaoTecnica === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
@@ -1437,16 +1640,8 @@ export default function ProcessAnalysisPanel({
               </div>
             </div>
 
-            {/* Lembrete da última análise — Referência de Dotação */}
-            {perfilUsuario === 'analista_dore' && lembreteAnterior('referenciaDotacao') && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-900">
-                <span className="shrink-0 font-black uppercase text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded mt-0.5">Seu comentário anterior</span>
-                <p className="leading-relaxed font-medium">{lembreteAnterior('referenciaDotacao')}</p>
-              </div>
-            )}
-
             {/* Ícones de Validação do Auditor */}
-            {perfilUsuario === 'analista_dore' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
               <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
                 <span className="text-xs font-bold text-slate-600">
                   Avaliação da Dotação Orçamentária SGO:
@@ -1506,7 +1701,7 @@ export default function ProcessAnalysisPanel({
               </div>
             )}
             
-            {perfilUsuario === 'analista_dore' && solicitacao.validacaoReferenciaDotacao === 'nao_validado' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && solicitacao.validacaoReferenciaDotacao === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
@@ -1546,7 +1741,7 @@ export default function ProcessAnalysisPanel({
         <div className="space-y-6 animate-in fade-in duration-200 text-left">
           
           {/* PARECER RÁPIDO COM IA SE ATRIBUIDO */}
-          {perfilUsuario === 'analista_dore' && isMyAssignment && (
+          {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && (
             <div className="flex items-center justify-between p-3.5 bg-indigo-50/70 border border-indigo-150 rounded-xl mb-4 font-sans text-xs">
               <div className="flex items-start gap-2.5">
                 <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5 animate-pulse" />
@@ -2001,7 +2196,7 @@ export default function ProcessAnalysisPanel({
                   <li>• {docPendentes} documento{docPendentes > 1 ? 's' : ''} ainda {docPendentes > 1 ? 'estão' : 'está'} com status <strong>Pendente</strong> — valide ou recuse cada um na aba Checklist.</li>
                 )}
                 {camposPendentes > 0 && (
-                  <li>• {camposPendentes} campo{camposPendentes > 1 ? 's' : ''} de dados gerais {camposPendentes > 1 ? 'ainda não foram avaliados' : 'ainda não foi avaliado'} — acesse a aba Dados Gerais e marque Validado, Não Validado ou Editado.</li>
+                  <li>• {camposPendentes} campo{camposPendentes > 1 ? 's' : ''} de dados gerais {camposPendentes > 1 ? 'ainda não foram validados' : 'ainda não foi validado'} (pendente ou editado) — acesse a aba Dados Gerais.</li>
                 )}
                 {hasRejections && allReviewed && (
                   <li>• Existem itens <strong>recusados ou não validados</strong> — o processo só pode ser <strong>devolvido para correção</strong>, não aprovado.</li>
@@ -2010,62 +2205,15 @@ export default function ProcessAnalysisPanel({
             </div>
           )}
 
-          {/* Formulário de ressalvas — aparece ao clicar no botão */}
-          {showRessalvasForm && (
-            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-                  <AlertCircle className="w-4 h-4" /> Aprovação com Ressalvas — descreva as observações
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { setShowRessalvasForm(false); setRessalvasTexto(''); }}
-                  className="text-[10px] text-amber-700 hover:text-amber-900 font-bold cursor-pointer"
-                >
-                  Cancelar
-                </button>
-              </div>
-              <textarea
-                rows={4}
-                autoFocus
-                value={ressalvasTexto}
-                onChange={(e) => setRessalvasTexto(e.target.value)}
-                placeholder="Descreva as ressalvas que devem ser observadas durante a execução ou nas próximas etapas do processo..."
-                className="w-full text-xs p-3 border border-amber-300 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-400/30 text-slate-800 leading-relaxed"
-              />
-              <div className="flex items-center justify-end gap-3">
-                <p className="text-[10px] text-amber-700 flex-1">
-                  As ressalvas ficarão registradas no processo e visíveis nas próximas etapas.
-                </p>
-                <button
-                  type="button"
-                  disabled={!ressalvasTexto.trim()}
-                  onClick={() => {
-                    if (!ressalvasTexto.trim()) return;
-                    setModalConfirmacaoTipo('ressalvas');
-                  }}
-                  className={`flex items-center gap-2 px-5 py-2 text-white text-xs font-black uppercase tracking-wide rounded-lg shadow-sm transition ${
-                    ressalvasTexto.trim()
-                      ? 'bg-amber-600 hover:bg-amber-700 cursor-pointer'
-                      : 'bg-slate-300 cursor-not-allowed opacity-60'
-                  }`}
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Confirmar Aprovação com Ressalvas
-                </button>
-              </div>
-            </div>
-          )}
-
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] text-slate-500 font-sans max-w-sm leading-relaxed">
               Ação final para o processo <strong className="text-slate-700">{solicitacao.id}</strong> — {solicitacao.nomeEscola}.
             </p>
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
               <button
                 type="button"
                 disabled={!podeDevolver}
-                onClick={podeDevolver ? () => setModalConfirmacaoTipo('reprovacao') : undefined}
+                onClick={podeDevolver ? (enviarReprovacaoFinal || solicitarDevolucaoProcesso) : undefined}
                 title={!podeDevolver ? 'Analise ao menos um item antes de devolver o processo' : 'Devolver para correção'}
                 className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
                   podeDevolver
@@ -2075,24 +2223,6 @@ export default function ProcessAnalysisPanel({
               >
                 <XCircle className="w-4 h-4" />
                 Enviar Reprovação
-              </button>
-              <button
-                type="button"
-                disabled={!podeAprovar}
-                onClick={() => {
-                  if (!podeAprovar) return;
-                  setShowRessalvasForm(v => !v);
-                  setRessalvasTexto('');
-                }}
-                title={!podeAprovar ? 'Conclua a revisão antes de aprovar com ressalvas' : 'Aprovar com observações a serem lembradas'}
-                className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition border-2 ${
-                  podeAprovar
-                    ? 'bg-amber-50 border-amber-400 text-amber-800 hover:bg-amber-100 cursor-pointer'
-                    : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
-                }`}
-              >
-                <AlertCircle className="w-4 h-4" />
-                Aprovar com Ressalvas
               </button>
               <button
                 type="button"
@@ -2113,67 +2243,6 @@ export default function ProcessAnalysisPanel({
               >
                 <CheckCircle className="w-4 h-4" />
                 Enviar Aprovação
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de confirmação — estilo dialog simples */}
-      {modalConfirmacaoTipo !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white border border-slate-300 shadow-xl w-80 rounded-sm overflow-hidden">
-            {/* Barra de título */}
-            <div className="flex items-center justify-between bg-[#13264d] px-3 py-2">
-              <span className="text-xs font-bold text-white">
-                {modalConfirmacaoTipo === 'reprovacao' ? 'Enviar Reprovação' : 'Aprovar com Ressalvas'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setModalConfirmacaoTipo(null)}
-                className="text-white hover:text-slate-300 text-sm font-bold leading-none cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-            {/* Corpo */}
-            <div className="px-5 py-5">
-              <p className="text-sm text-slate-800 leading-relaxed">
-                {modalConfirmacaoTipo === 'reprovacao'
-                  ? 'Confirma o envio de reprovação do processo para correção pelo técnico responsável?'
-                  : 'Confirma a aprovação do processo com as ressalvas informadas?'}
-              </p>
-            </div>
-            {/* Botões */}
-            <div className="flex justify-end gap-2 px-4 pb-4">
-              <button
-                type="button"
-                onClick={() => setModalConfirmacaoTipo(null)}
-                className="px-6 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-sm transition cursor-pointer"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (modalConfirmacaoTipo === 'reprovacao') {
-                    setModalConfirmacaoTipo(null);
-                    const fn = enviarReprovacaoFinal || solicitarDevolucaoProcesso;
-                    if (fn) fn();
-                  } else {
-                    setModalConfirmacaoTipo(null);
-                    const fn = enviarAprovacaoFinal || finalizarAnaliseDore;
-                    if (fn) {
-                      onUpdate({ ...solicitacao, parecerConsolidado: `[APROVADO COM RESSALVAS] ${ressalvasTexto.trim()}\n\n${solicitacao.parecerConsolidado || ''}`.trim() });
-                      setTimeout(() => fn(), 0);
-                    }
-                    setShowRessalvasForm(false);
-                    setRessalvasTexto('');
-                  }
-                }}
-                className="px-6 py-1.5 text-xs font-semibold text-white bg-[#13264d] hover:bg-[#1a3a6e] border border-[#13264d] rounded-sm transition cursor-pointer"
-              >
-                OK
               </button>
             </div>
           </div>

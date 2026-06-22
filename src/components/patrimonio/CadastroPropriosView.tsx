@@ -10,6 +10,7 @@ interface Props {
   imoveis: ImovelPatrimonio[];
   setImoveis: React.Dispatch<React.SetStateAction<ImovelPatrimonio[]>>;
   regionaisRestrita?: string[];
+  somenteLeitura?: boolean;
 }
 
 const inputCls  = 'w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20';
@@ -29,7 +30,7 @@ function SectionCard({ icon, title, children }: { icon: React.ReactNode; title: 
   );
 }
 
-export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRestrita = [] }: Props) {
+export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRestrita = [], somenteLeitura = false }: Props) {
   const sreUnica = regionaisRestrita.length === 1 ? regionaisRestrita[0] : '';
   const [view, setView] = useState<'lista' | 'form'>('lista');
   const [current, setCurrent] = useState<ImovelPatrimonio | null>(null);
@@ -100,10 +101,12 @@ export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRes
             <h2 className="text-base font-extrabold text-slate-800 font-sans">Cadastro de Próprios</h2>
             <p className="text-xs text-slate-500 mt-0.5">Registro patrimonial dos imóveis da rede estadual de MG.</p>
           </div>
+          {!somenteLeitura && (
           <button type="button" onClick={() => abrirForm()}
             className="flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-black uppercase rounded-xl shadow-sm transition cursor-pointer">
             <Plus className="w-4 h-4" /> Novo Imóvel
           </button>
+          )}
         </div>
 
         {/* Stats */}
@@ -197,6 +200,7 @@ export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRes
                     </div>
                   </div>
                 </div>
+                {!somenteLeitura && (
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button type="button" onClick={() => abrirForm(i)}
                     className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition cursor-pointer" title="Editar">
@@ -207,6 +211,7 @@ export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRes
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+                )}
               </div>
             ))}
           </div>
@@ -236,6 +241,7 @@ export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRes
               <p className="text-[10px] text-slate-400 font-mono">{current.id}</p>
             </div>
           </div>
+          {!somenteLeitura && (
           <div className="flex items-center gap-2">
             {savedMsg && (
               <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
@@ -251,6 +257,7 @@ export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRes
               <CheckCircle className="w-3.5 h-3.5" /> Cadastrar Imóvel
             </button>
           </div>
+          )}
         </div>
 
         {erro && (
@@ -430,6 +437,7 @@ export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRes
           </div>
         </SectionCard>
 
+        {!somenteLeitura && (
         <div className="flex justify-end gap-2 pb-4">
           <button type="button" onClick={() => save(true)}
             className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer flex items-center gap-1.5">
@@ -440,6 +448,7 @@ export default function CadastroPropriosView({ imoveis, setImoveis, regionaisRes
             <CheckCircle className="w-3.5 h-3.5" /> Cadastrar Imóvel
           </button>
         </div>
+        )}
       </div>
     );
   }

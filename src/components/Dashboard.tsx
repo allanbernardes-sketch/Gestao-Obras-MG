@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Solicitacao, PerfilUsuario, UsuarioSistema } from '../types';
 import { 
   Plus, Layers, ClipboardCheck, DollarSign, Building, 
@@ -11,6 +11,7 @@ interface DashboardProps {
   onSelect: (sol: Solicitacao) => void;
   onNovaSolicitacao: () => void;
   perfilUsuario: PerfilUsuario;
+  somenteLeitura?: boolean;
   onMudarPerfil: (perfil: PerfilUsuario) => void;
   onDelete: (id: string) => void;
   onUpdate?: (updated: Solicitacao) => void;
@@ -26,6 +27,7 @@ export default function Dashboard({
   onSelect,
   onNovaSolicitacao,
   perfilUsuario,
+  somenteLeitura = false,
   onMudarPerfil,
   onDelete,
   onUpdate,
@@ -146,7 +148,7 @@ export default function Dashboard({
     }
 
     // Se o usuário logado for Analista DORE e estiver focado nas tarefas dele
-    if (perfilUsuario === 'analista_dore' && filtroAtribuicao === 'minhas') {
+    if ((perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && filtroAtribuicao === 'minhas') {
       return s.etapaAtual === 'analise' && !!s.analistaAtribuido && (currentUserNome ? s.analistaAtribuido === currentUserNome : true);
     }
 
@@ -391,10 +393,10 @@ export default function Dashboard({
           </div>
 
         {/* Filtros específicos de perfil analista/gestor */}
-        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore') && (
+        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && (
           <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
             <span>Visão focada por atribuição de analistas:</span>
-            {perfilUsuario === 'analista_dore' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
               <div className="flex bg-slate-200/60 p-0.5 rounded-md border border-slate-250 select-none">
                 <button
                   type="button"
@@ -421,7 +423,7 @@ export default function Dashboard({
               </div>
             )}
 
-            {perfilUsuario === 'gestor_dore' && (
+            {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && (
               <div className="flex bg-slate-200/60 p-0.5 rounded-md border border-slate-250 select-none">
                 <button
                   type="button"
@@ -678,7 +680,7 @@ export default function Dashboard({
                             )
                           )}
 
-                          {sol.etapaAtual === 'cadastro' && (
+                          {!somenteLeitura && sol.etapaAtual === 'cadastro' && (
                             confirmDeleteId === sol.id ? (
                               <div className="flex items-center gap-1 bg-red-50 px-2 py-1 rounded border border-red-200 text-[10px] shrink-0 text-left">
                                 <span className="text-red-700 font-extrabold text-[9px]">Apagar?</span>

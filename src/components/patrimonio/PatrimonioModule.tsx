@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { ImovelPatrimonio, DOCUMENTOS_PATRIMONIO_PADRAO } from './types';
 import CadastroPropriosView from './CadastroPropriosView';
 import RegularizacaoDocumentalView from './RegularizacaoDocumentalView';
@@ -63,9 +63,10 @@ interface PatrimonioModuleProps {
   activeSubTask?: string;
   perfilUsuario?: string;
   regionaisDoTecnico?: string[];
+  somenteLeitura?: boolean;
 }
 
-export default function PatrimonioModule({ activeSubTask, perfilUsuario, regionaisDoTecnico = [] }: PatrimonioModuleProps) {
+export default function PatrimonioModule({ activeSubTask, perfilUsuario, regionaisDoTecnico = [], somenteLeitura = false }: PatrimonioModuleProps) {
   const [imoveis, setImoveis] = useState<ImovelPatrimonio[]>(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
   });
@@ -89,5 +90,5 @@ export default function PatrimonioModule({ activeSubTask, perfilUsuario, regiona
   if (activeSubTask === 'blank_projetos')
     return <ProjetosView imoveis={imoveisVisiveis} sreRestrita="" />;
 
-  return <CadastroPropriosView imoveis={imoveisVisiveis} setImoveis={setImoveis} regionaisRestrita={regionaisRestrita} />;
+  return <CadastroPropriosView imoveis={imoveisVisiveis} setImoveis={setImoveis} regionaisRestrita={regionaisRestrita} somenteLeitura={somenteLeitura} />;
 }

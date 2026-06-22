@@ -1,4 +1,4 @@
-/**
+﻿/**
  * BudgetList - Adapted from OrcaGov for Gestao-Obras-MG
  * Firebase removed; uses props for state management.
  */

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import {
   Building2, HardHat, Layers, ClipboardList, Plus, Calculator, ShieldCheck,
   UploadCloud, LayoutGrid, DollarSign, Calendar, MapPin, Search, CheckCircle,
@@ -14,6 +14,7 @@ interface ExecucaoSubmodulosProps {
   solicitacoes: Solicitacao[];
   onUpdate: (updated: Solicitacao) => void;
   perfilUsuario: PerfilUsuario;
+  somenteLeitura?: boolean;
   onSelect: (sol: Solicitacao) => void;
   empresasSeguranca?: EmpresaSeguranca[];
   usuariosSeguranca?: UsuarioSistema[];
@@ -25,6 +26,7 @@ export default function ExecucaoSubmodulos({
   solicitacoes,
   onUpdate,
   perfilUsuario,
+  somenteLeitura = false,
   onSelect,
   empresasSeguranca = [],
   usuariosSeguranca = [],
@@ -408,53 +410,58 @@ export default function ExecucaoSubmodulos({
 
       {/* 1. CADASTRO DE OBRAS */}
       {activeSubTask === 'execucao_cadastro' && (
-        <SubCadastro 
-          solicitacoes={filteredExecSols} 
+        <SubCadastro
+          solicitacoes={filteredExecSols}
           todasSolicitacoes={solicitacoes}
-          currentSol={selectedSol} 
-          onUpdate={handlePropagateUpdate} 
+          currentSol={selectedSol}
+          onUpdate={handlePropagateUpdate}
           onSelect={onSelect}
           setFocoObra={setSelectedSolId}
           setActiveSubTask={setActiveSubTask}
+          somenteLeitura={somenteLeitura}
         />
       )}
 
       {/* 2. ACOMPANHAMENTO DE EXECUÇÃO */}
       {activeSubTask === 'execucao_acompanhamento' && (
-        <SubAcompanhamento 
-          currentSol={selectedSol} 
-          onUpdate={handlePropagateUpdate} 
+        <SubAcompanhamento
+          currentSol={selectedSol}
+          onUpdate={handlePropagateUpdate}
+          somenteLeitura={somenteLeitura}
         />
       )}
 
       {/* 3. MEDIÇÕES */}
       {activeSubTask === 'execucao_medicoes' && (
         hasContract ? (
-          <SubMedicoes 
-            currentSol={selectedSol} 
-            onUpdate={handlePropagateUpdate} 
+          <SubMedicoes
+            currentSol={selectedSol}
+            onUpdate={handlePropagateUpdate}
+            somenteLeitura={somenteLeitura}
           />
         ) : renderBlockedScreen()
       )}
 
       {/* 4. CONTRATOS */}
       {activeSubTask === 'execucao_contratos' && (
-        <SubContratos 
-          currentSol={selectedSol} 
-          onUpdate={handlePropagateUpdate} 
+        <SubContratos
+          currentSol={selectedSol}
+          onUpdate={handlePropagateUpdate}
           empresasSeguranca={empresasSeguranca}
           todasSolicitacoes={solicitacoes}
           selectedSolId={selectedSolId}
           setSelectedSolId={setSelectedSolId}
+          somenteLeitura={somenteLeitura}
         />
       )}
 
       {/* 5. ADITIVOS */}
       {activeSubTask === 'execucao_aditivos' && (
         hasContract ? (
-          <SubAditivos 
-            currentSol={selectedSol} 
-            onUpdate={handlePropagateUpdate} 
+          <SubAditivos
+            currentSol={selectedSol}
+            onUpdate={handlePropagateUpdate}
+            somenteLeitura={somenteLeitura}
           />
         ) : renderBlockedScreen()
       )}
@@ -466,23 +473,25 @@ export default function ExecucaoSubmodulos({
             currentSol={selectedSol}
             onUpdate={handlePropagateUpdate}
             usuariosSeguranca={usuariosSeguranca}
+            somenteLeitura={somenteLeitura}
           />
         ) : renderBlockedScreen()
       )}
 
       {/* 7. FISCALIZAÇÃO */}
       {activeSubTask === 'execucao_fiscalizacao' && (
-        <SubFiscalizacao 
-          currentSol={selectedSol} 
-          onUpdate={handlePropagateUpdate} 
+        <SubFiscalizacao
+          currentSol={selectedSol}
+          onUpdate={handlePropagateUpdate}
           solicitacoes={solicitacoes}
+          somenteLeitura={somenteLeitura}
         />
       )}
 
       {/* 7b. REEQUILÍBRIO FINANCEIRO */}
       {activeSubTask === 'execucao_reequilibrio' && (
         hasContract ? (
-          <SubReequilibrio currentSol={selectedSol} onUpdate={handlePropagateUpdate} />
+          <SubReequilibrio currentSol={selectedSol} onUpdate={handlePropagateUpdate} somenteLeitura={somenteLeitura} />
         ) : renderBlockedScreen()
       )}
 
@@ -492,6 +501,7 @@ export default function ExecucaoSubmodulos({
           <SubSaldoComplementar
             currentSol={selectedSol}
             onUpdate={handlePropagateUpdate}
+            somenteLeitura={somenteLeitura}
           />
         ) : renderBlockedScreen()
       )}
@@ -501,6 +511,7 @@ export default function ExecucaoSubmodulos({
         <SubDocumentos
           currentSol={selectedSol}
           onUpdate={handlePropagateUpdate}
+          somenteLeitura={somenteLeitura}
         />
       )}
 
@@ -538,14 +549,15 @@ export function getFiscalPoints(fiscalName: string, allSolicitacoes: Solicitacao
 }
 
 // --- 1. SUB CADASTRO DE OBRAS ---
-function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, onSelect, setFocoObra, setActiveSubTask }: { 
-  solicitacoes: Solicitacao[]; 
+function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, onSelect, setFocoObra, setActiveSubTask, somenteLeitura = false }: {
+  solicitacoes: Solicitacao[];
   todasSolicitacoes: Solicitacao[];
-  currentSol: Solicitacao | null; 
+  currentSol: Solicitacao | null;
   onUpdate: (sol: Solicitacao) => void;
   onSelect: (sol: Solicitacao) => void;
   setFocoObra: (id: string) => void;
   setActiveSubTask?: (subTask: string) => void;
+  somenteLeitura?: boolean;
 }) {
   const [showNovoForm, setShowNovoForm] = useState(false);
   
@@ -932,6 +944,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           </h2>
           <p className="text-[10px] text-slate-500">Listagem de escolas com convênio ou execução técnica cadastrada em largura cheia</p>
         </div>
+        {!somenteLeitura && (
         <button
           id="btn-registra-obra-obras"
           onClick={() => setShowNovoForm(true)}
@@ -940,6 +953,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           <Plus className="w-4 h-4" />
           Cadastrar Oficialmente Obra
         </button>
+        )}
       </div>
 
       {/* Form Wizard - New register as a beautiful modal */}
@@ -1715,7 +1729,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
 }
 
 // --- 2. SUB ACOMPANHAMENTO DE EXECUÇÃO ---
-function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void }) {
+function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void; somenteLeitura?: boolean }) {
   const [activeTab, setActiveTab2] = useState<'dashboard' | 'ordem_inicio' | 'vistorias' | 'restricoes'>('dashboard');
 
   // Ordem de Início states
@@ -1818,7 +1832,6 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
       }),
     };
     onUpdate(updated);
-    setDescricaoProgresso('');
     if (isParalisando) setMostrarParalisacao(false);
   };
 
@@ -2219,6 +2232,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                 O status é determinado automaticamente pelo fluxo da obra. A paralisação manual é a única exceção permitida por este módulo.
               </div>
 
+              {!somenteLeitura && (
               <div className="flex justify-end pt-3">
                 <button
                   type="button"
@@ -2228,6 +2242,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
                   Registrar Alteração de Status
                 </button>
               </div>
+              )}
             </div>
 
           </div>
@@ -3339,7 +3354,7 @@ function SubAcompanhamento({ currentSol, onUpdate }: { currentSol: Solicitacao |
 }
 
 // --- 3. SUB MEDIÇÕES ---
-function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void }) {
+function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void; somenteLeitura?: boolean }) {
   const [valorM, setValorM] = useState('');
   const [porcentagemM, setPorcentagemM] = useState('');
   const [descricaoM, setDescricaoM] = useState('');
@@ -3527,7 +3542,6 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
     setValorM('');
     setPorcentagemM('');
     setDescricaoM('');
-    setPeriodoM('');
     setObservacoesM('');
     setPorcentagemFisicaM('');
     setRelatorioFileName('');
@@ -3556,6 +3570,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
         >
           <History className="w-4 h-4" /> Histórico de Medições ({currentSol.medicoes?.length || 0})
         </button>
+        {!somenteLeitura && (
         <button
           type="button"
           onClick={() => podeRegistrarMedicao && setActiveTab('nova_medicao')}
@@ -3575,6 +3590,7 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
           Registrar Nova Medição
           {!podeRegistrarMedicao && <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded font-black uppercase ml-1">Bloqueado</span>}
         </button>
+        )}
       </div>
 
       {activeTab === 'historico' ? (
@@ -4089,17 +4105,19 @@ function SubMedicoes({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
 }
 
 // --- 4. SUB CONTRATOS ---
-function SubContratos({ 
-  currentSol, 
+function SubContratos({
+  currentSol,
   onUpdate,
   empresasSeguranca = [],
   todasSolicitacoes = [],
   selectedSolId = '',
-  setSelectedSolId
-}: { 
-  currentSol: Solicitacao | null; 
+  setSelectedSolId,
+  somenteLeitura = false
+}: {
+  currentSol: Solicitacao | null;
   onUpdate: (sol: Solicitacao) => void;
   empresasSeguranca?: EmpresaSeguranca[];
+  somenteLeitura?: boolean;
   todasSolicitacoes?: Solicitacao[];
   selectedSolId?: string;
   setSelectedSolId?: (id: string) => void;
@@ -4792,6 +4810,7 @@ function SubContratos({
           </div>
 
           {/* AÇÕES CONTRATUAIS — abrem modais dedicados */}
+          {!somenteLeitura && (
           <div className="border-t border-slate-105 pt-4">
             <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2.5">Ações Contratuais Disponíveis no SGO</h4>
             {!currentSol.contratoDataAssinatura || currentSol.statusContratoEmpresa === 'Distratada' ? (
@@ -4846,6 +4865,7 @@ function SubContratos({
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* History of former companies if Distrato happened */}
@@ -5501,7 +5521,7 @@ function SubContratos({
 }
 
 // --- 5. SUB ADITIVOS ---
-function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void }) {
+function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void; somenteLeitura?: boolean }) {
   const [activeTab, setActiveTab] = useState<'historico' | 'novo_atendimento'>('historico');
   const [role, setRole] = useState<'proponente' | 'dore'>('proponente'); // Proponente vs Analista DORE
   const [step, setStep] = useState<1 | 2>(1);
@@ -5724,6 +5744,7 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
         >
           <History className="w-4 h-4" /> Histórico de Aditivos ({currentSol.aditivos?.length || 0})
         </button>
+        {!somenteLeitura && (
         <button
           onClick={() => { if (podeSolicitarAditivo) { setActiveTab('novo_atendimento'); setStep(1); } }}
           title={
@@ -5739,6 +5760,7 @@ function SubAditivos({ currentSol, onUpdate }: { currentSol: Solicitacao | null;
           Iniciar Novo Atendimento (Aditivo)
           {!podeSolicitarAditivo && <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded font-black uppercase ml-1">Bloqueado</span>}
         </button>
+        )}
       </div>
 
       {/* CONTENT AREA */}
@@ -6205,10 +6227,12 @@ function SubAjustes({
   currentSol,
   onUpdate,
   usuariosSeguranca = [],
+  somenteLeitura = false,
 }: {
   currentSol: Solicitacao | null;
   onUpdate: (sol: Solicitacao) => void;
   usuariosSeguranca?: UsuarioSistema[];
+  somenteLeitura?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<'historico' | 'novo_atendimento'>('historico');
   const [role, setRole] = useState<'proponente' | 'dore'>('proponente');
@@ -6447,6 +6471,7 @@ function SubAjustes({
         >
           <History className="w-4 h-4" /> Histórico de Ajustes ({currentSol.ajustes?.length || 0})
         </button>
+        {!somenteLeitura && (
         <button
           onClick={() => { if (!isDistratadaAjuste) { setActiveTab('novo_atendimento'); setStep(1); } }}
           title={isDistratadaAjuste ? 'Contrato distratado — não é possível registrar ajustes' : ''}
@@ -6459,6 +6484,7 @@ function SubAjustes({
           Registrar Ajuste de Planilha
           {isDistratadaAjuste && <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded font-black uppercase ml-1">Bloqueado</span>}
         </button>
+        )}
       </div>
 
       {/* CONTENT AREA */}
@@ -6841,14 +6867,16 @@ function SubAjustes({
 }
 
 // --- 7. SUB FISCALIZAÇÃO ---
-function SubFiscalizacao({ 
-  currentSol, 
+function SubFiscalizacao({
+  currentSol,
   onUpdate,
-  solicitacoes = []
-}: { 
-  currentSol: Solicitacao | null; 
+  solicitacoes = [],
+  somenteLeitura = false
+}: {
+  currentSol: Solicitacao | null;
   onUpdate: (sol: Solicitacao) => void;
   solicitacoes?: Solicitacao[];
+  somenteLeitura?: boolean;
 }) {
   const [fiscalInput, setFiscalInput] = useState(() => currentSol?.fiscalObraAtribuido || '');
   const [diarioTexto, setDiarioTexto] = useState('');
@@ -6964,6 +6992,7 @@ function SubFiscalizacao({
               );
             })()}
 
+            {!somenteLeitura && (
             <button
               id="save-fiscal-btn"
               type="submit"
@@ -6971,6 +7000,7 @@ function SubFiscalizacao({
             >
               Atribuir Fiscal
             </button>
+            )}
           </form>
         </div>
 
@@ -6988,6 +7018,7 @@ function SubFiscalizacao({
               onChange={(e) => setDiarioTexto(e.target.value)}
               className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden"
             />
+            {!somenteLeitura && (
             <button
               id="add-diario-btn"
               type="submit"
@@ -6995,6 +7026,7 @@ function SubFiscalizacao({
             >
               Enviar Diário de Campo
             </button>
+            )}
           </form>
         </div>
       </div>
@@ -7004,7 +7036,7 @@ function SubFiscalizacao({
 }
 
 // --- 8. SUB DOCUMENTOS (GED) ---
-function SubDocumentos({ currentSol, onUpdate }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void }) {
+function SubDocumentos({ currentSol, onUpdate, somenteLeitura = false }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void; somenteLeitura?: boolean }) {
   const [documentosSalvos, setDocumentosSalvos] = useState<{ name: string; size: string; type: string; date: string }[]>([
     { name: 'Planilha_Completa_Original_Assinada.pdf', size: '2.5 MB', type: 'Planilha Orçamentária', date: '2026-05-15' },
     { name: 'Cronograma_Geral_Instalacoes.xlsx', size: '1.2 MB', type: 'Planejamento', date: '2026-05-16' },
@@ -7098,6 +7130,7 @@ function SubDocumentos({ currentSol, onUpdate }: { currentSol: Solicitacao | nul
       </div>
 
       {/* Upload files drawer */}
+      {!somenteLeitura && (
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs ">
         <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2.5 mb-4">
           <FileUp className="w-4 h-4 text-blue-500" /> Upload de Novo Documento
@@ -7150,6 +7183,7 @@ function SubDocumentos({ currentSol, onUpdate }: { currentSol: Solicitacao | nul
           </button>
         </form>
       </div>
+      )}
 
     </div>
   );
@@ -7176,9 +7210,11 @@ function NoObraSelected() {
 function SubReequilibrio({
   currentSol,
   onUpdate,
+  somenteLeitura = false,
 }: {
   currentSol: Solicitacao | null;
   onUpdate: (sol: Solicitacao) => void;
+  somenteLeitura?: boolean;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
 
@@ -7369,6 +7405,7 @@ function SubReequilibrio({
                 </div>
               </div>
 
+              {!somenteLeitura && (
               <div className="flex justify-end">
                 <button type="button"
                   disabled={!justificativaFile || !autorizacaoDIPCFile}
@@ -7377,6 +7414,7 @@ function SubReequilibrio({
                   Planilha de Reequilíbrio <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+              )}
             </>
           )}
         </div>
@@ -7451,6 +7489,7 @@ function SubReequilibrio({
             )}
           </div>
 
+          {!somenteLeitura && (
           <div className="flex justify-between">
             <button type="button" onClick={() => setStep(1)}
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">
@@ -7461,6 +7500,7 @@ function SubReequilibrio({
               <CheckCircle className="w-4 h-4" /> Enviar Solicitação
             </button>
           </div>
+          )}
         </div>
       )}
 
@@ -7506,9 +7546,11 @@ const DOCS_SALDO_COMPLEMENTAR = [
 function SubSaldoComplementar({
   currentSol,
   onUpdate,
+  somenteLeitura = false,
 }: {
   currentSol: Solicitacao | null;
   onUpdate: (sol: Solicitacao) => void;
+  somenteLeitura?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<'dados' | 'documentos'>('dados');
 
@@ -7793,6 +7835,7 @@ function SubSaldoComplementar({
             </div>
           </div>
 
+          {!somenteLeitura && (
           <div className="flex items-center justify-between gap-3">
             <button type="button" onClick={() => setActiveTab('dados')}
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition cursor-pointer">
@@ -7804,6 +7847,7 @@ function SubSaldoComplementar({
               <CheckCircle className="w-4 h-4" /> Enviar Solicitação
             </button>
           </div>
+          )}
         </div>
       )}
 

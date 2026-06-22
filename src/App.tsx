@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -11,7 +11,8 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle, FolderOpen, RefreshCw, Filter } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle, FolderOpen, RefreshCw, Filter, LogOut } from 'lucide-react';
+import LoginScreen from './components/LoginScreen';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
@@ -23,6 +24,8 @@ import PatrimonioModule from './components/patrimonio/PatrimonioModule';
 
 
 export default function App() {
+  const [logado, setLogado] = useState(false);
+  const [nomeUsuario, setNomeUsuario] = useState('');
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [perfilUsuario, setPerfilUsuario] = useState<PerfilUsuario>('tecnico_infra');
   const [idSolicitacaoSelecionada, setIdSolicitacaoSelecionada] = useState<string | null>(null);
@@ -56,12 +59,9 @@ export default function App() {
     const novoLog: SistemaLog = {
       id: `log-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       dataHora: new Date().toISOString(),
-      usuario: perfilUsuario === 'tecnico_infra' ? 'João Paulo' :
-               perfilUsuario === 'gestor_dore' ? 'Aline Davino' :
-               perfilUsuario === 'analista_dore' ? 'Flavia Borges' :
-               perfilUsuario === 'gestor_paf' ? 'Silas Fagundes' :
-               perfilUsuario === 'administrativo_dore' ? 'Rui Lages' : 'Usuário SGO',
-      perfil: perfilUsuario === 'tecnico_infra' ? 'Técnico de Infraestrutura SRE' :
+      usuario: nomeUsuario || 'Usuário SGO',
+      perfil: perfilUsuario === 'admin' ? 'Administrador do Sistema' :
+              perfilUsuario === 'tecnico_infra' ? 'Técnico de Infraestrutura SRE' :
               perfilUsuario === 'gestor_dore' ? 'Gestor Atendimento DORE' :
               perfilUsuario === 'analista_dore' ? 'Analista de Engenharia DORE' :
               perfilUsuario === 'gestor_paf' ? 'Gestor Geral (PAF)' :
@@ -140,7 +140,8 @@ export default function App() {
     { id: 'USR-02', nome: 'Aline Davino', email: 'aline.davino@educacao.mg.gov.br', perfil: 'gestor_dore', departamento: 'DORE Atendimento' },
     { id: 'USR-03', nome: 'Flavia Borges', email: 'flavia.borges@educacao.mg.gov.br', perfil: 'analista_dore', departamento: 'DORE Engenharia' },
     { id: 'USR-04', nome: 'Silas Fagundes', email: 'silas.fagundes@paf.mg.gov.br', perfil: 'gestor_paf', departamento: 'SAF/PAF Secretarias' },
-    { id: 'USR-05', nome: 'Rui Lages', email: 'rui.lages@educacao.mg.gov.br', perfil: 'administrativo_dore', departamento: 'Administrativo DORE' }
+    { id: 'USR-05', nome: 'Rui Lages', email: 'rui.lages@educacao.mg.gov.br', perfil: 'administrativo_dore', departamento: 'Administrativo DORE' },
+    { id: 'USR-00', nome: 'Administrador SGO', email: 'admin', perfil: 'admin', departamento: 'Administração do Sistema' }
   ]);
 
   const [enderecosSeguranca, setEnderecosSeguranca] = useState([
@@ -207,6 +208,7 @@ export default function App() {
   const [filtroUsrSituacao, setFiltroUsrSituacao] = useState('todos');
   const [filtroUsrPerfil, setFiltroUsrPerfil] = useState('todos');
   const [filtroUsrVinculo, setFiltroUsrVinculo] = useState('todos');
+  const [resetSenhaUsrId, setResetSenhaUsrId] = useState<string | null>(null);
 
   // SEGURANÇA FORM STATES - ADDRESS
   const [endCep, setEndCep] = useState('');
@@ -268,6 +270,7 @@ export default function App() {
         case 'analista_dore': return 'Analista de Engenharia (DORE)';
         case 'gestor_paf': return 'Gestor Geral (PAF)';
         case 'administrativo_dore': return 'Administrativo DORE';
+        case 'admin': return 'Administrador do Sistema';
         default: return perfil;
       }
     };
@@ -436,6 +439,8 @@ export default function App() {
   const [empSit, setEmpSit] = useState<string>('Regular');
   const [empTel, setEmpTel] = useState('');
   const [empMail, setEmpMail] = useState('');
+  const [empIdEmEdicao, setEmpIdEmEdicao] = useState<string | null>(null);
+  const [showEditarEmpresaModal, setShowEditarEmpresaModal] = useState(false);
 
   const handleCadastrarEmpresa = (e: React.FormEvent) => {
     e.preventDefault();
@@ -460,6 +465,33 @@ export default function App() {
     setEmpTel('');
     setEmpMail('');
     alert(`Empresa "${empNome}" pré-cadastrada e homologada com sucesso no módulo de Segurança.`);
+  };
+
+  const abrirEdicaoEmpresa = (emp: EmpresaSeguranca) => {
+    setEmpIdEmEdicao(emp.id);
+    setEmpNome(emp.nome);
+    setEmpCnpj(emp.cnpj);
+    setEmpResp(emp.responsavelTecnico);
+    setEmpSit(emp.situacaoCadastral);
+    setEmpTel(emp.telefone);
+    setEmpMail(emp.email);
+    setShowEditarEmpresaModal(true);
+  };
+
+  const handleSalvarEdicaoEmpresa = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!empNome || !empCnpj) {
+      alert('Por favor, informe a Razão Social e o CNPJ da empresa.');
+      return;
+    }
+    setEmpresasSeguranca(empresasSeguranca.map(emp =>
+      emp.id === empIdEmEdicao
+        ? { ...emp, nome: empNome, cnpj: empCnpj, responsavelTecnico: empResp, situacaoCadastral: empSit, telefone: empTel, email: empMail }
+        : emp
+    ));
+    setShowEditarEmpresaModal(false);
+    setEmpIdEmEdicao(null);
+    setEmpNome(''); setEmpCnpj(''); setEmpResp(''); setEmpSit('Regular'); setEmpTel(''); setEmpMail('');
   };
 
   // Controle de acesso regional: tecnico_infra só vê dados das suas SREs
@@ -940,6 +972,25 @@ export default function App() {
     atualizarEGuardarSolicitacoes(novas);
   };
 
+  const handleLogin = (perfil: PerfilUsuario, nome: string) => {
+    setPerfilUsuario(perfil);
+    setNomeUsuario(nome);
+    setLogado(true);
+  };
+
+  const handleLogout = () => {
+    setLogado(false);
+    setNomeUsuario('');
+    setMostrarMenuPerfil(false);
+    setMostrarMenuNotif(false);
+  };
+
+  if (!logado) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  const somenteLeitura = perfilUsuario === 'administrativo_dore' && activeSubTask !== 'paf';
+
   // Find currently open solicitação
   const solicitacaoAberta = solicitacoes.find(s => s.id === idSolicitacaoSelecionada) || null;
 
@@ -1058,7 +1109,7 @@ export default function App() {
                     )}
                   </div>
 
-                  {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf') && (
+                  {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
                     <div className="px-3 pt-2 pb-0.5 border-t border-slate-100 flex justify-center">
                       <button
                         onClick={() => {
@@ -1077,31 +1128,15 @@ export default function App() {
             )}
           </div>
 
-          <div className="relative">
-            <div 
-              onClick={() => {
-                setMostrarMenuPerfil(!mostrarMenuPerfil);
-                setMostrarMenuNotif(false);
-              }}
-              className="flex items-center gap-2 text-xs cursor-pointer select-none p-1.5 hover:bg-blue-900/60 rounded-lg transition-colors"
-            >
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 p-1.5 select-none">
               <div className="w-8 h-8 rounded-full bg-blue-800 flex items-center justify-center text-xs text-white font-bold border border-blue-600 shrink-0">
-                {perfilUsuario === 'tecnico_infra' && 'JP'}
-                {perfilUsuario === 'gestor_dore' && 'AD'}
-                {perfilUsuario === 'analista_dore' && 'FB'}
-                {perfilUsuario === 'gestor_paf' && 'SF'}
-                {perfilUsuario === 'administrativo_dore' && 'RL'}
+                {nomeUsuario.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()}
               </div>
               <div className="text-left hidden sm:block font-sans">
-                <p className="text-slate-200 leading-none font-medium flex items-center gap-1">
-                  {perfilUsuario === 'tecnico_infra' && 'João Paulo'}
-                  {perfilUsuario === 'gestor_dore' && 'Aline Davino'}
-                  {perfilUsuario === 'analista_dore' && 'Flavia Borges'}
-                  {perfilUsuario === 'gestor_paf' && 'Silas Fagundes'}
-                  {perfilUsuario === 'administrativo_dore' && 'Rui Lages'}
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                </p>
+                <p className="text-slate-200 leading-none font-medium text-xs">{nomeUsuario}</p>
                 <p className="text-slate-500 text-[10px] mt-0.5 uppercase tracking-wider font-semibold">
+                  {perfilUsuario === 'admin' && 'Administrador do Sistema'}
                   {perfilUsuario === 'tecnico_infra' && 'Técnico de Infraestrutura (SRE)'}
                   {perfilUsuario === 'gestor_dore' && 'Gestor Atendimento (DORE)'}
                   {perfilUsuario === 'analista_dore' && 'Analista de Engenharia (DORE)'}
@@ -1111,55 +1146,15 @@ export default function App() {
               </div>
             </div>
 
-            {mostrarMenuPerfil && (
-              <>
-                <div 
-                  className="fixed inset-0 z-10" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMostrarMenuPerfil(false);
-                  }} 
-                />
-                <div className="absolute right-0 top-full mt-2 w-64 bg-slate-900 border border-slate-705 rounded-xl shadow-xl py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
-                  <div className="px-3 py-1.5 border-b border-slate-800 mb-1">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block font-mono">
-                      Alternar Usuário Simulado
-                    </span>
-                  </div>
-                  {[
-                    { id: 'tecnico_infra', nome: 'João Paulo', cargo: 'Técnico de Infraestrutura SRE', av: 'JP', color: 'bg-amber-600' },
-                    { id: 'gestor_dore', nome: 'Aline Davino', cargo: 'Gestor Atendimento DORE', av: 'AD', color: 'bg-indigo-600' },
-                    { id: 'analista_dore', nome: 'Flavia Borges', cargo: 'Analista de Engenharia DORE', av: 'FB', color: 'bg-blue-600' },
-                    { id: 'gestor_paf', nome: 'Silas Fagundes', cargo: 'Gestor Geral (PAF)', av: 'SF', color: 'bg-cyan-600' },
-                    { id: 'administrativo_dore', nome: 'Rui Lages', cargo: 'Administrativo DORE', av: 'RL', color: 'bg-purple-600' }
-                  ].map((perf) => (
-                    <button
-                      key={perf.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPerfilUsuario(perf.id as PerfilUsuario);
-                        setMostrarMenuPerfil(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left flex items-center gap-2.5 hover:bg-slate-800 transition-colors cursor-pointer ${
-                        perfilUsuario === perf.id ? 'bg-slate-850/50' : ''
-                      }`}
-                    >
-                      <div className={`w-7 h-7 rounded-full ${perf.color} text-[10px] text-white font-bold flex items-center justify-center`}>
-                        {perf.av}
-                      </div>
-                      <div>
-                        <p className={`text-slate-200 leading-none text-xs font-semibold ${perfilUsuario === perf.id ? 'text-blue-400 font-bold' : ''}`}>
-                          {perf.nome}
-                        </p>
-                        <p className="text-slate-500 text-[9px] mt-0.5 uppercase tracking-wider font-semibold">
-                          {perf.cargo}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Sair do sistema"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-slate-400 hover:text-white hover:bg-rose-600/80 rounded-lg transition-all text-xs font-semibold cursor-pointer border border-slate-600/30 hover:border-rose-500"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
           </div>
         </div>
       </header>
@@ -1193,83 +1188,95 @@ export default function App() {
           </button>
 
           {/* 2. SEGURANÇA */}
-          <button
-            type="button"
-            title="Segurança & Cadastros"
-            onClick={() => {
-              setActiveModule('seguranca');
-              setActiveSubTask('cadastro_usuario');
-              setIdSolicitacaoSelecionada(null);
-            }}
-            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
-              activeModule === 'seguranca'
-                ? 'bg-rose-600 text-white border-rose-500 shadow-md'
-                : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
-            }`}
-          >
-            <Lock className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[8px] font-bold tracking-tight">Segurança</span>
-          </button>
+          {(() => {
+            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra';
+            return (
+              <button
+                type="button"
+                title={bloqueado ? 'Acesso restrito para este perfil' : 'Segurança & Cadastros'}
+                onClick={bloqueado ? undefined : () => { setActiveModule('seguranca'); setActiveSubTask('cadastro_usuario'); setIdSolicitacaoSelecionada(null); }}
+                className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 relative border ${
+                  bloqueado
+                    ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
+                    : activeModule === 'seguranca'
+                      ? 'bg-rose-600 text-white border-rose-500 shadow-md cursor-pointer'
+                      : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white cursor-pointer'
+                }`}
+              >
+                <Lock className="w-4 h-4 flex-shrink-0" />
+                <span className="text-[8px] font-bold tracking-tight">Segurança</span>
+              </button>
+            );
+          })()}
 
           {/* 3. ORÇAMENTO */}
-          <button
-            type="button"
-            title="Orçamentos"
-            onClick={() => {
-              setActiveModule('orcamento');
-              setActiveSubTask('blank');
-              setIdSolicitacaoSelecionada(null);
-            }}
-            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
-              activeModule === 'orcamento'
-                ? 'bg-amber-600 text-white border-amber-500 shadow-md'
-                : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
-            }`}
-          >
-            <Coins className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[8px] font-bold tracking-tight">Orçamento</span>
-          </button>
+          {(() => {
+            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra';
+            return (
+              <button
+                type="button"
+                title={bloqueado ? 'Acesso restrito para este perfil' : 'Orçamentos'}
+                onClick={bloqueado ? undefined : () => { setActiveModule('orcamento'); setActiveSubTask('blank'); setIdSolicitacaoSelecionada(null); }}
+                className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 relative border ${
+                  bloqueado
+                    ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
+                    : activeModule === 'orcamento'
+                      ? 'bg-amber-600 text-white border-amber-500 shadow-md cursor-pointer'
+                      : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white cursor-pointer'
+                }`}
+              >
+                <Coins className="w-4 h-4 flex-shrink-0" />
+                <span className="text-[8px] font-bold tracking-tight">Orçamento</span>
+              </button>
+            );
+          })()}
 
           {/* 4. IMÓVEIS */}
-          <button
-            type="button"
-            title="Patrimônio & Imóveis"
-            onClick={() => {
-              setActiveModule('imoveis');
-              setActiveSubTask('blank_imoveis');
-              setIdSolicitacaoSelecionada(null);
-            }}
-            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
-              activeModule === 'imoveis'
-                ? 'bg-teal-600 text-white border-teal-500 shadow-md'
-                : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
-            }`}
-          >
-            <Building className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[8px] font-bold tracking-tight">Imóveis</span>
-          </button>
+          {(() => {
+            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore';
+            return (
+              <button
+                type="button"
+                title={bloqueado ? 'Acesso restrito para este perfil' : 'Patrimônio & Imóveis'}
+                onClick={bloqueado ? undefined : () => { setActiveModule('imoveis'); setActiveSubTask('blank_imoveis'); setIdSolicitacaoSelecionada(null); }}
+                className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 relative border ${
+                  bloqueado
+                    ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
+                    : activeModule === 'imoveis'
+                      ? 'bg-teal-600 text-white border-teal-500 shadow-md cursor-pointer'
+                      : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white cursor-pointer'
+                }`}
+              >
+                <Building className="w-4 h-4 flex-shrink-0" />
+                <span className="text-[8px] font-bold tracking-tight">Imóveis</span>
+              </button>
+            );
+          })()}
 
           {/* 5. ABERTURA DE CHAMADOS */}
-          <button
-            type="button"
-            title="Abertura de Chamados"
-            onClick={() => {
-              setActiveModule('abertura_chamados');
-              setActiveSubTask('blank_novo_chamado');
-              setIdSolicitacaoSelecionada(null);
-            }}
-            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
-              activeModule === 'abertura_chamados'
-                ? 'bg-purple-600 text-white border-purple-500 shadow-md'
-                : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
-            }`}
-          >
-            <Wrench className="w-4 h-4 flex-shrink-0" />
-            <span className="text-[8px] font-bold tracking-tight">Chamados</span>
-          </button>
+          {(() => {
+            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore';
+            return (
+              <button
+                type="button"
+                title={bloqueado ? 'Acesso restrito para este perfil' : 'Abertura de Chamados'}
+                onClick={bloqueado ? undefined : () => { setActiveModule('abertura_chamados'); setActiveSubTask('blank_novo_chamado'); setIdSolicitacaoSelecionada(null); }}
+                className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 relative border ${
+                  bloqueado
+                    ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
+                    : activeModule === 'abertura_chamados'
+                      ? 'bg-purple-600 text-white border-purple-500 shadow-md cursor-pointer'
+                      : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white cursor-pointer'
+                }`}
+              >
+                <Wrench className="w-4 h-4 flex-shrink-0" />
+                <span className="text-[8px] font-bold tracking-tight">Chamados</span>
+              </button>
+            );
+          })()}
 
           {/* 6. LOG DO SISTEMA — somente gestores */}
-          {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf') && (
+          {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
             <button
               type="button"
               title="Log do Sistema & Auditoria"
@@ -1350,21 +1357,27 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
+                        const bloqueado = perfilUsuario === 'administrativo_dore' && item.id === 'novo_atendimento';
                         return (
                           <button
                             key={item.id}
+                            disabled={bloqueado}
                             onClick={() => {
+                              if (bloqueado) return;
                               setActiveSubTask(item.id);
                               setIdSolicitacaoSelecionada(null);
                             }}
-                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left transition-all duration-150 cursor-pointer ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-850 font-bold border-l-2 border-blue-500 pl-1.5 rounded-r-md'
-                                : 'hover:bg-slate-50/70 text-slate-600 pl-1.5'
+                            className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left pl-1.5 transition-all duration-150 ${
+                              bloqueado
+                                ? 'text-slate-300 cursor-not-allowed'
+                                : isActive
+                                  ? 'bg-blue-50 text-blue-850 font-bold border-l-2 border-blue-500 rounded-r-md cursor-pointer'
+                                  : 'hover:bg-slate-50/70 text-slate-600 cursor-pointer'
                             }`}
                           >
-                            <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                            <span className="text-xs font-sans">{item.label}</span>
+                            <Icon className={`w-3 h-3 shrink-0 ${bloqueado ? 'text-slate-300' : isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-sans flex-1">{item.label}</span>
+                            {bloqueado && <Lock className="w-3 h-3 text-slate-300 ml-auto" />}
                           </button>
                         );
                       })}
@@ -1402,7 +1415,7 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'tecnico_infra';
+                        const bloqueado = perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'administrativo_dore' && item.id === 'analise');
                         return (
                           <button
                             key={item.id}
@@ -1414,14 +1427,15 @@ export default function App() {
                             }}
                             className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left pl-1.5 ${
                               bloqueado
-                                ? 'text-slate-400 cursor-not-allowed'
+                                ? 'text-slate-300 cursor-not-allowed'
                                 : isActive
                                   ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 rounded-r-md cursor-pointer transition-all duration-150'
                                   : 'hover:bg-slate-50/70 text-slate-600 cursor-pointer transition-all duration-150'
                             }`}
                           >
-                            <Icon className={`w-3 h-3 shrink-0 ${isActive && !bloqueado ? 'text-blue-600' : 'text-slate-400'}`} />
-                            <span className="text-xs font-sans">{item.label}</span>
+                            <Icon className={`w-3 h-3 shrink-0 ${bloqueado ? 'text-slate-300' : isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-sans flex-1">{item.label}</span>
+                            {bloqueado && <Lock className="w-3 h-3 text-slate-300 ml-auto" />}
                           </button>
                         );
                       })}
@@ -1460,7 +1474,7 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'tecnico_infra';
+                        const bloqueado = perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'administrativo_dore' && item.id === 'paf_autorizacao');
                         return (
                           <button
                             key={item.id}
@@ -1472,14 +1486,15 @@ export default function App() {
                             }}
                             className={`w-full flex items-center gap-1.5 px-2 py-1 rounded-md text-left pl-1.5 ${
                               bloqueado
-                                ? 'text-slate-400 cursor-not-allowed'
+                                ? 'text-slate-300 cursor-not-allowed'
                                 : isActive
                                   ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 rounded-r-md cursor-pointer transition-all duration-150'
                                   : 'hover:bg-slate-50/70 text-slate-600 cursor-pointer transition-all duration-150'
                             }`}
                           >
-                            <Icon className={`w-3 h-3 shrink-0 ${isActive && !bloqueado ? 'text-blue-600' : 'text-slate-400'}`} />
-                            <span className="text-xs font-sans">{item.label}</span>
+                            <Icon className={`w-3 h-3 shrink-0 ${bloqueado ? 'text-slate-300' : isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                            <span className="text-xs font-sans flex-1">{item.label}</span>
+                            {bloqueado && <Lock className="w-3 h-3 text-slate-300 ml-auto" />}
                           </button>
                         );
                       })}
@@ -1627,7 +1642,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'seguranca' && (
+          {activeModule === 'seguranca' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-rose-600 uppercase tracking-widest block font-sans">
@@ -1673,7 +1688,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'orcamento' && (
+          {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-amber-600 uppercase tracking-widest block font-sans">Módulo Ativo</span>
@@ -1784,7 +1799,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'imoveis' && (
+          {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-teal-600 uppercase tracking-widest block font-sans">
@@ -1833,7 +1848,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'abertura_chamados' && (
+          {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-purple-600 uppercase tracking-widest block font-sans">
@@ -2179,7 +2194,7 @@ export default function App() {
 
                                   {/* Botões de Ação */}
                                   <td className="py-4 px-4 text-center">
-                                    {perfilUsuario === 'gestor_paf' ? (
+                                    {(perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') ? (
                                       <div className="flex items-center justify-center gap-1.5">
                                         <button
                                           onClick={() => setConfirmingSolId(sol.id)}
@@ -3146,6 +3161,7 @@ export default function App() {
                         viewMode={viewMode}
                         onMudarViewMode={(mode) => setViewMode(mode)}
                         perfilUsuario={perfilUsuario}
+                        somenteLeitura={somenteLeitura}
                         onNavToAnalise={(sol) => {
                           setActiveSubTask('analise');
                           setSelectedSchoolsPorSubtask(prev => ({ ...prev, analise: sol.id }));
@@ -3156,6 +3172,7 @@ export default function App() {
                         solicitacoes={solicitacoesVisiveis}
                         onSelect={handleSelectSolicitacao}
                         perfilUsuario={perfilUsuario}
+                        somenteLeitura={somenteLeitura}
                         onUpdate={handleUpdateSolicitacao}
                         onDelete={handleDeleteSolicitacao}
                         onEdit={setSolicitacaoEmEdicao}
@@ -3179,6 +3196,7 @@ export default function App() {
                       solicitacoes={solicitacoesVisiveis}
                       onUpdate={handleUpdateSolicitacao}
                       perfilUsuario={perfilUsuario}
+                      somenteLeitura={somenteLeitura}
                       onSelect={(sol) => handleSelectSolicitacao(sol)}
                       empresasSeguranca={empresasSeguranca}
                       usuariosSeguranca={usuariosSeguranca}
@@ -3219,6 +3237,7 @@ export default function App() {
                       onSelect={handleSelectSolicitacao}
                       onNovaSolicitacao={() => setAbrirModalCadastro(true)}
                       perfilUsuario={perfilUsuario}
+                      somenteLeitura={somenteLeitura}
                       onMudarPerfil={(perf) => setPerfilUsuario(perf)}
                       onDelete={handleDeleteSolicitacao}
                       onUpdate={handleUpdateSolicitacao}
@@ -3259,6 +3278,7 @@ export default function App() {
                       })}
                       onSelect={handleSelectSolicitacao}
                       perfilUsuario={perfilUsuario}
+                      somenteLeitura={somenteLeitura}
                       onUpdate={handleUpdateSolicitacao}
                       onDelete={handleDeleteSolicitacao}
                       onEdit={setSolicitacaoEmEdicao}
@@ -3271,7 +3291,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'seguranca' && (
+              {activeModule === 'seguranca' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && (
                 <div className="w-full flex-1 flex flex-col space-y-6 text-left">
                   
                   {/* SUBTASK CADASTRO DE USUÁRIO */}
@@ -3482,6 +3502,14 @@ export default function App() {
                                             </button>
                                             <button
                                               type="button"
+                                              onClick={() => setResetSenhaUsrId(u.id)}
+                                              className="px-2 py-1 text-[9.5px] font-extrabold text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-100 rounded-lg cursor-pointer transition"
+                                              title="Resetar senha do usuário"
+                                            >
+                                              Resetar Senha
+                                            </button>
+                                            <button
+                                              type="button"
                                               onClick={() => setUsuariosSeguranca(usuariosSeguranca.filter(usr2 => usr2.id !== u.id))}
                                               className="text-[13px] leading-none hover:scale-110 active:scale-95 transition-all text-slate-400 hover:text-red-600 cursor-pointer p-1"
                                               title="Remover usuário"
@@ -3649,16 +3677,24 @@ export default function App() {
                                     </span>
                                   </td>
                                   <td className="py-3 px-4 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEmpresasSeguranca(empresasSeguranca.filter(e => e.id !== emp.id));
-                                      }}
-                                      className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer p-1"
-                                      title="Remover Empresa"
-                                    >
-                                      🗑️
-                                    </button>
+                                    <div className="flex items-center justify-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => abrirEdicaoEmpresa(emp)}
+                                        className="px-2 py-1 text-[9.5px] font-extrabold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-lg cursor-pointer transition"
+                                        title="Editar empresa"
+                                      >
+                                        Editar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEmpresasSeguranca(empresasSeguranca.filter(e => e.id !== emp.id))}
+                                        className="text-[13px] leading-none hover:scale-110 active:scale-95 transition-all text-slate-400 hover:text-red-600 cursor-pointer p-1"
+                                        title="Remover empresa"
+                                      >
+                                        🗑️
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -3672,7 +3708,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'orcamento' && (
+              {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && (
                 <OrcamentoModule
                   activeSubTask={activeSubTask}
                   setActiveSubTask={setActiveSubTask}
@@ -3681,17 +3717,18 @@ export default function App() {
                 />
               )}
 
-              {activeModule === 'imoveis' && (
+              {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && (
                 <div className="w-full p-6">
                   <PatrimonioModule
                     activeSubTask={activeSubTask}
                     perfilUsuario={perfilUsuario}
+                    somenteLeitura={perfilUsuario === 'administrativo_dore'}
                     regionaisDoTecnico={regionaisDoTecnico}
                   />
                 </div>
               )}
 
-              {activeModule === 'abertura_chamados' && (
+              {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && (
                 <div className="flex-1 flex flex-col items-center justify-center py-12 text-center select-none animate-in fade-in duration-200">
                   <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center border border-purple-100 mb-4 animate-bounce">
                     <Wrench className="w-8 h-8 text-purple-600" />
@@ -3748,7 +3785,7 @@ export default function App() {
               )}
 
               {activeModule === 'central_logs' && (
-                perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' ? (
+                (perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') ? (
                   <CentralNotificacoesLogs
                     logs={logs}
                     perfilUsuario={perfilUsuario}
@@ -3780,6 +3817,177 @@ export default function App() {
           <p className="text-[10px] text-slate-100/80">Sistema seguro de simulação com persistência local ativa (LocalStorage).</p>
         </div>
       </footer>
+
+      {/* MODAL EDITAR EMPRESA */}
+      {showEditarEmpresaModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Building className="w-4 h-4 text-rose-600" />
+                Editar Empresa Cadastrada
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setShowEditarEmpresaModal(false); setEmpIdEmEdicao(null); setEmpNome(''); setEmpCnpj(''); setEmpResp(''); setEmpSit('Regular'); setEmpTel(''); setEmpMail(''); }}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSalvarEdicaoEmpresa} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Razão Social / Nome Fantasia *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={empNome}
+                    onChange={e => setEmpNome(e.target.value)}
+                    className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    CNPJ *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={empCnpj}
+                    onChange={e => setEmpCnpj(e.target.value)}
+                    className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Situação Cadastral *
+                  </label>
+                  <select
+                    value={empSit}
+                    onChange={e => setEmpSit(e.target.value)}
+                    className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden cursor-pointer"
+                  >
+                    <option value="Regular">Regular (Homologada)</option>
+                    <option value="Pendente">Pendente (Falta Análise Fiscal)</option>
+                    <option value="Bloqueado">Bloqueado (Inadimplência ou Sanção)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Responsável Técnico
+                  </label>
+                  <input
+                    type="text"
+                    value={empResp}
+                    onChange={e => setEmpResp(e.target.value)}
+                    className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Telefone de Contato
+                  </label>
+                  <input
+                    type="text"
+                    value={empTel}
+                    onChange={e => setEmpTel(e.target.value)}
+                    className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                    E-mail Corporativo
+                  </label>
+                  <input
+                    type="email"
+                    value={empMail}
+                    onChange={e => setEmpMail(e.target.value)}
+                    className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 focus:border-rose-500 outline-hidden"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setShowEditarEmpresaModal(false); setEmpIdEmEdicao(null); setEmpNome(''); setEmpCnpj(''); setEmpResp(''); setEmpSit('Regular'); setEmpTel(''); setEmpMail(''); }}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL RESETAR SENHA */}
+      {resetSenhaUsrId && (() => {
+        const usr = usuariosSeguranca.find(u => u.id === resetSenhaUsrId);
+        if (!usr) return null;
+        return (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-sm animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-100">
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <Key className="w-4 h-4 text-amber-500" />
+                  Resetar Senha de Acesso
+                </h3>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                <p className="text-xs text-slate-600">
+                  Confirme o reset de senha para o usuário:
+                </p>
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700 shrink-0">
+                    {usr.nome.split(' ').slice(0, 2).map((n: string) => n[0]).join('')}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">{usr.nome}</p>
+                    <p className="text-[10px] text-slate-500">{usr.email}</p>
+                  </div>
+                </div>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1">Senha temporária gerada</p>
+                  <p className="font-mono text-sm font-bold text-amber-900 tracking-widest">sgo@2026</p>
+                  <p className="text-[10px] text-amber-600 mt-1">O usuário deverá alterar no próximo acesso.</p>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResetSenhaUsrId(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    registrarLog(
+                      'Reset de Senha',
+                      `Senha do usuário "${usr.nome}" (${usr.email}) foi redefinida para a senha temporária padrão por ${nomeUsuario}.`,
+                      'alerta'
+                    );
+                    setResetSenhaUsrId(null);
+                  }}
+                  className="px-4 py-2 text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 rounded-lg transition cursor-pointer"
+                >
+                  Confirmar Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL CADASTRO DE USUÁRIO */}
       {showCadastroUsuarioModal && (

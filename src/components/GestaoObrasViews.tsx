@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Plus, 
   ClipboardList, 
@@ -493,7 +493,6 @@ export function NovoAtendimentoPanel({
     setNumPaf('');
     setAnoEmenda('');
     setFormaAtendimento('VIA CAIXA ESCOLAR');
-    setNotificacao('');
     setDescricaoFolhaRosto('');
     setValorPlanilha('');
     setIss('');
@@ -2376,6 +2375,7 @@ interface AtribuicaoPanelProps {
   onMudarViewMode?: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
   perfilUsuario?: string;
   onNavToAnalise?: (sol: Solicitacao) => void;
+  somenteLeitura?: boolean;
 }
 
 export function AtribuicaoPanel({
@@ -2387,7 +2387,8 @@ export function AtribuicaoPanel({
   viewMode,
   onMudarViewMode,
   perfilUsuario = 'gestor_dore',
-  onNavToAnalise
+  onNavToAnalise,
+  somenteLeitura = false
 }: AtribuicaoPanelProps) {
   const [feedbackMsg, setFeedbackMsg] = useState<{ [solId: string]: string }>({});
 
@@ -2462,11 +2463,11 @@ export function AtribuicaoPanel({
     if (filtroDataFim && sol.dataCriacao && sol.dataCriacao > filtroDataFim) return false;
 
     // 8. Atribuição focada
-    if (perfilUsuario === 'analista_dore' && filtroAtribuicao === 'minhas') {
+    if ((perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && filtroAtribuicao === 'minhas') {
       const myNome = usuariosSeguranca?.find((u: any) => u.perfil === perfilUsuario)?.nome || '';
       const isMyAssign = !!sol.analistaAtribuido && (myNome ? sol.analistaAtribuido === myNome : !!sol.analistaAtribuido);
       if (!isMyAssign) return false;
-    } else if (perfilUsuario === 'gestor_dore' && filtroAtribuicao === 'minhas') {
+    } else if ((perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && filtroAtribuicao === 'minhas') {
       const noAssign = !sol.analistaAtribuido;
       if (!noAssign) return false;
     }
@@ -2721,7 +2722,7 @@ export function AtribuicaoPanel({
           <Layers className="w-4 h-4 text-blue-600 shrink-0" />
           <span className="font-extrabold text-slate-700 font-sans text-xs uppercase tracking-wide">Visão focada por atribuição de analistas:</span>
         </span>
-        {perfilUsuario === 'analista_dore' && (
+        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
           <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 select-none shrink-0">
             <button
               type="button"
@@ -2748,7 +2749,7 @@ export function AtribuicaoPanel({
           </div>
         )}
 
-        {perfilUsuario === 'gestor_dore' && (
+        {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && (
           <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 select-none shrink-0">
             <button
               type="button"
@@ -2948,10 +2949,11 @@ export function AtribuicaoPanel({
                     <div className="flex flex-col gap-1 max-w-[220px]">
                       <select
                         value={currentAssignId}
-                        onChange={(e) => handleAssignAnalyst(sol, e.target.value)}
-                        className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold cursor-pointer transition-all duration-150 w-full min-w-[210px] ${
-                          sol.analistaAtribuido 
-                            ? 'border-blue-500 text-blue-700 shadow-3xs' 
+                        onChange={(e) => !somenteLeitura && handleAssignAnalyst(sol, e.target.value)}
+                        disabled={somenteLeitura}
+                        className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold transition-all duration-150 w-full min-w-[210px] ${somenteLeitura ? 'cursor-default opacity-60' : 'cursor-pointer'} ${
+                          sol.analistaAtribuido
+                            ? 'border-blue-500 text-blue-700 shadow-3xs'
                             : 'border-slate-300 text-slate-500 font-medium'
                         }`}
                       >

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Solicitacao, DocumentoChecklist, syncChecklistDocs } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { enderecosDados } from './GestaoObrasViews';

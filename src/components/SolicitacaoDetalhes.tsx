@@ -156,7 +156,7 @@ export default function SolicitacaoDetalhes({
       setActiveTab(forcedTab as any);
     }
   }, [forcedTab, solicitacao.id]);
-  const isMyAssignment = perfilUsuario === 'analista_dore' &&
+  const isMyAssignment = (perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') &&
     !!solicitacao.analistaAtribuido &&
     (currentUserNome ? solicitacao.analistaAtribuido === currentUserNome : true);
 
@@ -1523,7 +1523,7 @@ ${totalPendencias > 0
       )}
 
       {/* ATRIBUIÇÃO DE ANALISTA DA DORE (Apenas para Gestor Atendimento DORE) */}
-      {perfilUsuario === 'gestor_dore' && solicitacao.etapaAtual === 'analise' && (
+      {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && solicitacao.etapaAtual === 'analise' && (
         <div className="bg-indigo-50/70 border border-indigo-200/85 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 shrink-0">
@@ -1907,7 +1907,7 @@ ${totalPendencias > 0
               {/* Action buttons corresponding to Role Permissions */}
               <div className="flex items-center gap-2">
                 {/* Simulated Quick Action block for Engineer to approve/evaluate quickly */}
-                {perfilUsuario === 'analista_dore' && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
+                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
                   <>
                     <button
                       onClick={reviewAllWithIA}
@@ -1944,7 +1944,7 @@ ${totalPendencias > 0
             </div>
 
             {/* BANNER DE ATRIBUIÇÃO PARA O ANALISTA DORE */}
-            {perfilUsuario === 'analista_dore' && (
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
               <div className="mb-6 p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-3 font-sans bg-white shadow-xs border-slate-200">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 shrink-0 border border-slate-200/50">
@@ -2143,7 +2143,7 @@ ${totalPendencias > 0
                         )}
 
                         {/* 2. OPEN TEXT AREA FOR ACTIVE ANALYST REVIEW - CAMPO DE TEXTO ABERTO DE ANÁLISE EM TEMPO REAL */}
-                        {perfilUsuario === 'analista_dore' && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
+                        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
                           <div className="mt-4 space-y-2 p-3.5 border border-slate-200 rounded-xl bg-slate-50 shadow-inner">
                             <div className="flex items-center justify-between">
                               <label htmlFor={`analise-doc-${doc.id}`} className="text-[11px] font-bold text-slate-755 flex items-center gap-1.5 font-sans">
@@ -2216,7 +2216,7 @@ ${totalPendencias > 0
                         )}
 
                         {/* 2. ENGENHEIRO DORE ACTIONS */}
-                        {perfilUsuario === 'analista_dore' && isMyAssignment && (
+                        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && (
                           <div className="flex flex-col items-end gap-2">
                             {solicitacao.etapaAtual === 'analise' ? (
                               <div className="space-y-2">
@@ -2351,7 +2351,7 @@ ${totalPendencias > 0
                 )}
 
                 {/* 2. Engenheiro DORE finalizando análise */}
-                {perfilUsuario === 'analista_dore' && isMyAssignment && solicitacao.etapaAtual === 'analise' && !hideTransitionButtons && (
+                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && solicitacao.etapaAtual === 'analise' && !hideTransitionButtons && (
                   <div className="text-right">
                     {solicitacao.documentos.some(d => d.status === 'pendente' && d.fileName) && (
                       <span className="text-xs text-amber-600 font-semibold block mb-2">
@@ -2972,7 +2972,7 @@ ${totalPendencias > 0
                           </div>
                         </div>
 
-                        {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                        {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                           <button
                             type="button"
                             onClick={removerCronograma}
@@ -2986,12 +2986,12 @@ ${totalPendencias > 0
                     ) : (
                       <div 
                         onClick={() => {
-                          if (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') {
+                          if (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) {
                             cronogramaInputRef.current?.click();
                           }
                         }}
                         className={`border-2 border-dashed rounded-xl p-6 text-center transition-all ${
-                          perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf'
+                          perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')
                             ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/55 cursor-pointer'
                             : 'border-neutral-200 bg-neutral-50/20 cursor-not-allowed'
                         }`}
@@ -3012,7 +3012,7 @@ ${totalPendencias > 0
                   </div>
 
                   {/* SAVE ACTION */}
-                  {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                  {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                     <div className="pt-2 flex justify-end">
                       <button
                         type="submit"
@@ -3391,7 +3391,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                               <button
                                 type="button"
                                 onClick={removerCronograma}
@@ -3405,12 +3405,12 @@ ${totalPendencias > 0
                       ) : (
                         <div 
                           onClick={() => {
-                            if (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') {
+                            if (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) {
                               cronogramaInputRef.current?.click();
                             }
                           }}
                           className={`border-2 border-dashed rounded-xl p-4 text-center transition-all ${
-                            perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf'
+                            perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')
                               ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/50 cursor-pointer'
                               : 'border-neutral-200 bg-neutral-50/25 cursor-not-allowed'
                           }`}
@@ -3431,7 +3431,7 @@ ${totalPendencias > 0
                     </div>
 
                     <div className="pt-2 flex justify-end gap-2.5">
-                      {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                      {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                         <button
                           type="submit"
                           className="px-3.5 py-1.5 border border-blue-600 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-extrabold cursor-pointer transition-colors"
@@ -3440,7 +3440,7 @@ ${totalPendencias > 0
                         </button>
                       )}
 
-                      {solicitacao.etapaAtual === 'ordem_inicio' && (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                      {solicitacao.etapaAtual === 'ordem_inicio' && (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                         <button
                           type="button"
                           onClick={emitirOrdemEIniciarObra}
@@ -3605,7 +3605,7 @@ ${totalPendencias > 0
                                 </span>
                               </div>
                             </div>
-                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3809,7 +3809,7 @@ ${totalPendencias > 0
                     </div>
                   )}
 
-                  {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                  {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                     <div className="flex justify-end pt-1">
                       <button
                         onClick={salvarDadosGeraisObra}
@@ -4454,7 +4454,7 @@ ${totalPendencias > 0
                       <div className="pt-3.5 border-t border-slate-200/80 space-y-3">
                         
                         {/* 1. GESTOR DORE: ATRIBUIR QUALQUER TÉCNICO DESEJADO */}
-                        {perfilUsuario === 'gestor_dore' && (
+                        {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && (
                           <div className="bg-white border border-slate-200 p-3.5 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                             <div className="flex items-center gap-2.5">
                               <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
@@ -4938,7 +4938,7 @@ ${totalPendencias > 0
               <div className="lg:col-span-2 space-y-6">
                 
                 {/* 1. REGISTER NEW ADITIVO */}
-                {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                   <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
                     <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
                       <h3 className="font-bold text-sm text-neutral-800">Nova Solicitação de Aditivo</h3>
@@ -5062,7 +5062,7 @@ ${totalPendencias > 0
                               </div>
                             </div>
 
-                            {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf') && adt.status === 'Pendente' && (
+                            {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && adt.status === 'Pendente' && (
                               <div className="flex items-center gap-1.5 shrink-0">
                                 <select
                                   onChange={(e) => atribuirAnalistaAditivo(adt.id, e.target.value)}
@@ -5124,7 +5124,7 @@ ${totalPendencias > 0
                                         )}
 
                                         {/* Audit actions for assigned analysts */}
-                                        {doc.status === 'pendente' && doc.fileName && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf') && (
+                                        {doc.status === 'pendente' && doc.fileName && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
                                           <div className="flex items-center gap-1.5">
                                             <button
                                               type="button"
@@ -5168,7 +5168,7 @@ ${totalPendencias > 0
                           </div>
 
                           {/* 3. DECISION PANEL / HOMOLOGAR ADITIVO */}
-                          {adt.status === 'Pendente' && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf') && (
+                          {adt.status === 'Pendente' && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
                             <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-250 space-y-3 font-sans text-xs shadow-2xs">
                               <h5 className="font-bold text-blue-900">Análise de Homologação de Termo Aditivo</h5>
                               <p className="text-neutral-500 leading-normal">
@@ -5444,7 +5444,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5524,7 +5524,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5604,7 +5604,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5652,7 +5652,7 @@ ${totalPendencias > 0
                     </div>
                   </div>
 
-                  {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf') && (
+                  {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
                     <div className="flex flex-col gap-2 pt-3 border-t border-neutral-100">
                       {!todosItensOk && (
                         <p className="text-[10.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-medium text-right">

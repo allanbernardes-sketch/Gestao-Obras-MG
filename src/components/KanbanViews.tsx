@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Solicitacao, EtapaProcesso, PerfilUsuario, UsuarioSistema } from '../types';
 import { 
   Building2, MapPin, User, ChevronRight, AlertCircle, Sparkles, CheckCircle2, 
@@ -9,6 +9,7 @@ interface KanbanViewsProps {
   solicitacoes: Solicitacao[];
   onSelect: (sol: Solicitacao) => void;
   perfilUsuario: PerfilUsuario;
+  somenteLeitura?: boolean;
   onUpdate: (updated: Solicitacao) => void;
   onDelete: (id: string) => void;
   onEdit?: (sol: Solicitacao) => void;
@@ -24,6 +25,7 @@ export default function KanbanViews({
   solicitacoes,
   onSelect,
   perfilUsuario,
+  somenteLeitura = false,
   onUpdate,
   onDelete,
   onEdit,
@@ -47,7 +49,7 @@ export default function KanbanViews({
   const [filtroCodesc, setFiltroCodesc] = useState('');
   const [filtroSre, setFiltroSre] = useState('todos');
 
-  const isReadOnly = activeSubTask === 'cadastro';
+  const isReadOnly = activeSubTask === 'cadastro' || somenteLeitura;
 
   // Obter a lista de municípios e sres/regionais únicas para popular o select de filtros
   const municipiosUnicos = React.useMemo(() => Array.from(new Set(solicitacoes.map(s => s.municipio).filter(Boolean))).sort(), [solicitacoes]);
@@ -318,7 +320,7 @@ export default function KanbanViews({
         <div className="pt-2 border-t border-slate-100 space-y-1.5 text-left" onClick={(e) => e.stopPropagation()}>
           
           {/* Quick Assign Dropdown for Gestor */}
-          {(!isReadOnly && (perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf')) ? (
+          {(!isReadOnly && (perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) ? (
             <div className="space-y-1">
               <label className="text-[8.5px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
                 <User className="w-2.5 h-2.5 text-slate-400" /> Atribuição:

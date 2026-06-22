@@ -328,7 +328,7 @@ export interface SaldoComplementarItem {
   documentos: { item: string; obrigatorio: boolean; checked: boolean; fileName?: string }[];
 }
 
-export type PerfilUsuario = 'tecnico_infra' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore';
+export type PerfilUsuario = 'tecnico_infra' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'admin';
 
 export interface UsuarioSistema {
   id: string;
