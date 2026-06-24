@@ -1,5 +1,15 @@
 export type EtapaProcesso = 'cadastro' | 'analise' | 'correcao' | 'paf_autorizacao' | 'paf' | 'ordem_inicio' | 'execucao' | 'cancelado';
 
+// Modelo de validação técnica (Nível 1 — status por item, aba Dados Gerais)
+export type StatusValidacao = 'pendente' | 'validado' | 'editado' | 'nao_validado';
+
+export type SecaoDadosGerais = 'identificacao_escolar' | 'classificacao_patrimonial' | 'detalhamento_tecnico' | 'referencia_dotacao';
+
+export interface StatusSecao {
+  status: StatusValidacao;
+  motivo?: string;
+}
+
 export interface DocumentoChecklist {
   id: string;
   nome: string;
@@ -8,6 +18,8 @@ export interface DocumentoChecklist {
   fileName?: string;
   uploadedAt?: string;
   fileSize?: string;
+  fileContent?: string;
+  fileType?: string;
   status: 'pendente' | 'aprovado' | 'recusado' | 'nao_se_aplica';
   justificativa?: string;
 }
@@ -123,9 +135,15 @@ export interface Solicitacao {
   tipoAtendimento?: string;
   numPaf?: string;
   anoEmenda?: string;
+  emendaImpositiva?: 'Sim' | 'Não'; // obrigatório quando tipoAtendimento = EMENDA — alimenta a etiqueta EMENDA_IMPOSITIVA
   atendimentoOrgao?: string;
   formaAtendimento?: string;
   seiMinutaOcupacao?: string;
+  // Saldo de PAF anterior cancelado
+  usaSaldoPafAnterior?: 'Sim' | 'Não';
+  numeroPafAnteriorCancelado?: string;
+  valorSaldoPafAnterior?: number;
+  necessidadeAditivoEstimada?: number;
   // Classificação da Demanda (substitui notificacao)
   origemDemanda?: string;
   orgaoEmissorNotificacao?: string;
@@ -133,10 +151,23 @@ export interface Solicitacao {
   dataNotificacao?: string;
   prazoAtendimentoNotificacao?: string;
   grauPrioridade?: 'Crítico' | 'Alto' | 'Médio' | 'Baixo';
+  // Prioridade automática (calculada por calcularPrioridade/calcularEstrelas em src/utils/prioridade.ts)
+  prioridadeManual?: boolean; // override setado pelo perfil ADM — alimenta a etiqueta PRIORIDADE
+  prioridadeScore?: number; // soma dos pontos das etiquetas ativas
+  estrelas?: number; // 0 a 5, derivado do score (EMERGENCIAL sempre = 5, bypass)
+  etiquetasPrioridade?: string[]; // ex: ['EMERGENCIAL', 'ESPECIAL']
+  // Classificação de complexidade (calculada por calcularIEE/recalcularIEE em src/utils/iee.ts) —
+  // lógica independente das etiquetas/estrelas de prioridade acima; define o custo de capacidade do analista.
+  iee?: number;
+  ieeClasse?: 'I' | 'II' | 'III' | 'IV';
+  ieePontos?: number; // 1 a 4 — quanto da capacidade (35 pts) do analista este processo consome
+  ieeComplexidade?: string; // 'Baixa' | 'Média' | 'Alta' | 'Muito Alta'
   /** @deprecated use origemDemanda */
   notificacao?: string;
   descricaoFolhaRosto?: string;
   valorPlanilha?: number;
+  prazoEstimadoObra?: number; // dias — seção 4 da análise DORE (Referência e Dotação Orçamentária SGO), opcional
+  prazoEstimadoMeses?: number; // meses — preenchido pelo técnico no Atendimento Inicial, obrigatório, critério do IEE
   iss?: string;
   responsavel?: string;
   tombado?: string;
@@ -192,6 +223,7 @@ export interface Solicitacao {
   ajustes?: AjustePlanilha[];
   analistasSugeridos?: string[];
   analistaAtribuido?: string;
+  atribuicaoForcada?: boolean; // true quando Admin/Gestor atribuiu acima da capacidade disponível do analista (Parte 4 do IEE)
   contadorAnalises?: number;
   parecerConsolidado?: string;
   historicoCorrecoes?: {
@@ -201,6 +233,25 @@ export interface Solicitacao {
     docsRecusados: { nome: string; id: string; justificativa: string }[];
   }[];
   statusPAF?: 'Aguardando Geração' | 'Aguardando Pagamento' | 'Pago Parcialmente' | 'Pago e Liberado';
+
+  // Retorno de Etapa administrativo (somente Administrador, src/utils/etapas.ts) — histórico
+  // estruturado exibido com badge próprio, separado de historicoEtapas.
+  retornosAdministrativos?: {
+    etapaOrigem: EtapaProcesso;
+    etapaDestino: EtapaProcesso;
+    motivo: string;
+    usuario: string;
+    timestamp: string;
+  }[];
+
+  // Cancelamento de Processo
+  solicitacaoCancelamento?: boolean; // true enquanto a solicitação do Técnico aguarda decisão do Admin
+  motivoSolicitacaoCancelamento?: string;
+  solicitacaoCancelamentoPor?: string;
+  solicitacaoCancelamentoData?: string;
+  motivoCancelamento?: string; // justificativa final registrada pelo Admin ao executar o cancelamento
+  canceladoPor?: string;
+  canceladoEm?: string;
 
   // Campos específicos da Ordem de Início (Atividade 4 / Novo status)
   dataOrdemInicio?: string;
@@ -243,18 +294,36 @@ export interface Solicitacao {
   planilhaMedicaoFinalUploadedAt?: string;
 
   // Validações da aba Análise de Processo
+  /** @deprecated substituído por statusSecoes['identificacao_escolar'] — mantido só para migração de dados antigos */
   validacaoEscolar?: 'validado' | 'nao_validado' | 'editado';
+  /** @deprecated substituído por statusSecoes['identificacao_escolar'].motivo */
   motivoNaoValidacaoEscolar?: string;
+  /** @deprecated campo nunca foi usado — a seção Patrimonial sempre teve status por sub-campo */
   validacaoPatrimonial?: 'validado' | 'nao_validado' | 'editado';
+  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'].motivo */
   motivoNaoValidacaoPatrimonial?: string;
+  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'] */
   validacaoFormaOcupacao?: 'validado' | 'nao_validado' | 'editado';
+  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'] */
   validacaoPredioEscola?: 'validado' | 'nao_validado' | 'editado';
+  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'] */
   validacaoTombamento?: 'validado' | 'nao_validado' | 'editado';
+  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'] */
   validacaoCoabitado?: 'validado' | 'nao_validado' | 'editado';
+  /** @deprecated substituído por statusSecoes['detalhamento_tecnico'] */
   validacaoTecnica?: 'validado' | 'nao_validado' | 'editado';
+  /** @deprecated substituído por statusSecoes['detalhamento_tecnico'].motivo */
   motivoNaoValidacaoTecnica?: string;
+  /** @deprecated substituído por statusSecoes['referencia_dotacao'] */
   validacaoReferenciaDotacao?: 'validado' | 'nao_validado' | 'editado';
+  /** @deprecated substituído por statusSecoes['referencia_dotacao'].motivo */
   motivoNaoValidacaoReferenciaDotacao?: string;
+
+  // Modelo novo (Nível 1, por seção) — ver src/utils/validacaoTecnica.ts
+  statusSecoes?: Record<SecaoDadosGerais, StatusSecao>;
+  // Snapshot dos valores enviados pelo técnico ao entrar em "Em Análise DORE" — usado para detectar EDITADO por diff real
+  valoresOriginaisTecnico?: Record<string, any>;
+
   observacoesAnalistaDadosGerais?: string;
   observacoesAnalistaChecklist?: string;
   outrosDocumentos?: DocumentoChecklist[];
@@ -347,6 +416,8 @@ export interface UsuarioSistema {
   tipoVinculo?: 'regional' | 'orgao_central';
   equipeCentral?: string;
   regionais?: string[];
+  // Capacidade de carga de análise (preparação para futura regra de atribuição por pontos)
+  capacidadeMaxima?: number; // padrão: 100 pts
 }
 
 export type StatusObraComputado =

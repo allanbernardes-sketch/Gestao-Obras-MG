@@ -505,6 +505,11 @@ export default function Dashboard({
                         <div className="font-bold text-slate-800 text-xs leading-snug font-sans text-left">
                           {sol.nomeEscola}
                         </div>
+                        {sol.solicitacaoCancelamento && (
+                          <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-[8.5px] font-bold uppercase" title={sol.motivoSolicitacaoCancelamento}>
+                            ⚠ Cancelamento Solicitado
+                          </span>
+                        )}
                         <div className="text-[10px] text-slate-400 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-left font-sans">
                           <span className="flex items-center gap-0.5">
                             <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
@@ -619,6 +624,10 @@ export default function Dashboard({
                         ) : sol.etapaAtual === 'ordem_inicio' ? (
                           <span className="px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[10px] font-bold">
                             Ordem de Início
+                          </span>
+                        ) : sol.etapaAtual === 'cancelado' ? (
+                          <span className="px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-300 rounded text-[10px] font-bold">
+                            Cancelado
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-250 rounded text-[10px] font-bold">

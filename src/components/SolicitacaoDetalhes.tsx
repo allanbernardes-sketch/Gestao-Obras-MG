@@ -3,11 +3,13 @@ import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao,
 import { CHECKLIST_PADRAO } from '../initialData';
 import { gerarParecerIA } from './GeradorParecerIA';
 import ProcessAnalysisPanel from './ProcessAnalysisPanel';
-import { 
+import { SECOES_DADOS_GERAIS, SECAO_LABEL, getStatusSecoes, capturarSnapshotTecnico } from '../utils/validacaoTecnica';
+import { ETAPA_LABEL, processoAindaModificavel, getEtapasAnteriores } from '../utils/etapas';
+import {
   ArrowLeft, Calendar, FileText, CheckCircle, XCircle, AlertCircle, AlertTriangle, TrendingUp,
-  UploadCloud, Sparkles, DollarSign, Building, Plus, Trash2, 
+  UploadCloud, Sparkles, DollarSign, Building, Plus, Trash2,
   ChevronRight, RefreshCw, Layers, Shield, FileCheck, HardHat, Info, UserCheck, User, History, Paperclip, Play,
-  Download
+  Download, Undo2, Ban
 } from 'lucide-react';
 
 const cnpjCaixaEscolarMap: Record<string, string> = {
@@ -152,15 +154,128 @@ export default function SolicitacaoDetalhes({
   const currentUserNome = usuariosSeguranca.find(u => u.perfil === perfilUsuario)?.nome || '';
   // Navigation internal view
   const [activeTab, setActiveTab ] = useState<'checklist' | 'paf' | 'ordem_inicio' | 'execucao' | 'ajustes' | 'aditivos' | 'conclusao'>('checklist');
+  const [mostrarModalEnviado, setMostrarModalEnviado] = useState(false);
+  const [tentouEnviarDore, setTentouEnviarDore] = useState(false);
+
+  // Retorno de Etapa (somente Administrador)
+  const [retornoEtapaModalAberto, setRetornoEtapaModalAberto] = useState(false);
+  const [etapaDestinoRetorno, setEtapaDestinoRetorno] = useState<EtapaProcesso | ''>('');
+  const [motivoRetornoEtapa, setMotivoRetornoEtapa] = useState('');
+
+  // Cancelamento de Processo
+  const [solicitarCancelamentoModalAberto, setSolicitarCancelamentoModalAberto] = useState(false);
+  const [motivoSolicitarCancelamento, setMotivoSolicitarCancelamento] = useState('');
+  const [cancelarProcessoModalAberto, setCancelarProcessoModalAberto] = useState(false);
+  const [justificativaCancelamentoFinal, setJustificativaCancelamentoFinal] = useState('');
 
   React.useEffect(() => {
     if (forcedTab) {
       setActiveTab(forcedTab as any);
     }
   }, [forcedTab, solicitacao.id]);
-  const isMyAssignment = (perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') &&
+  // somenteLeitura sempre vence — usado pela consulta histórica somente-leitura (Atribuição) para
+  // garantir que nenhum botão de validação/aprovação fique habilitado, independente de quem está logado.
+  const isMyAssignment = !somenteLeitura &&
+    (perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') &&
     !!solicitacao.analistaAtribuido &&
     (currentUserNome ? solicitacao.analistaAtribuido === currentUserNome : true);
+
+  // RETORNO DE ETAPA (somente Administrador) — utils/etapas.ts define o limite e as etapas elegíveis.
+  const etapasAnterioresDisponiveis = getEtapasAnteriores(solicitacao.etapaAtual);
+
+  const handleAbrirRetornoEtapa = () => {
+    setEtapaDestinoRetorno(etapasAnterioresDisponiveis[etapasAnterioresDisponiveis.length - 1] || '');
+    setMotivoRetornoEtapa('');
+    setRetornoEtapaModalAberto(true);
+  };
+
+  const handleConfirmarRetornoEtapa = () => {
+    if (!etapaDestinoRetorno || !motivoRetornoEtapa.trim()) return;
+    const hoje = new Date();
+    const etapaOrigem = solicitacao.etapaAtual;
+    const nomeAdmin = currentUserNome || 'Administrador';
+
+    onUpdate({
+      ...solicitacao,
+      etapaAtual: etapaDestinoRetorno,
+      retornosAdministrativos: [
+        ...(solicitacao.retornosAdministrativos || []),
+        {
+          etapaOrigem,
+          etapaDestino: etapaDestinoRetorno,
+          motivo: motivoRetornoEtapa.trim(),
+          usuario: nomeAdmin,
+          timestamp: hoje.toISOString()
+        }
+      ],
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { etapa: etapaDestinoRetorno, data: hoje.toISOString().split('T')[0], responsavel: `${nomeAdmin} (Retorno Administrativo)` }
+      ]
+    });
+    setRetornoEtapaModalAberto(false);
+  };
+
+  // CANCELAMENTO DE PROCESSO
+  const handleAbrirSolicitarCancelamento = () => {
+    setMotivoSolicitarCancelamento('');
+    setSolicitarCancelamentoModalAberto(true);
+  };
+
+  const handleConfirmarSolicitarCancelamento = () => {
+    if (!motivoSolicitarCancelamento.trim()) return;
+    const hoje = new Date();
+    onUpdate({
+      ...solicitacao,
+      solicitacaoCancelamento: true,
+      motivoSolicitacaoCancelamento: motivoSolicitarCancelamento.trim(),
+      solicitacaoCancelamentoPor: currentUserNome || 'Téc. Infraestrutura (SRE)',
+      solicitacaoCancelamentoData: hoje.toISOString()
+    });
+    setSolicitarCancelamentoModalAberto(false);
+  };
+
+  const handleRetirarSolicitacaoCancelamento = () => {
+    onUpdate({
+      ...solicitacao,
+      solicitacaoCancelamento: false,
+      motivoSolicitacaoCancelamento: undefined,
+      solicitacaoCancelamentoPor: undefined,
+      solicitacaoCancelamentoData: undefined
+    });
+  };
+
+  const handleAbrirCancelarProcesso = () => {
+    setJustificativaCancelamentoFinal('');
+    setCancelarProcessoModalAberto(true);
+  };
+
+  const handleConfirmarCancelamentoFinal = () => {
+    if (!justificativaCancelamentoFinal.trim()) return;
+    const hoje = new Date();
+    const nomeAdmin = currentUserNome || 'Administrador';
+    onUpdate({
+      ...solicitacao,
+      etapaAtual: 'cancelado',
+      motivoCancelamento: justificativaCancelamentoFinal.trim(),
+      canceladoPor: nomeAdmin,
+      canceladoEm: hoje.toISOString(),
+      solicitacaoCancelamento: false,
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { etapa: 'cancelado', data: hoje.toISOString().split('T')[0], responsavel: `${nomeAdmin} (Cancelamento Executado)` }
+      ]
+    });
+    setCancelarProcessoModalAberto(false);
+  };
+
+  const handleNegarSolicitacaoCancelamento = () => {
+    onUpdate({
+      ...solicitacao,
+      solicitacaoCancelamento: false
+    });
+    setCancelarProcessoModalAberto(false);
+  };
 
   const handleDownloadDocument = (fileName: string, label: string) => {
     const textContent = `--- Governo do Estado de Minas Gerais ---
@@ -185,7 +300,21 @@ Plataforma e-SGO - SEE-MG`;
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
-  
+
+  // Baixa o conteúdo real do documento do checklist (anexado via FileReader no upload); cai no simulado se for um doc antigo sem conteúdo salvo
+  const handleDownloadDoc = (doc: DocumentoChecklist) => {
+    if (!doc.fileContent) {
+      handleDownloadDocument(doc.fileName || 'documento', doc.nome);
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = doc.fileContent;
+    link.setAttribute('download', doc.fileName || 'documento');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // States for file uploads simulation
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   
@@ -264,7 +393,7 @@ Plataforma e-SGO - SEE-MG`;
 
   const planilhaAjusteFormInputRef = useRef<HTMLInputElement>(null);
 
-  // Simulated doc upload
+  // Upload real de documento — lê o conteúdo do arquivo (base64) via FileReader para permitir download posterior pelo analista
   const handleSimulatedUpload = (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const targetDoc = solicitacao.documentos.find(d => d.id === docId);
     if (targetDoc?.status === 'aprovado') {
@@ -276,24 +405,31 @@ Plataforma e-SGO - SEE-MG`;
     if (!file) return;
 
     const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
-    const updatedDocs = solicitacao.documentos.map(doc => {
-      if (doc.id === docId) {
-        return {
-          ...doc,
-          fileName: file.name,
-          fileSize: sizeFormatted,
-          uploadedAt: new Date().toISOString().split('T')[0],
-          status: 'pendente' as const, // resets to pending check
-          justificativa: undefined
-        };
-      }
-      return doc;
-    });
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const fileContent = ev.target?.result as string;
+      const updatedDocs = solicitacao.documentos.map(doc => {
+        if (doc.id === docId) {
+          return {
+            ...doc,
+            fileName: file.name,
+            fileSize: sizeFormatted,
+            fileContent,
+            fileType: file.type || undefined,
+            uploadedAt: new Date().toISOString().split('T')[0],
+            status: 'pendente' as const, // resets to pending check
+            justificativa: undefined
+          };
+        }
+        return doc;
+      });
 
-    onUpdate({
-      ...solicitacao,
-      documentos: updatedDocs
-    });
+      onUpdate({
+        ...solicitacao,
+        documentos: updatedDocs
+      });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleTriggerUpload = (docId: string) => {
@@ -427,7 +563,10 @@ ${totalPendencias > 0
   };
 
   const enviarParaDore = () => {
-    if (!canSendToDore()) return;
+    if (!canSendToDore()) {
+      setTentouEnviarDore(true);
+      return;
+    }
 
     // Considera a primeira que receber (starts at 1) e incrementa a cada encaminhamento de reanálise
     const currentCount = solicitacao.contadorAnalises || 0;
@@ -438,12 +577,14 @@ ${totalPendencias > 0
       etapaAtual: 'analise',
       analistaAtribuido: undefined,
       contadorAnalises: nextCount,
+      valoresOriginaisTecnico: capturarSnapshotTecnico(solicitacao),
       historicoEtapas: [
         ...solicitacao.historicoEtapas,
         { etapa: 'analise', data: new Date().toISOString().split('T')[0], responsavel: 'Téc. Infraestrutura (Envio)' }
       ]
     });
-    setActiveTab('checklist');
+    setTentouEnviarDore(false);
+    setMostrarModalEnviado(true);
   };
 
   const solicitarDevolucaoProcesso = () => {
@@ -525,12 +666,10 @@ ${totalPendencias > 0
   const enviarReprovacaoFinal = () => {
     const contador = (solicitacao.historicoCorrecoes?.length || 0) + 1;
     const hoje = new Date().toISOString().split('T')[0];
-    const motivosAtivos = [
-      { label: 'Identificação Escolar',    campo: 'escolar',           motivo: solicitacao.motivoNaoValidacaoEscolar || '' },
-      { label: 'Patrimônio / Tombamento',  campo: 'patrimonial',       motivo: solicitacao.motivoNaoValidacaoPatrimonial || '' },
-      { label: 'Detalhamento Técnico',     campo: 'tecnica',           motivo: solicitacao.motivoNaoValidacaoTecnica || '' },
-      { label: 'Referência de Dotação',    campo: 'referenciaDotacao', motivo: solicitacao.motivoNaoValidacaoReferenciaDotacao || '' },
-    ].filter(m => m.motivo.trim());
+    const statusSecoes = getStatusSecoes(solicitacao);
+    const motivosAtivos = SECOES_DADOS_GERAIS
+      .filter(secao => statusSecoes[secao]?.status === 'nao_validado')
+      .map(secao => ({ label: SECAO_LABEL[secao], campo: secao, motivo: statusSecoes[secao]?.motivo || '' }));
     const docsRecusados = (solicitacao.documentos || [])
       .filter(d => d.status === 'recusado' && d.justificativa)
       .map(d => ({ nome: d.nome, id: d.id, justificativa: d.justificativa || '' }));
@@ -1474,9 +1613,86 @@ ${totalPendencias > 0
                 Obra em Execução
               </span>
             )}
+            {solicitacao.etapaAtual === 'cancelado' && (
+              <span className="px-3 py-1 bg-rose-100 text-rose-800 border border-rose-300 rounded-full font-bold text-xs flex items-center gap-1.5">
+                <Ban className="w-3.5 h-3.5" />
+                Cancelado
+              </span>
+            )}
           </div>
+
+          {/* Badge de Solicitação de Cancelamento — independente da etapa, processo continua normalmente */}
+          {solicitacao.solicitacaoCancelamento && (
+            <span className="mt-1.5 px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-full font-bold text-[10.5px] flex items-center gap-1.5 animate-pulse" title={solicitacao.motivoSolicitacaoCancelamento}>
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Cancelamento Solicitado
+            </span>
+          )}
+
+          {/* Ações administrativas — Retorno de Etapa (admin) e Cancelamento (admin/técnico) */}
+          {!somenteLeitura && (
+          <div className="flex items-center gap-2 mt-2 flex-wrap justify-end">
+            {perfilUsuario === 'admin' && processoAindaModificavel(solicitacao) && etapasAnterioresDisponiveis.length > 0 && (
+              <button
+                type="button"
+                onClick={handleAbrirRetornoEtapa}
+                className="px-2.5 py-1 text-[10.5px] font-bold text-slate-500 hover:text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-lg flex items-center gap-1 cursor-pointer transition"
+                title="Retornar este processo para uma etapa anterior"
+              >
+                <Undo2 className="w-3 h-3" /> Retornar Etapa
+              </button>
+            )}
+            {perfilUsuario === 'admin' && processoAindaModificavel(solicitacao) && solicitacao.etapaAtual !== 'cancelado' && (
+              <button
+                type="button"
+                onClick={handleAbrirCancelarProcesso}
+                className="px-2.5 py-1 text-[10.5px] font-bold text-rose-700 hover:text-rose-800 border border-rose-200 hover:bg-rose-50 rounded-lg flex items-center gap-1 cursor-pointer transition"
+              >
+                <Ban className="w-3 h-3" /> Cancelar Processo
+              </button>
+            )}
+            {perfilUsuario === 'tecnico_infra' && processoAindaModificavel(solicitacao) && (
+              solicitacao.solicitacaoCancelamento ? (
+                <button
+                  type="button"
+                  onClick={handleRetirarSolicitacaoCancelamento}
+                  className="px-2.5 py-1 text-[10.5px] font-bold text-slate-500 hover:text-slate-700 border border-slate-200 hover:bg-slate-50 rounded-lg flex items-center gap-1 cursor-pointer transition"
+                >
+                  <Undo2 className="w-3 h-3" /> Retirar Solicitação de Cancelamento
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAbrirSolicitarCancelamento}
+                  className="px-2.5 py-1 text-[10.5px] font-bold text-rose-600 hover:text-rose-700 border border-rose-200 hover:bg-rose-50 rounded-lg flex items-center gap-1 cursor-pointer transition"
+                >
+                  <Ban className="w-3 h-3" /> Solicitar Cancelamento
+                </button>
+              )
+            )}
+          </div>
+          )}
         </div>
       </div>}
+
+      {/* HISTÓRICO ADMINISTRATIVO — Retornos de Etapa executados por Administrador */}
+      {(solicitacao.retornosAdministrativos || []).length > 0 && (
+        <div className="bg-rose-50/60 border border-rose-200 rounded-xl p-4 space-y-2">
+          <h4 className="text-[10px] font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+            <Undo2 className="w-3.5 h-3.5" /> Histórico Administrativo
+          </h4>
+          {(solicitacao.retornosAdministrativos || []).map((r, i) => (
+            <div key={i} className="text-xs text-rose-900 bg-white border border-rose-200 rounded-lg p-2.5">
+              <p className="font-bold flex items-center gap-1.5">
+                <Undo2 className="w-3.5 h-3.5 text-rose-600" />
+                Retorno Administrativo — {r.usuario} retornou de [{ETAPA_LABEL[r.etapaOrigem]}] para [{ETAPA_LABEL[r.etapaDestino]}]
+              </p>
+              <p className="mt-1 text-rose-800">Motivo: {r.motivo}</p>
+              <p className="mt-1 text-[10px] text-rose-400 font-mono">{new Date(r.timestamp).toLocaleString('pt-BR')}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* STEPPER SUPERIOR - INDICANDO ETAPA DO PROCESSO (PROFESSIONAL POLISH) */}
       {!hideStepper && (
@@ -2052,16 +2268,19 @@ ${totalPendencias > 0
               {solicitacao.documentos.map((doc, idx) => {
                 const isUploaded = doc.fileName !== undefined;
                 const uploadRefId = `${doc.id}-input`;
+                const faltandoObrigatorio = tentouEnviarDore && doc.obrigatorio && !isUploaded;
 
                 return (
-                  <div 
-                    key={doc.id} 
+                  <div
+                    key={doc.id}
                     className={`p-4 rounded-xl border transition-all ${
-                      doc.status === 'recusado' 
-                        ? 'border-red-200 bg-red-50/15'
-                        : doc.status === 'aprovado'
-                          ? 'border-emerald-100 bg-emerald-50/5'
-                          : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                      faltandoObrigatorio
+                        ? 'border-red-400 bg-red-50/40'
+                        : doc.status === 'recusado'
+                          ? 'border-red-200 bg-red-50/15'
+                          : doc.status === 'aprovado'
+                            ? 'border-emerald-100 bg-emerald-50/5'
+                            : 'border-neutral-200 hover:border-neutral-300 bg-white'
                     }`}
                   >
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -2104,7 +2323,7 @@ ${totalPendencias > 0
                             {/* Download Action */}
                             <button
                               type="button"
-                              onClick={() => handleDownloadDocument(doc.fileName!, doc.nome)}
+                              onClick={() => handleDownloadDoc(doc)}
                               className="text-blue-600 hover:text-blue-850 p-1.5 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer inline-flex items-center gap-1 font-extrabold text-[10.5px] uppercase tracking-wider border border-blue-200"
                               title="Baixar Documento"
                             >
@@ -2124,7 +2343,9 @@ ${totalPendencias > 0
                             )}
                           </div>
                         ) : (
-                          <span className="text-[11px] text-neutral-400 italic block mt-2 font-mono">
+                          <span className={`text-[11px] italic block mt-2 font-mono ${
+                            faltandoObrigatorio ? 'text-red-600 font-bold not-italic' : 'text-neutral-400'
+                          }`}>
                             ⚠️ Nenhum documento anexado ainda.
                           </span>
                         )}
@@ -2313,19 +2534,14 @@ ${totalPendencias > 0
                 {/* 1. Técnico enviando para Engenharia */}
                 {perfilUsuario === 'tecnico_infra' && solicitacao.etapaAtual === 'cadastro' && !hideTransitionButtons && (
                   <div className="text-right">
-                    {!canSendToDore() && (
+                    {tentouEnviarDore && !canSendToDore() && (
                       <span className="text-xs text-red-600 font-semibold block mb-2">
-                        ⚠️ Aguardando anexo dos {solicitacao.documentos.filter(d => d.obrigatorio && !d.fileName).length} docs obrigatórios restantes.
+                        ⚠️ Aguardando anexo dos {solicitacao.documentos.filter(d => d.obrigatorio && !d.fileName).length} docs obrigatórios restantes (destacados em vermelho acima).
                       </span>
                     )}
                     <button
                       onClick={enviarParaDore}
-                      disabled={!canSendToDore()}
-                      className={`px-5 py-2.5 rounded-lg text-sm font-semibold shadow-xs transition-all flex items-center gap-2 ${
-                        canSendToDore()
-                          ? 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
-                          : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                      }`}
+                      className="px-5 py-2.5 rounded-lg text-sm font-semibold shadow-xs transition-all flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
                     >
                       Enviar documentação para atendimento DORE
                       <ChevronRight className="w-4 h-4" />
@@ -5725,6 +5941,182 @@ ${totalPendencias > 0
           );
         })()}
       </div>
+
+      {mostrarModalEnviado && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-205 max-w-sm w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5">
+              <h3 className="font-display font-bold text-neutral-800 text-base mb-2">Solicitação Encaminhada</h3>
+              <p className="text-sm text-neutral-600">
+                A solicitação foi encaminhada à DORE com sucesso. Aguarde a atribuição de um analista.
+              </p>
+            </div>
+            <div className="px-6 py-4 bg-slate-50/75 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => {
+                  setMostrarModalEnviado(false);
+                  setActiveTab('checklist');
+                }}
+                className="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-600 text-white hover:bg-blue-700 cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Retornar Etapa (somente Administrador) */}
+      {retornoEtapaModalAberto && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-205 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 space-y-4">
+              <h3 className="font-display font-bold text-neutral-800 text-base flex items-center gap-2">
+                <Undo2 className="w-4.5 h-4.5 text-rose-600" /> Retornar Etapa
+              </h3>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Retornar para qual etapa? *
+                </label>
+                <select
+                  value={etapaDestinoRetorno}
+                  onChange={(e) => setEtapaDestinoRetorno(e.target.value as EtapaProcesso)}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white text-slate-800 font-bold"
+                >
+                  {etapasAnterioresDisponiveis.map(etapa => (
+                    <option key={etapa} value={etapa}>{ETAPA_LABEL[etapa]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Motivo do retorno *
+                </label>
+                <textarea
+                  rows={3}
+                  value={motivoRetornoEtapa}
+                  onChange={(e) => setMotivoRetornoEtapa(e.target.value)}
+                  placeholder="Justifique o motivo do retorno administrativo..."
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-slate-50/75 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setRetornoEtapaModalAberto(false)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarRetornoEtapa}
+                disabled={!etapaDestinoRetorno || !motivoRetornoEtapa.trim()}
+                className="px-5 py-2 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Confirmar Retorno
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Solicitar Cancelamento (Técnico SRE) */}
+      {solicitarCancelamentoModalAberto && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-205 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 space-y-4">
+              <h3 className="font-display font-bold text-neutral-800 text-base flex items-center gap-2">
+                <Ban className="w-4.5 h-4.5 text-rose-600" /> Solicitar Cancelamento
+              </h3>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Motivo da solicitação de cancelamento *
+                </label>
+                <textarea
+                  rows={3}
+                  value={motivoSolicitarCancelamento}
+                  onChange={(e) => setMotivoSolicitarCancelamento(e.target.value)}
+                  placeholder="Descreva o motivo da solicitação de cancelamento..."
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-slate-50/75 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                onClick={() => setSolicitarCancelamentoModalAberto(false)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarSolicitarCancelamento}
+                disabled={!motivoSolicitarCancelamento.trim()}
+                className="px-5 py-2 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Confirmar Solicitação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Cancelar Processo (Administrador) */}
+      {cancelarProcessoModalAberto && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-205 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 space-y-4">
+              <h3 className="font-display font-bold text-neutral-800 text-base flex items-center gap-2">
+                <Ban className="w-4.5 h-4.5 text-rose-600" /> Cancelar Processo
+              </h3>
+              {solicitacao.solicitacaoCancelamento && solicitacao.motivoSolicitacaoCancelamento && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                  <span className="font-bold block mb-0.5">Motivo da solicitação do Técnico ({solicitacao.solicitacaoCancelamentoPor}):</span>
+                  {solicitacao.motivoSolicitacaoCancelamento}
+                </div>
+              )}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Justificativa do cancelamento *
+                </label>
+                <textarea
+                  rows={3}
+                  value={justificativaCancelamentoFinal}
+                  onChange={(e) => setJustificativaCancelamentoFinal(e.target.value)}
+                  placeholder="Justifique o cancelamento definitivo do processo..."
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 font-semibold">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                Esta ação é irreversível. O processo será arquivado como Cancelado.
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-slate-50/75 border-t border-slate-100 flex justify-end gap-2 flex-wrap">
+              <button
+                onClick={() => setCancelarProcessoModalAberto(false)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 cursor-pointer"
+              >
+                Voltar
+              </button>
+              {solicitacao.solicitacaoCancelamento && (
+                <button
+                  onClick={handleNegarSolicitacaoCancelamento}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-amber-700 border border-amber-200 hover:bg-amber-50 cursor-pointer"
+                >
+                  Negar Solicitação
+                </button>
+              )}
+              <button
+                onClick={handleConfirmarCancelamentoFinal}
+                disabled={!justificativaCancelamentoFinal.trim()}
+                className="px-5 py-2 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Confirmar Cancelamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -87,14 +87,23 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
   const [dataNotificacao, setDataNotificacao] = useState('');
   const [prazoAtendimentoNotificacao, setPrazoAtendimentoNotificacao] = useState('');
   const [grauPrioridade, setGrauPrioridade] = useState('');
+  // Saldo de PAF anterior cancelado
+  const [usaSaldoPafAnterior, setUsaSaldoPafAnterior] = useState<'Sim' | 'Não'>('Não');
+  const [numeroPafAnteriorCancelado, setNumeroPafAnteriorCancelado] = useState('');
+  const [valorSaldoPafAnterior, setValorSaldoPafAnterior] = useState('');
   const [descricaoFolhaRosto, setDescricaoFolhaRosto] = useState('');
   const [valorPlanilha, setValorPlanilha] = useState('');
   const [iss, setIss] = useState('');
-  
+
   const activeUser = usuariosSeguranca?.find(u => u.perfil === perfilUsuario);
   const responsavel = activeUser ? activeUser.nome : 'João Paulo Penfield';
 
   const [erro, setErro] = useState('');
+  const [codescTouched, setCodescTouched] = useState(false);
+  const [tentouSubmeter, setTentouSubmeter] = useState(false);
+
+  const codescNaoEncontrado = codesc.trim().length > 0 && enderecosDados.filter(e => e.codesc === codesc.trim()).length === 0;
+  const fieldErrorClass = 'border-red-400 bg-red-50/30';
 
   // Handle CODESC change — limpa endereço e dados da escola
   const handleCodescChange = (val: string) => {
@@ -167,16 +176,20 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setTentouSubmeter(true);
     if (
       !nomeEscola.trim() ||
       !codesc.trim() ||
+      codescNaoEncontrado ||
       !municipio.trim() ||
       !sre.trim() ||
       !descricaoFolhaRosto.trim() ||
       !valorPlanilha.trim() ||
       !iss.trim() ||
       (formaOcupacao === 'OUTRO' && !outraFormaOcupacao.trim()) ||
-      (tipoAtendimento === 'EMENDA' && (!numPaf.trim() || !anoEmenda.trim()))
+      (tipoAtendimento === 'EMENDA' && (!numPaf.trim() || !anoEmenda.trim())) ||
+      (origemDemanda === 'Notificação' && (!numeroNotificacao.trim() || !dataNotificacao.trim() || !prazoAtendimentoNotificacao.trim())) ||
+      (usaSaldoPafAnterior === 'Sim' && (!numeroPafAnteriorCancelado.trim() || !valorSaldoPafAnterior.trim()))
     ) {
       setErro('Por favor, preencha todos os campos do formulário para criar a nova solicitação.');
       return;
@@ -232,7 +245,13 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
       tombado: tombado.toUpperCase(),
       orgaoTombador: tombado !== 'NÃO É TOMBADO' ? (orgaoTombador.toUpperCase() || 'MUNICIPAL') : undefined,
       coabitado: coabitado.toUpperCase(),
-      tipoCoabitado: coabitado === 'SIM' ? (tipoCoabitado || 'Coabitado com outra escola Estadual') : undefined
+      tipoCoabitado: coabitado === 'SIM' ? (tipoCoabitado || 'Coabitado com outra escola Estadual') : undefined,
+      usaSaldoPafAnterior,
+      numeroPafAnteriorCancelado: usaSaldoPafAnterior === 'Sim' ? numeroPafAnteriorCancelado.trim().toUpperCase() : undefined,
+      valorSaldoPafAnterior: usaSaldoPafAnterior === 'Sim' ? parseBRLToFloat(valorSaldoPafAnterior) : undefined,
+      necessidadeAditivoEstimada: usaSaldoPafAnterior === 'Sim'
+        ? Math.max(0, (parseBRLToFloat(valorPlanilha) ?? 0) - (parseBRLToFloat(valorSaldoPafAnterior) ?? 0))
+        : undefined
     };
 
     onSave(nova);
@@ -284,9 +303,19 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                   placeholder="Digite ex: 145236..."
                   value={codesc}
                   onChange={(e) => handleCodescChange(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono font-medium"
+                  onBlur={() => setCodescTouched(true)}
+                  className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono font-medium ${
+                    (codescTouched && codescNaoEncontrado) || (tentouSubmeter && !codesc.trim())
+                      ? fieldErrorClass
+                      : 'border-slate-200'
+                  }`}
                   required
                 />
+                {codescTouched && codescNaoEncontrado && (
+                  <span className="text-[10px] text-red-600 font-semibold block mt-1">
+                    Escola não encontrada para este código. Verifique o CODESC informado.
+                  </span>
+                )}
               </div>
 
               <div>
@@ -378,7 +407,9 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                     placeholder="Por favor, explique a forma de ocupação do imóvel..."
                     value={outraFormaOcupacao}
                     onChange={(e) => setOutraFormaOcupacao(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-blue-200 bg-blue-50/10 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans outline-hidden"
+                    className={`w-full px-3 py-2 text-sm border bg-blue-50/10 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans outline-hidden ${
+                      tentouSubmeter && !outraFormaOcupacao.trim() ? fieldErrorClass : 'border-blue-200'
+                    }`}
                     required
                   />
                 </div>
@@ -498,6 +529,62 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
               </select>
             </div>
 
+            {/* Saldo de PAF anterior cancelado — sempre visível */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Este atendimento utiliza saldo de PAF anterior cancelado? *
+                </label>
+                <div className="flex gap-4">
+                  {(['Não', 'Sim'] as const).map(op => (
+                    <label key={op} className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="usaSaldoPafAnterior"
+                        checked={usaSaldoPafAnterior === op}
+                        onChange={() => setUsaSaldoPafAnterior(op)}
+                        className="rounded-full text-blue-600"
+                      />
+                      <span>{op}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {usaSaldoPafAnterior === 'Sim' && (
+                <>
+                  <div className="animate-in slide-in-from-top-2 duration-150">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Número do PAF Anterior Cancelado *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 512/G-2025"
+                      value={numeroPafAnteriorCancelado}
+                      onChange={(e) => setNumeroPafAnteriorCancelado(e.target.value)}
+                      className={`w-full px-3 py-2 text-sm border rounded-lg bg-white font-mono ${
+                        tentouSubmeter && !numeroPafAnteriorCancelado.trim() ? fieldErrorClass : 'border-slate-200'
+                      }`}
+                    />
+                  </div>
+                  <div className="animate-in slide-in-from-top-2 duration-150">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Valor em Conta (Saldo Disponível) (R$) *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="R$ 0,00"
+                      value={valorSaldoPafAnterior}
+                      onChange={(e) => setValorSaldoPafAnterior(formatBRL(e.target.value))}
+                      className={`w-full px-3 py-2 text-sm border rounded-lg bg-white font-mono ${
+                        tentouSubmeter && !valorSaldoPafAnterior.trim() ? fieldErrorClass : 'border-slate-200'
+                      }`}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
             {origemDemanda === 'Notificação' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl animate-in slide-in-from-top-2 duration-150">
                 <div className="sm:col-span-2 text-[10px] font-black text-amber-800 uppercase tracking-wider">Detalhes da Notificação</div>
@@ -518,19 +605,19 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Número da Notificação</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Número da Notificação *</label>
                   <input type="text" placeholder="Ex: NOT-2026/001" value={numeroNotificacao} onChange={(e) => setNumeroNotificacao(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" />
+                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-white ${tentouSubmeter && !numeroNotificacao.trim() ? fieldErrorClass : 'border-slate-200'}`} />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Data da Notificação</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Data da Notificação *</label>
                   <input type="date" value={dataNotificacao} onChange={(e) => setDataNotificacao(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" />
+                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-white ${tentouSubmeter && !dataNotificacao.trim() ? fieldErrorClass : 'border-slate-200'}`} />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Prazo para Atendimento</label>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Prazo para Atendimento *</label>
                   <input type="date" value={prazoAtendimentoNotificacao} onChange={(e) => setPrazoAtendimentoNotificacao(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white" />
+                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-white ${tentouSubmeter && !prazoAtendimentoNotificacao.trim() ? fieldErrorClass : 'border-slate-200'}`} />
                 </div>
               </div>
             )}
@@ -625,7 +712,9 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                   <select
                     value={anoEmenda}
                     onChange={(e) => setAnoEmenda(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 bg-white transition-all font-sans cursor-pointer text-slate-705 font-medium"
+                    className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 bg-white transition-all font-sans cursor-pointer text-slate-705 font-medium ${
+                      tentouSubmeter && !anoEmenda.trim() ? fieldErrorClass : 'border-slate-200'
+                    }`}
                     required
                   >
                     <option value="">Selecione o ano...</option>
@@ -645,7 +734,9 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                     placeholder="Ex: 512/G-EMENDA"
                     value={numPaf}
                     onChange={(e) => setNumPaf(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono"
+                    className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono ${
+                      tentouSubmeter && !numPaf.trim() ? fieldErrorClass : 'border-slate-200'
+                    }`}
                     required
                   />
                 </div>
@@ -661,7 +752,9 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                 value={descricaoFolhaRosto}
                 onChange={(e) => setDescricaoFolhaRosto(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans"
+                className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans ${
+                  tentouSubmeter && !descricaoFolhaRosto.trim() ? fieldErrorClass : 'border-slate-200'
+                }`}
                 required
               />
             </div>
@@ -683,11 +776,13 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                    placeholder="R$ 0,00"
                    value={valorPlanilha}
                    onChange={handleValorChange}
-                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono"
+                   className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono ${
+                     tentouSubmeter && !valorPlanilha.trim() ? fieldErrorClass : 'border-slate-200'
+                   }`}
                    required
                  />
                </div>
- 
+
                <div>
                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                    ISS (%) *
@@ -699,11 +794,37 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                    onChange={handleIssChange}
                    onFocus={handleIssFocus}
                    onBlur={handleIssBlur}
-                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono"
+                   className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 transition-all font-sans font-mono ${
+                     tentouSubmeter && !iss.trim() ? fieldErrorClass : 'border-slate-200'
+                   }`}
                    required
                  />
                </div>
              </div>
+
+             {usaSaldoPafAnterior === 'Sim' && valorPlanilha.trim() && valorSaldoPafAnterior.trim() && (() => {
+               const planilhaFloat = parseBRLToFloat(valorPlanilha) ?? 0;
+               const saldoFloat = parseBRLToFloat(valorSaldoPafAnterior) ?? 0;
+               const diferenca = planilhaFloat - saldoFloat;
+               const precisaAditivo = diferenca > 0;
+               return (
+                 <div className={`text-xs p-3 rounded-lg border flex items-start gap-2 ${
+                   precisaAditivo ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                 }`}>
+                   <span className="font-bold shrink-0">{precisaAditivo ? '⚠️' : '✓'}</span>
+                   {precisaAditivo ? (
+                     <span>
+                       Será necessário aditivo estimado de{' '}
+                       <strong>{diferenca.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong>{' '}
+                       (planilha {planilhaFloat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} excede o saldo disponível de{' '}
+                       {saldoFloat.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).
+                     </span>
+                   ) : (
+                     <span>O saldo do PAF anterior cobre o valor da planilha. Aditivo não necessário.</span>
+                   )}
+                 </div>
+               );
+             })()}
           </div>
 
           <div className="text-xs text-slate-500 bg-blue-50/50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">

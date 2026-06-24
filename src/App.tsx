@@ -5,16 +5,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, computeStatusObra } from './types';
+import { recalcularPrioridade } from './utils/prioridade';
+import { recalcularIEE } from './utils/iee';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
 import Dashboard from './components/Dashboard';
 import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle, FolderOpen, RefreshCw, Filter, LogOut } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import KanbanViews from './components/KanbanViews';
-import { NovoAtendimentoPanel, AtribuicaoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
+import { NovoAtendimentoPanel, AtribuicaoPanel, AtribuicaoHistoricoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
 import AcompanhamentoPaf from './components/AcompanhamentoPaf';
 import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
@@ -125,10 +127,12 @@ export default function App() {
   const [filterAnaliseResponsavelText, setFilterAnaliseResponsavelText] = useState('');
   const [filterAnaliseDataInicio, setFilterAnaliseDataInicio] = useState('');
   const [filterAnaliseDataFim, setFilterAnaliseDataFim] = useState('');
-  // Modo da aba de análise: fila ativa ou histórico de processos validados
-  const [analiseViewMode, setAnaliseViewMode] = useState<'ativa' | 'historico'>('ativa');
-  const [historicoSelectedId, setHistoricoSelectedId] = useState<string | null>(null);
-  
+
+  // Tela de Atribuição: aba ativa (Fila Ativa / Histórico) e preview somente-leitura do histórico
+  const [abaAtribuicao, setAbaAtribuicao] = useState<'ativa' | 'historico'>('ativa');
+  const [historicoAtribuicaoSelecionadoId, setHistoricoAtribuicaoSelecionadoId] = useState<string | null>(null);
+
+
   // REJECTION STATE FOR "3. AUTORIZAÇÃO DO PAF"
   const [rejectingSchoolId, setRejectingSchoolId] = useState<string | null>(null);
   const [rejectionJustification, setRejectionJustification] = useState('');
@@ -631,15 +635,17 @@ export default function App() {
           };
         });
 
-        setSolicitacoes(migrado);
-        localStorage.setItem('gesto_solicitacoes', JSON.stringify(migrado));
+        const migradoComPrioridade = migrado.map(recalcularPrioridade).map(recalcularIEE);
+        setSolicitacoes(migradoComPrioridade);
+        localStorage.setItem('gesto_solicitacoes', JSON.stringify(migradoComPrioridade));
       } catch (e) {
         console.error('Falha ao parsear localStorage, resetando...', e);
-        setSolicitacoes(SOLICITACOES_INICIAIS);
+        setSolicitacoes(SOLICITACOES_INICIAIS.map(recalcularPrioridade).map(recalcularIEE));
       }
     } else {
-      setSolicitacoes(SOLICITACOES_INICIAIS);
-      localStorage.setItem('gesto_solicitacoes', JSON.stringify(SOLICITACOES_INICIAIS));
+      const iniciaisComPrioridade = SOLICITACOES_INICIAIS.map(recalcularPrioridade).map(recalcularIEE);
+      setSolicitacoes(iniciaisComPrioridade);
+      localStorage.setItem('gesto_solicitacoes', JSON.stringify(iniciaisComPrioridade));
     }
   }, []);
 
@@ -650,9 +656,17 @@ export default function App() {
   }, [activeSubTask]);
 
   // Persists updates to localStorage
-  const atualizarEGuardarSolicitacoes = (novas: Solicitacao[]) => {
+  const atualizarEGuardarSolicitacoes = (novasBrutas: Solicitacao[]) => {
+    // Recalcula score/estrelas/etiquetas a cada criação, atualização ou ajuste de prioridade manual
+    const novas = novasBrutas.map(recalcularPrioridade).map(recalcularIEE);
     setSolicitacoes(novas);
-    localStorage.setItem('gesto_solicitacoes', JSON.stringify(novas));
+    try {
+      localStorage.setItem('gesto_solicitacoes', JSON.stringify(novas));
+    } catch (err) {
+      // Limite de armazenamento do navegador excedido (comum ao anexar muitos arquivos reais)
+      alert('Não foi possível salvar: o limite de armazenamento do navegador foi excedido. Isso costuma ocorrer quando há muitos documentos anexados. Remova ou substitua algum arquivo grande e tente novamente.');
+      console.error('Falha ao salvar no localStorage:', err);
+    }
   };
 
   const handleInjetarDemandaTeste = (subTask: string) => {
@@ -927,6 +941,25 @@ export default function App() {
           );
         }
       });
+
+      // 6. Check if a Técnico SRE requested cancellation — notifica o Administrador
+      if (!old.solicitacaoCancelamento && updated.solicitacaoCancelamento) {
+        criarNotificacao(
+          `Solicitação de Cancelamento: ${updated.nomeEscola}`,
+          `${updated.solicitacaoCancelamentoPor || 'Téc. SRE'} solicitou o cancelamento do processo. Motivo: "${updated.motivoSolicitacaoCancelamento || ''}".`,
+          'alerta',
+          updated.id,
+          updated.nomeEscola
+        );
+
+        registrarLog(
+          'Solicitação de Cancelamento de Processo',
+          `Cancelamento solicitado por ${updated.solicitacaoCancelamentoPor || 'Téc. SRE'}. Motivo: "${updated.motivoSolicitacaoCancelamento || ''}".`,
+          'alerta',
+          updated.id,
+          updated.nomeEscola
+        );
+      }
     }
   };
 
@@ -2422,26 +2455,7 @@ export default function App() {
                   {/* CABEÇALHO DA FILA E SELETOR DE ATENDIMENTO - LIGHTENED THE COLOR */}
                   {activeSubTask === 'analise' ? (
                     <div id="paf-autorizacao-workspace" className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs text-left text-slate-800 space-y-4">
-                      {/* Toggle: Fila Ativa / Histórico */}
-                      <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                        <button
-                          type="button"
-                          onClick={() => setAnaliseViewMode('ativa')}
-                          className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${analiseViewMode === 'ativa' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                        >
-                          Fila Ativa ({listFiltered.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setAnaliseViewMode('historico'); setHistoricoSelectedId(null); }}
-                          className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all flex items-center gap-1.5 ${analiseViewMode === 'historico' ? 'bg-slate-700 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
-                        >
-                          <FileClock className="w-3.5 h-3.5" /> Histórico Validados ({solicitacoes.filter(s => s.etapaAtual !== 'analise' && (s.historicoEtapas || []).some(h => h.etapa === 'analise')).length})
-                        </button>
-                      </div>
-
-                      {/* Top Row with Header and Step Queue Info — só na fila ativa */}
-                      {analiseViewMode === 'ativa' && (
+                      {/* Top Row with Header and Step Queue Info */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
                         <div className="flex items-center gap-2">
                           <Search className="w-4 h-4 text-blue-600" />
@@ -2453,9 +2467,7 @@ export default function App() {
                           Fila da Etapa: {listFiltered.length} de {solicitacoes.filter(s => s.etapaAtual === 'analise').length} demandas analisáveis
                         </span>
                       </div>
-                      )}
 
-                      {analiseViewMode === 'ativa' && (<>
                       {/* Dropdowns and Date Fields Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                         {/* ID DE OBRA */}
@@ -2610,71 +2622,6 @@ export default function App() {
                             })}
                         </div>
                       </div>
-                      </>)}
-
-                      {/* Painel Histórico de Processos Validados */}
-                      {analiseViewMode === 'historico' && (() => {
-                        const historico = solicitacoes.filter(s =>
-                          s.etapaAtual !== 'analise' &&
-                          (s.historicoEtapas || []).some(h => h.etapa === 'analise')
-                        );
-                        const etapaLabels: Record<string, string> = {
-                          paf_autorizacao: 'Autorização PAF',
-                          paf: 'Geração PAF',
-                          ordem_inicio: 'Ordem de Início',
-                          execucao: 'Execução',
-                          correcao: 'Correção',
-                          cancelado: 'Cancelado',
-                        };
-                        return (
-                          <div className="space-y-3">
-                            <p className="text-[11px] text-slate-500 font-medium">
-                              Processos que passaram pela etapa de Análise Técnica. Clique em um para consultar o dossiê em modo somente leitura.
-                            </p>
-                            {historico.length === 0 ? (
-                              <div className="text-center py-8 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
-                                Nenhum processo foi validado ainda nesta sessão.
-                              </div>
-                            ) : (
-                              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-                                {historico.map(s => {
-                                  const etapaAnalise = (s.historicoEtapas || []).find(h => h.etapa === 'analise');
-                                  const etapaApos = (s.historicoEtapas || []).find(h => h.etapa === 'paf_autorizacao' || h.etapa === 'correcao');
-                                  const foiAprovado = s.etapaAtual !== 'correcao' && !['cadastro', 'analise'].includes(s.etapaAtual);
-                                  const isSelected = historicoSelectedId === s.id;
-                                  return (
-                                    <button
-                                      key={s.id}
-                                      type="button"
-                                      onClick={() => setHistoricoSelectedId(isSelected ? null : s.id)}
-                                      className={`w-full text-left px-4 py-3 rounded-xl border text-xs transition-all flex items-center justify-between gap-3 ${isSelected ? 'bg-slate-700 text-white border-slate-600' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'}`}
-                                    >
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        <span className="font-black font-mono shrink-0">{s.id}</span>
-                                        <div className="min-w-0">
-                                          <p className="font-bold truncate">{s.nomeEscola}</p>
-                                          <p className="text-[10px] opacity-60 truncate">{s.sre} — CODESC {s.codesc}</p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        {etapaAnalise?.data && (
-                                          <span className="text-[10px] opacity-60">Analisado: {new Date(etapaAnalise.data).toLocaleDateString('pt-BR')}</span>
-                                        )}
-                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${foiAprovado ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                          {foiAprovado ? 'Aprovado' : 'Devolvido'}
-                                        </span>
-                                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-600 uppercase">
-                                          {etapaLabels[s.etapaAtual] || s.etapaAtual}
-                                        </span>
-                                      </div>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
 
                     </div>
                   ) : activeSubTask === 'conclusao' ? (
@@ -3047,40 +2994,7 @@ export default function App() {
                   )}
 
                   <div className="w-full flex flex-col space-y-6">
-                    {/* Modo histórico — exibir processo selecionado em somente leitura */}
-                    {activeSubTask === 'analise' && analiseViewMode === 'historico' && historicoSelectedId ? (() => {
-                      const solHistorico = solicitacoes.find(s => s.id === historicoSelectedId);
-                      if (!solHistorico) return null;
-                      return (
-                        <div className="bg-white rounded-xl border border-slate-700/20 shadow-sm p-1 ring-2 ring-slate-600/10">
-                          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 rounded-t-lg">
-                            <FileClock className="w-4 h-4 text-slate-300" />
-                            <span className="text-xs font-black text-white uppercase tracking-wide">Consulta Histórica — Somente Leitura</span>
-                            <span className="ml-auto text-[10px] text-slate-300 font-mono">{solHistorico.id} · {solHistorico.nomeEscola}</span>
-                            <button type="button" onClick={() => setHistoricoSelectedId(null)} className="ml-2 text-slate-400 hover:text-white transition">
-                              <XCircle className="w-4 h-4" />
-                            </button>
-                          </div>
-                          <SolicitacaoDetalhes
-                            solicitacao={solHistorico}
-                            perfilUsuario={perfilUsuario}
-                            onVoltar={() => setHistoricoSelectedId(null)}
-                            onUpdate={() => {}}
-                            forcedTab="checklist"
-                            hideVoltar={true}
-                            hideStepper={true}
-                            hideTransitionButtons={true}
-                            hideTabs={true}
-                            activeSubTask="analise"
-                            usuariosSeguranca={usuariosSeguranca}
-                          />
-                        </div>
-                      );
-                    })() : activeSubTask === 'analise' && analiseViewMode === 'historico' ? (
-                      <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-400 text-xs shadow-sm">
-                        Selecione um processo no histórico acima para visualizar o dossiê.
-                      </div>
-                    ) : activeSchool ? (
+                    {activeSchool ? (
                     <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-1">
                       <SolicitacaoDetalhes
                         solicitacao={activeSchool}
@@ -3157,43 +3071,147 @@ export default function App() {
                       atendimentoEmEdicaoDirect={atendimentoEmEdicaoDirect}
                       onLimparEdicaoDirect={() => setAtendimentoEmEdicaoDirect(null)}
                     />
-                  ) : activeSubTask === 'analise_atribuicao' ? (
-                    viewMode === 'lista' ? (
-                      <AtribuicaoPanel
-                        solicitacoes={solicitacoesVisiveis}
-                        onUpdateSolicitacao={handleUpdateSolicitacao}
-                        usuariosSeguranca={usuariosSeguranca}
-                        atribuicoes={atribuicoesEngenharia}
-                        onAssign={(solId, usrId) => {
-                          setAtribuicoesEngenharia(prev => ({ ...prev, [solId]: usrId }));
-                        }}
-                        viewMode={viewMode}
-                        onMudarViewMode={(mode) => setViewMode(mode)}
-                        perfilUsuario={perfilUsuario}
-                        somenteLeitura={somenteLeitura}
-                        onNavToAnalise={(sol) => {
-                          setActiveSubTask('analise');
-                          setSelectedSchoolsPorSubtask(prev => ({ ...prev, analise: sol.id }));
-                        }}
-                      />
-                    ) : (
-                      <KanbanViews
-                        solicitacoes={solicitacoesVisiveis}
-                        onSelect={handleSelectSolicitacao}
-                        perfilUsuario={perfilUsuario}
-                        somenteLeitura={somenteLeitura}
-                        onUpdate={handleUpdateSolicitacao}
-                        onDelete={handleDeleteSolicitacao}
-                        onEdit={setSolicitacaoEmEdicao}
-                        mode={viewMode === 'kanban_analista' ? 'usuario' : 'status'}
-                        viewMode={viewMode}
-                        onMudarViewMode={(mode) => setViewMode(mode)}
-                        onNovaSolicitacao={() => setAbrirModalCadastro(true)}
-                        activeSubTask={activeSubTask}
-                        usuariosSeguranca={usuariosSeguranca}
-                      />
-                    )
-                  ) : activeSubTask === 'execucao_central' ? (
+                  ) : activeSubTask === 'analise_atribuicao' ? (() => {
+                    const filaAtivaCount = solicitacoesVisiveis.filter(s => s.etapaAtual === 'analise' || s.etapaAtual === 'correcao').length;
+                    const historicoAtribuicaoCount = solicitacoesVisiveis.filter(s =>
+                      ['paf_autorizacao', 'paf', 'ordem_inicio', 'execucao', 'cancelado'].includes(s.etapaAtual) &&
+                      (s.historicoEtapas || []).some(h => h.etapa === 'analise')
+                    ).length;
+                    const solHistoricoPreview = historicoAtribuicaoSelecionadoId
+                      ? solicitacoesVisiveis.find(s => s.id === historicoAtribuicaoSelecionadoId)
+                      : null;
+
+                    if (solHistoricoPreview) {
+                      return (
+                        <div className="bg-white rounded-xl border border-slate-700/20 shadow-sm p-1 ring-2 ring-slate-600/10">
+                          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 rounded-t-lg">
+                            <button
+                              type="button"
+                              onClick={() => setHistoricoAtribuicaoSelecionadoId(null)}
+                              className="flex items-center gap-1.5 text-xs font-black text-white uppercase tracking-wide cursor-pointer hover:text-slate-200 transition"
+                            >
+                              <ArrowLeft className="w-3.5 h-3.5" /> Voltar para Atribuição
+                            </button>
+                            <span className="ml-auto text-[10px] text-slate-300 font-mono">{solHistoricoPreview.id} · {solHistoricoPreview.nomeEscola}</span>
+                          </div>
+
+                          {(solHistoricoPreview.historicoCorrecoes || []).length > 0 && (
+                            <div className="m-4 bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-3">
+                              <h4 className="text-[10px] font-black uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+                                <FileClock className="w-4 h-4" /> Histórico de Rodadas
+                              </h4>
+                              {(solHistoricoPreview.historicoCorrecoes || []).map((round) => {
+                                const ordinal = round.contador === 1 ? '1ª' : round.contador === 2 ? '2ª' : round.contador === 3 ? '3ª' : `${round.contador}ª`;
+                                return (
+                                  <div key={round.contador} className="rounded-lg border border-rose-200/60 bg-white p-3 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-200 text-rose-800">{ordinal} Devolução</span>
+                                      <span className="text-[9px] text-slate-400 font-mono">{round.data}</span>
+                                    </div>
+                                    {round.motivos.map((m, i) => (
+                                      <div key={i} className="flex items-start gap-2 text-xs">
+                                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-200 text-rose-800">{m.label}</span>
+                                        <p className="text-rose-900 font-medium leading-relaxed">{m.motivo}</p>
+                                      </div>
+                                    ))}
+                                    {round.docsRecusados.length > 0 && (
+                                      <div className="space-y-1.5 border-t border-rose-200/60 pt-2">
+                                        <span className="text-[9px] font-black uppercase text-rose-700 block">Documentos Recusados</span>
+                                        {round.docsRecusados.map((d, i) => (
+                                          <div key={i} className="flex items-start gap-2 text-xs">
+                                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-200 text-rose-800">{d.nome}</span>
+                                            <p className="text-rose-900 font-medium leading-relaxed">{d.justificativa}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <SolicitacaoDetalhes
+                            solicitacao={solHistoricoPreview}
+                            perfilUsuario={perfilUsuario}
+                            onVoltar={() => setHistoricoAtribuicaoSelecionadoId(null)}
+                            onUpdate={() => {}}
+                            forcedTab="checklist"
+                            hideVoltar={true}
+                            hideStepper={true}
+                            hideTransitionButtons={true}
+                            hideTabs={true}
+                            activeSubTask="analise"
+                            usuariosSeguranca={usuariosSeguranca}
+                            somenteLeitura={true}
+                          />
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Abas: Fila Ativa / Histórico */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setAbaAtribuicao('ativa')}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${abaAtribuicao === 'ativa' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                          >
+                            Fila Ativa ({filaAtivaCount})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAbaAtribuicao('historico')}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all flex items-center gap-1.5 ${abaAtribuicao === 'historico' ? 'bg-slate-700 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                          >
+                            <FileClock className="w-3.5 h-3.5" /> Histórico ({historicoAtribuicaoCount})
+                          </button>
+                        </div>
+
+                        {abaAtribuicao === 'historico' ? (
+                          <AtribuicaoHistoricoPanel
+                            solicitacoes={solicitacoesVisiveis}
+                            onAbrirPreview={(sol) => setHistoricoAtribuicaoSelecionadoId(sol.id)}
+                          />
+                        ) : viewMode === 'lista' ? (
+                          <AtribuicaoPanel
+                            solicitacoes={solicitacoesVisiveis}
+                            onUpdateSolicitacao={handleUpdateSolicitacao}
+                            usuariosSeguranca={usuariosSeguranca}
+                            atribuicoes={atribuicoesEngenharia}
+                            onAssign={(solId, usrId) => {
+                              setAtribuicoesEngenharia(prev => ({ ...prev, [solId]: usrId }));
+                            }}
+                            viewMode={viewMode}
+                            onMudarViewMode={(mode) => setViewMode(mode)}
+                            perfilUsuario={perfilUsuario}
+                            somenteLeitura={somenteLeitura}
+                            onNavToAnalise={(sol) => {
+                              setActiveSubTask('analise');
+                              setSelectedSchoolsPorSubtask(prev => ({ ...prev, analise: sol.id }));
+                            }}
+                          />
+                        ) : (
+                          <KanbanViews
+                            solicitacoes={solicitacoesVisiveis}
+                            onSelect={handleSelectSolicitacao}
+                            perfilUsuario={perfilUsuario}
+                            somenteLeitura={somenteLeitura}
+                            onUpdate={handleUpdateSolicitacao}
+                            onDelete={handleDeleteSolicitacao}
+                            onEdit={setSolicitacaoEmEdicao}
+                            mode={viewMode === 'kanban_analista' ? 'usuario' : 'status'}
+                            viewMode={viewMode}
+                            onMudarViewMode={(mode) => setViewMode(mode)}
+                            onNovaSolicitacao={() => setAbrirModalCadastro(true)}
+                            activeSubTask={activeSubTask}
+                            usuariosSeguranca={usuariosSeguranca}
+                          />
+                        )}
+                      </div>
+                    );
+                  })() : activeSubTask === 'execucao_central' ? (
                     <CentralNavegacaoObras
                       solicitacoes={solicitacoesVisiveis}
                       perfilUsuario={perfilUsuario}

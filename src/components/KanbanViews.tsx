@@ -1,9 +1,11 @@
 ﻿import React, { useState } from 'react';
 import { Solicitacao, EtapaProcesso, PerfilUsuario, UsuarioSistema } from '../types';
-import { 
-  Building2, MapPin, User, ChevronRight, AlertCircle, Sparkles, CheckCircle2, 
+import {
+  Building2, MapPin, User, ChevronRight, AlertCircle, Sparkles, CheckCircle2,
   HelpCircle, Clock, Undo2, ArrowRightLeft, Shield, Check, Trash2, RefreshCw, Plus, Pencil, Filter
 } from 'lucide-react';
+import { calcularPrioridade, calcularEstrelas, getInfoEtiqueta, compararPorPrioridade, CodigoEtiqueta } from '../utils/prioridade';
+import { calcularIEE, CLASSE_IEE_INFO, CAPACIDADE_MAXIMA_ANALISTA, getPontosIEEDisponiveis } from '../utils/iee';
 
 interface KanbanViewsProps {
   solicitacoes: Solicitacao[];
@@ -48,6 +50,8 @@ export default function KanbanViews({
   const [filtroDataFim, setFiltroDataFim] = useState('');
   const [filtroCodesc, setFiltroCodesc] = useState('');
   const [filtroSre, setFiltroSre] = useState('todos');
+  const [filtroEstrelas, setFiltroEstrelas] = useState('todas');
+  const [filtroEtiqueta, setFiltroEtiqueta] = useState<'todas' | CodigoEtiqueta>('todas');
 
   const isReadOnly = activeSubTask === 'cadastro' || somenteLeitura;
 
@@ -66,7 +70,9 @@ export default function KanbanViews({
     (filtroDataInicio ? 1 : 0) + 
     (filtroDataFim ? 1 : 0) +
     (filtroCodesc ? 1 : 0) +
-    (filtroSre !== 'todos' ? 1 : 0);
+    (filtroSre !== 'todos' ? 1 : 0) +
+    (filtroEstrelas !== 'todas' ? 1 : 0) +
+    (filtroEtiqueta !== 'todas' ? 1 : 0);
 
   const limparTodosFiltros = () => {
     setFiltroId('');
@@ -77,20 +83,21 @@ export default function KanbanViews({
     setFiltroDataFim('');
     setFiltroCodesc('');
     setFiltroSre('todos');
+    setFiltroEstrelas('todas');
+    setFiltroEtiqueta('todas');
   };
 
-  // Dynamic list of analysts from registered users + existing assignments
-  const listaAnalistas = React.useMemo(() => {
-    const list = new Set<string>();
-    const defaults = usuariosSeguranca.map(u => u.nome);
-    defaults.forEach(d => list.add(d));
-    solicitacoes.forEach(s => {
-      if (s.analistaAtribuido) {
-        list.add(s.analistaAtribuido);
-      }
-    });
-    return ['Sem Atribuição', ...Array.from(list)];
-  }, [solicitacoes]);
+  // Coluna "Sem Atribuição" (fixa) + uma coluna por usuário ativo com perfil
+  // "Analista de Engenharia (DORE)" — gerado dinamicamente a partir do cadastro de usuários,
+  // então um novo analista cadastrado aparece automaticamente, sem alteração de código.
+  const analistasDore = React.useMemo(
+    () => usuariosSeguranca.filter(u => u.perfil === 'analista_dore'),
+    [usuariosSeguranca]
+  );
+  const listaAnalistas = React.useMemo(
+    () => ['Sem Atribuição', ...analistasDore.map(u => u.nome)],
+    [analistasDore]
+  );
 
   // Stages to categorize "Kanban by Status"
   const colunasStatus: { key: EtapaProcesso; label: string; desc: string; color: string; bgHeader: string }[] = [
@@ -175,15 +182,66 @@ export default function KanbanViews({
       return false;
     }
 
+    // 9. Filtro por número de estrelas de prioridade
+    if (filtroEstrelas !== 'todas') {
+      const estrelasSol = s.estrelas ?? calcularEstrelas(s);
+      if (String(estrelasSol) !== filtroEstrelas) return false;
+    }
+
+    // 10. Filtro por etiqueta de prioridade
+    if (filtroEtiqueta !== 'todas') {
+      const etiquetasSol = s.etiquetasPrioridade as CodigoEtiqueta[] | undefined ?? calcularPrioridade(s).etiquetas;
+      if (!etiquetasSol.includes(filtroEtiqueta)) return false;
+    }
+
     return true;
   });
 
   // Action: Change analyst quickly from card
+  // Matriz de permissões: Admin e Gestor (DORE/PAF) podem atribuir para qualquer analista;
+  // Analista de Engenharia (DORE) só pode atribuir para si mesmo (auto-atribuição).
+  // Além disso valida a capacidade de 35 pts IEE do analista de destino (Parte 4) — Admin/Gestor
+  // podem forçar a atribuição acima da capacidade (grava atribuicaoForcada: true).
   const handleMudarAnalista = (sol: Solicitacao, analista: string) => {
+    const destino = analista === 'Sem Atribuição' || !analista ? '' : analista;
+
+    if (perfilUsuario === 'analista_dore' && destino !== currentUserNome) {
+      alert('Você só pode atribuir processos para si mesmo.');
+      return;
+    }
+
+    if (destino) {
+      const pontosObra = sol.ieePontos ?? calcularIEE(sol)?.pontos ?? 0;
+      const outrosProcessos = solicitacoes.filter(s => s.id !== sol.id);
+      const pontosDisponiveis = getPontosIEEDisponiveis(destino, outrosProcessos);
+
+      if (pontosObra > pontosDisponiveis) {
+        const podeForcar = perfilUsuario === 'admin' || perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf';
+        const mensagem = `Analista sem capacidade disponível para esta obra (${pontosDisponiveis} pontos disponíveis, obra requer ${pontosObra} pontos).`;
+
+        if (!podeForcar) {
+          alert(mensagem);
+          return;
+        }
+        if (!window.confirm(`${mensagem}\n\nDeseja forçar a atribuição mesmo assim?`)) {
+          return;
+        }
+        onUpdate({ ...sol, analistaAtribuido: destino, atribuicaoForcada: true });
+        return;
+      }
+    }
+
     onUpdate({
       ...sol,
-      analistaAtribuido: analista === 'Sem Atribuição' || !analista ? undefined : analista
+      analistaAtribuido: destino || undefined,
+      atribuicaoForcada: destino ? false : undefined
     });
+  };
+
+  // Ação explícita e separada de desatribuição — nenhum perfil pode "voltar" um card
+  // para Sem Atribuição apenas trocando a seleção do dropdown de atribuição.
+  const handleRemoverAtribuicao = (sol: Solicitacao) => {
+    onUpdate({ ...sol, analistaAtribuido: undefined });
   };
 
   // Action: Move status quickly from card
@@ -209,6 +267,10 @@ export default function KanbanViews({
     const numAprovados = sol.documentos.filter(d => d.status === 'aprovado').length;
     const temRecusados = sol.documentos.some(d => d.status === 'recusado');
     const totalDocs = sol.documentos.length;
+    const prioridadeScoreCalc = sol.prioridadeScore ?? calcularPrioridade(sol).score;
+    const etiquetasCalc: CodigoEtiqueta[] = sol.etiquetasPrioridade as CodigoEtiqueta[] | undefined ?? calcularPrioridade(sol).etiquetas;
+    const estrelasCalc = sol.estrelas ?? calcularEstrelas(sol);
+    const ieeClasseCalc = sol.ieeClasse ?? calcularIEE(sol)?.classe;
 
     return (
       <div 
@@ -281,6 +343,46 @@ export default function KanbanViews({
             )}
           </div>
 
+          {/* Estrelas de Prioridade — destaque visual principal do card */}
+          {estrelasCalc > 0 && (
+            <div className="flex items-center gap-2" title={`${estrelasCalc} de 5 estrelas de prioridade`}>
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map(n => (
+                  <span key={n} className={`text-sm leading-none ${n <= estrelasCalc ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+                ))}
+              </div>
+              <span className="text-[8px] text-slate-300 font-mono tracking-wide">score: {prioridadeScoreCalc}</span>
+            </div>
+          )}
+
+          {/* Etiquetas de Prioridade (cumulativas) */}
+          {etiquetasCalc.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {etiquetasCalc.map(codigo => {
+                const info = getInfoEtiqueta(codigo, sol);
+                return (
+                  <span key={codigo} className={`${info.corClassName} text-[8.5px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 inline-block`}>
+                    {info.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {estrelasCalc === 0 && (
+            <span className="text-[8px] text-slate-300 font-mono tracking-wide">score: {prioridadeScoreCalc}</span>
+          )}
+
+          {/* Classe IEE (complexidade da obra) — lógica independente das etiquetas de prioridade acima,
+              por isso fica em linha própria, visualmente separada */}
+          {ieeClasseCalc && (
+            <div className="flex items-center gap-1 pt-1 border-t border-dashed border-slate-100">
+              <span className={`${CLASSE_IEE_INFO[ieeClasseCalc].corClassName} text-[8.5px] font-black uppercase tracking-wide rounded px-1.5 py-0.5 inline-block`}>
+                {CLASSE_IEE_INFO[ieeClasseCalc].label}
+              </span>
+              <span className="text-[8px] text-slate-300 font-mono tracking-wide">({sol.ieePontos ?? calcularIEE(sol)?.pontos} pts IEE)</span>
+            </div>
+          )}
+
           {/* School and Location info */}
           <h4 className="font-sans font-bold text-xs text-slate-800 leading-tight group-hover:text-blue-600 transition duration-150 text-left">
             {sol.nomeEscola}
@@ -314,27 +416,50 @@ export default function KanbanViews({
               <span className="text-red-600 text-[11px]">⚠️</span> Ficha com Inconsistências
             </div>
           )}
+
+          {/* Solicitação de cancelamento pendente — processo continua na etapa normalmente */}
+          {sol.solicitacaoCancelamento && (
+            <div className="bg-rose-50/70 border border-rose-200 text-rose-700 rounded px-1.5 py-0.5 text-[9px] flex items-center gap-1 font-bold animate-pulse" title={sol.motivoSolicitacaoCancelamento}>
+              <span className="text-rose-600 text-[11px]">⚠</span> Cancelamento Solicitado
+            </div>
+          )}
         </div>
 
         {/* Footer actions of Card (e.g. assignment dropdown or moves) */}
         <div className="pt-2 border-t border-slate-100 space-y-1.5 text-left" onClick={(e) => e.stopPropagation()}>
           
-          {/* Quick Assign Dropdown for Gestor */}
-          {(!isReadOnly && (perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) ? (
+          {/* Quick Assign Dropdown — Admin/Gestor podem atribuir a qualquer analista;
+              Analista de Engenharia (DORE) só pode se auto-atribuir (validado em handleMudarAnalista) */}
+          {(!isReadOnly && (perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin' || perfilUsuario === 'analista_dore')) ? (
             <div className="space-y-1">
               <label className="text-[8.5px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
                 <User className="w-2.5 h-2.5 text-slate-400" /> Atribuição:
+                {sol.atribuicaoForcada && (
+                  <span className="text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5 font-black normal-case" title="Atribuída acima da capacidade disponível do analista">
+                    forçada
+                  </span>
+                )}
               </label>
               <select
                 value={sol.analistaAtribuido || ''}
                 onChange={(e) => handleMudarAnalista(sol, e.target.value)}
-                className="w-full text-[9.5px] p-1 border border-indigo-150 rounded bg-white text-slate-700 cursor-pointer outline-hidden"
+                disabled={perfilUsuario === 'analista_dore' && !!sol.analistaAtribuido && sol.analistaAtribuido !== currentUserNome}
+                className="w-full text-[9.5px] p-1 border border-indigo-150 rounded bg-white text-slate-700 cursor-pointer outline-hidden disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
               >
-                <option value="">Sem Atribuição</option>
+                {!sol.analistaAtribuido && <option value="">Selecionar analista...</option>}
                 {listaAnalistas.filter(ana => ana !== 'Sem Atribuição').map(ana => (
                   <option key={ana} value={ana}>{ana}</option>
                 ))}
               </select>
+              {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && sol.analistaAtribuido && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoverAtribuicao(sol)}
+                  className="text-[8.5px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                >
+                  Remover atribuição
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-1 text-[10px] text-slate-500">
@@ -581,7 +706,42 @@ export default function KanbanViews({
               </select>
             </div>
 
-            {/* 7. Data de Criação */}
+            {/* 7. Estrelas de Prioridade */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Estrelas</label>
+              <select
+                value={filtroEstrelas}
+                onChange={(e) => setFiltroEstrelas(e.target.value)}
+                className="w-full text-[11px] bg-slate-950 border border-slate-700 rounded-lg py-1.5 px-2 focus:outline-hidden focus:ring-2 focus:ring-blue-500/35 text-slate-100 cursor-pointer"
+              >
+                <option value="todas">Todas</option>
+                <option value="5">★★★★★ (5)</option>
+                <option value="4">★★★★ (4)</option>
+                <option value="3">★★★ (3)</option>
+                <option value="2">★★ (2)</option>
+                <option value="1">★ (1)</option>
+                <option value="0">Sem estrela (0)</option>
+              </select>
+            </div>
+
+            {/* 8. Etiqueta de Prioridade */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Etiqueta</label>
+              <select
+                value={filtroEtiqueta}
+                onChange={(e) => setFiltroEtiqueta(e.target.value as 'todas' | CodigoEtiqueta)}
+                className="w-full text-[11px] bg-slate-950 border border-slate-700 rounded-lg py-1.5 px-2 focus:outline-hidden focus:ring-2 focus:ring-blue-500/35 text-slate-100 cursor-pointer"
+              >
+                <option value="todas">Todas</option>
+                <option value="EMERGENCIAL">EMERGENCIAL</option>
+                <option value="PRIORIDADE">⭐ PRIORIDADE (ADM)</option>
+                <option value="ESPECIAL">ESPECIAL</option>
+                <option value="SEM_LIB_FINANCEIRA">SEM LIBERAÇÃO FINANCEIRA</option>
+                <option value="NORMAL">⚪ NORMAL</option>
+              </select>
+            </div>
+
+            {/* 9. Data de Criação */}
             <div className="space-y-1 sm:col-span-2 lg:col-span-2 xl:col-span-2 shadow-2xs">
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data de Criação</label>
               <div className="flex items-center gap-1.5">
@@ -631,7 +791,7 @@ export default function KanbanViews({
                 return ['paf_autorizacao', 'paf', 'ordem_inicio', 'execucao'].includes(sol.etapaAtual);
               }
               return sol.etapaAtual === col.key;
-            });
+            }).sort(compararPorPrioridade);
 
             return (
               <div 
@@ -668,22 +828,47 @@ export default function KanbanViews({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start overflow-x-auto pb-4">
           {listaAnalistas.map((nomeAna) => {
             const itensNaColuna = filtradas.filter(sol => {
+              // Processos cancelados saem das filas de atribuição ativas — ainda aparecem na
+              // coluna "Cancelados" do Kanban por Status e na Lista de Atendimentos (histórico).
+              if (sol.etapaAtual === 'cancelado') return false;
               if (nomeAna === 'Sem Atribuição') {
                 return !sol.analistaAtribuido;
               }
               return sol.analistaAtribuido === nomeAna;
-            });
+            }).sort(compararPorPrioridade);
+
+            const usuarioColuna = analistasDore.find(u => u.nome === nomeAna);
+            const iniciais = usuarioColuna
+              ? usuarioColuna.nome.split(' ').filter(Boolean).slice(0, 2).map(n => n[0]).join('').toUpperCase()
+              : null;
+
+            // Pontos IEE somados dos processos da coluna — para analistas é a "carga" usada contra a
+            // capacidade fixa de 35 pts (Parte 4/5); para "Sem Atribuição" é só um total informativo.
+            const pontosColuna = itensNaColuna.reduce((soma, sol) => soma + (sol.ieePontos ?? calcularIEE(sol)?.pontos ?? 0), 0);
+            const corBarraPontos = pontosColuna > CAPACIDADE_MAXIMA_ANALISTA
+              ? 'bg-red-900'
+              : pontosColuna >= 29
+                ? 'bg-red-500'
+                : pontosColuna >= 21
+                  ? 'bg-amber-400'
+                  : 'bg-emerald-500';
 
             return (
-              <div 
-                key={nomeAna}
+              <div
+                key={usuarioColuna?.id || 'sem-atribuicao'}
                 className="bg-slate-100/70 border border-slate-200/60 rounded-xl p-3 flex flex-col space-y-3 min-w-[220px] max-h-[800px] overflow-y-auto"
               >
                 {/* Column header */}
                 <div className={`p-2.5 rounded-lg border text-left bg-white border-slate-205 shadow-3xs`}>
                   <div className="flex items-center justify-between font-bold text-slate-800">
                     <span className="text-xs font-display flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${nomeAna === 'Sem Atribuição' ? 'bg-amber-450 animate-pulse' : 'bg-indigo-500'}`} />
+                      {iniciais ? (
+                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-black flex items-center justify-center shrink-0">
+                          {iniciais}
+                        </span>
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-amber-450 animate-pulse" />
+                      )}
                       {nomeAna}
                     </span>
                     <span className="font-mono text-[9.5px] px-1.5 py-0.5 bg-slate-50 border rounded-md">
@@ -693,6 +878,29 @@ export default function KanbanViews({
                   <p className="text-[9.5px] text-slate-400 mt-0.5">
                     {nomeAna === 'Sem Atribuição' ? 'Aguardando ação de Atendimento DORE' : 'Análises sob alçada de Engenharia'}
                   </p>
+
+                  {usuarioColuna ? (
+                    <div className="mt-1.5 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-mono font-bold text-slate-500" title="Pontos IEE em uso na capacidade do analista (máx. 35)">
+                          {pontosColuna} / {CAPACIDADE_MAXIMA_ANALISTA} pts
+                        </span>
+                        {pontosColuna > CAPACIDADE_MAXIMA_ANALISTA && (
+                          <span className="text-[8.5px] font-black uppercase text-red-700">Sobrecarga</span>
+                        )}
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${corBarraPontos} transition-all`}
+                          style={{ width: `${Math.min(100, (pontosColuna / CAPACIDADE_MAXIMA_ANALISTA) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[9.5px] text-amber-700 font-bold mt-1">
+                      {itensNaColuna.length} processos — {pontosColuna} pts no total aguardando atribuição
+                    </p>
+                  )}
                 </div>
 
                 {/* Cards Container */}

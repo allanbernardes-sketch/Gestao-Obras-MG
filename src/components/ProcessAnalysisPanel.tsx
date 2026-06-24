@@ -1,10 +1,19 @@
 ﻿import React, { useState } from 'react';
 import { 
   CheckCircle, XCircle, FileText, AlertCircle, Sparkles, UploadCloud, Trash2, 
-  ChevronRight, Download, Layers, Plus, Database, Check, Edit3, MessageSquare, RefreshCw 
+  ChevronRight, Download, Layers, Plus, Database, Check, MessageSquare, RefreshCw
 } from 'lucide-react';
-import { Solicitacao, DocumentoChecklist, PerfilUsuario, syncChecklistDocs, Aditivo, AjustePlanilha } from '../types';
+import { Solicitacao, DocumentoChecklist, PerfilUsuario, SecaoDadosGerais, StatusValidacao, syncChecklistDocs, Aditivo, AjustePlanilha } from '../types';
 import { enderecosDados } from './GestaoObrasViews';
+import {
+  SECAO_LABEL,
+  getStatusSecao,
+  validarSecao,
+  naoValidarSecao,
+  aplicarEdicaoSecao,
+  contarStatusSecoes,
+  secaoTemRejeicao
+} from '../utils/validacaoTecnica';
 
 interface ProcessAnalysisPanelProps {
   solicitacao: Solicitacao;
@@ -44,6 +53,20 @@ export default function ProcessAnalysisPanel({
   const [opinioesAditivo, setOpinioesAditivo] = useState<{[key: string]: string}>({});
   const [opinioesAjuste, setOpinioesAjuste] = useState<{[key: string]: string}>({});
 
+  // Baixa o arquivo real anexado pelo técnico (fileContent é um data URL gerado via FileReader no upload)
+  const handleDownloadDoc = (doc: DocumentoChecklist) => {
+    if (!doc.fileContent) {
+      alert(`O arquivo "${doc.fileName}" foi anexado antes da disponibilidade de download real e não possui conteúdo salvo. Solicite ao técnico que reanexe o documento.`);
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = doc.fileContent;
+    link.setAttribute('download', doc.fileName || 'documento');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // SRE Base Dados match helper (simulated)
   const baseDadosSimulada = [
     { codesc: '145236', escola: 'E.E. Padre Almir', municipio: 'Patos de Minas', sre: 'SRE Patos de Minas' },
@@ -57,8 +80,7 @@ export default function ProcessAnalysisPanel({
   const handleUpdateEscolar = (key: keyof Solicitacao, val: any) => {
     const updated = {
       ...solicitacao,
-      [key]: val,
-      validacaoEscolar: 'editado' as const
+      [key]: val
     };
 
     // If typing codesc, try to auto-fill
@@ -70,7 +92,7 @@ export default function ProcessAnalysisPanel({
         updated.sre = match.sre;
       }
     }
-    onUpdate(updated);
+    onUpdate({ ...updated, ...aplicarEdicaoSecao(updated, 'identificacao_escolar') });
   };
 
   const homologarAditivo = (adtId: string) => {
@@ -231,21 +253,9 @@ export default function ProcessAnalysisPanel({
 
   // Classificação Patrimonial edits
   const handleUpdatePatrimonial = (key: keyof Solicitacao, val: any) => {
-    let extra = {};
-    if (key === 'formaOcupacao') {
-      extra = { validacaoFormaOcupacao: 'editado' as const };
-    } else if (key === 'predio') {
-      extra = { validacaoPredioEscola: 'editado' as const };
-    } else if (key === 'tombado' || key === 'orgaoTombador') {
-      extra = { validacaoTombamento: 'editado' as const };
-    } else if (key === 'coabitado' || key === 'tipoCoabitado') {
-      extra = { validacaoCoabitado: 'editado' as const };
-    }
-
     const updated: Solicitacao = {
       ...solicitacao,
       [key]: val,
-      ...extra,
       // Ao desmarcar tombamento, limpa o órgão tombador automaticamente
       ...(key === 'tombado' && val === 'NÃO É TOMBADO' ? { orgaoTombador: '' } : {})
     };
@@ -254,31 +264,27 @@ export default function ProcessAnalysisPanel({
       updated.documentos = syncChecklistDocs(updated.documentos || [], val, updated.formaAtendimento);
     }
 
-    onUpdate(updated);
+    onUpdate({ ...updated, ...aplicarEdicaoSecao(updated, 'classificacao_patrimonial') });
   };
 
   // Detalhamento Técnico edits
   const handleUpdateTecnico = (key: keyof Solicitacao, val: any) => {
     const updated: Solicitacao = {
       ...solicitacao,
-      [key]: val,
-      validacaoTecnica: 'editado' as const
+      [key]: val
     };
 
     if (key === 'formaAtendimento') {
       updated.documentos = syncChecklistDocs(updated.documentos || [], updated.notificacao, val);
     }
 
-    onUpdate(updated);
+    onUpdate({ ...updated, ...aplicarEdicaoSecao(updated, 'detalhamento_tecnico') });
   };
 
   // Dotação SGO edits
   const handleUpdateReferencia = (key: keyof Solicitacao, val: any) => {
-    onUpdate({
-      ...solicitacao,
-      [key]: val,
-      validacaoReferenciaDotacao: 'editado' as const
-    });
+    const updated = { ...solicitacao, [key]: val };
+    onUpdate({ ...updated, ...aplicarEdicaoSecao(updated, 'referencia_dotacao') });
   };
 
   // Formatting currency float helpers (consistent with app BRL parsing)
@@ -290,11 +296,8 @@ export default function ProcessAnalysisPanel({
 
   const handleEditValorPlanilha = (valRaw: string) => {
     const parsed = parseBRLToFloat(valRaw);
-    onUpdate({
-      ...solicitacao,
-      valorPlanilha: parsed,
-      validacaoReferenciaDotacao: 'editado' as const
-    });
+    const updated = { ...solicitacao, valorPlanilha: parsed };
+    onUpdate({ ...updated, ...aplicarEdicaoSecao(updated, 'referencia_dotacao') });
   };
 
   // Helper to format float to BRL string on inputs
@@ -385,36 +388,20 @@ export default function ProcessAnalysisPanel({
   };
 
   // Check if can finalized/apresentar DORE
-  const hasRejections = solicitacao.documentos.some(d => d.status === 'recusado') || 
+  const hasRejections = solicitacao.documentos.some(d => d.status === 'recusado') ||
                         (solicitacao.outrosDocumentos || []).some(d => d.status === 'recusado') ||
-                        solicitacao.validacaoEscolar === 'nao_validado' ||
-                        solicitacao.validacaoFormaOcupacao === 'nao_validado' ||
-                        solicitacao.validacaoPredioEscola === 'nao_validado' ||
-                        solicitacao.validacaoTombamento === 'nao_validado' ||
-                        solicitacao.validacaoCoabitado === 'nao_validado' ||
-                        solicitacao.validacaoTecnica === 'nao_validado' ||
-                        solicitacao.validacaoReferenciaDotacao === 'nao_validado';
+                        secaoTemRejeicao(solicitacao);
 
   const docCount = solicitacao.documentos.length + (solicitacao.outrosDocumentos || []).length;
   const docPendentes = solicitacao.documentos.filter(d => d.status === 'pendente').length +
                        (solicitacao.outrosDocumentos || []).filter(d => d.status === 'pendente').length;
 
-  // Campos de validação técnica
-  const validacaoFields = [
-    solicitacao.validacaoEscolar,
-    solicitacao.validacaoFormaOcupacao,
-    solicitacao.validacaoPredioEscola,
-    solicitacao.validacaoTombamento,
-    solicitacao.validacaoCoabitado,
-    solicitacao.validacaoTecnica,
-    solicitacao.validacaoReferenciaDotacao,
-  ];
-  // Campos ainda não analisados (undefined ou 'editado' = aguardando re-validação)
-  const camposPendentes = validacaoFields.filter(v => !v || v === 'editado').length;
+  // Seções dos Dados Gerais ainda não analisadas (PENDENTE)
+  const { pendentes: camposPendentes } = contarStatusSecoes(solicitacao);
 
   // Analista iniciou ao menos uma revisão?
   const hasStartedReview =
-    validacaoFields.some(v => v === 'validado' || v === 'nao_validado') ||
+    contarStatusSecoes(solicitacao).analisadas > 0 || hasRejections ||
     solicitacao.documentos.some(d => d.status === 'aprovado' || d.status === 'recusado') ||
     (solicitacao.outrosDocumentos || []).some(d => d.status === 'aprovado' || d.status === 'recusado');
 
@@ -427,25 +414,36 @@ export default function ProcessAnalysisPanel({
   const podeDevolver = hasStartedReview;
 
   // Classe de borda dinâmica por estado de validação de seção
-  const secBorder = (v?: string) =>
-    v === 'validado'     ? 'border-emerald-300 bg-emerald-50/20' :
-    v === 'nao_validado' ? 'border-red-400 bg-red-50/20' :
-    v === 'editado'      ? 'border-amber-400 bg-amber-50/20' :
-                           'border-amber-300 bg-amber-50/10';
+  const secBorder = (status: StatusValidacao) =>
+    status === 'validado'     ? 'border-emerald-300 bg-emerald-50/20' :
+    status === 'nao_validado' ? 'border-red-400 bg-red-50/20' :
+    status === 'editado'      ? 'border-amber-400 bg-amber-50/20' :
+                                'border-amber-300 bg-amber-50/10';
+
+  // Classe de badge dinâmica por estado de validação de seção
+  const secBadge = (status: StatusValidacao) =>
+    status === 'validado'     ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+    status === 'nao_validado' ? 'bg-red-50 text-red-700 border-red-200' :
+                                'bg-amber-50 text-amber-700 border-amber-200';
+
+  const secLabel = (status: StatusValidacao) => status === 'pendente' ? 'NÃO AVALIADO' : status.replace(/_/g, ' ').toUpperCase();
+
+  // ids de DOM mantidos por compatibilidade com o scroll abaixo
+  const SECAO_DOM_ID: Record<SecaoDadosGerais, string> = {
+    identificacao_escolar: 'sec-escolar',
+    classificacao_patrimonial: 'sec-patrimonial',
+    detalhamento_tecnico: 'sec-tecnico',
+    referencia_dotacao: 'sec-referencia'
+  };
 
   // Scroll para a primeira seção com pendência
   const scrollToFirstIssue = () => {
-    const secIds = [
-      { id: 'sec-escolar',      v: solicitacao.validacaoEscolar },
-      { id: 'sec-patrimonial',  v: [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].find(x => !x || x !== 'validado') },
-      { id: 'sec-tecnico',      v: solicitacao.validacaoTecnica },
-      { id: 'sec-referencia',   v: solicitacao.validacaoReferenciaDotacao },
-    ];
-    const primeira = secIds.find(s => s.v !== 'validado');
+    const primeira = (['identificacao_escolar', 'classificacao_patrimonial', 'detalhamento_tecnico', 'referencia_dotacao'] as SecaoDadosGerais[])
+      .find(secao => getStatusSecao(solicitacao, secao).status !== 'validado');
     if (primeira) {
       if (subTab !== 'dados_gerais') setSubTab('dados_gerais');
       setTimeout(() => {
-        document.getElementById(primeira.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.getElementById(SECAO_DOM_ID[primeira])?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
       return;
     }
@@ -803,20 +801,14 @@ export default function ProcessAnalysisPanel({
           )}
 
           {/* SEÇÃO 1: Identificação Escolar */}
-          <div id="sec-escolar" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(solicitacao.validacaoEscolar)}`}>
+          <div id="sec-escolar" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(getStatusSecao(solicitacao, 'identificacao_escolar').status)}`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
-                1. Identificação Escolar
+                1. {SECAO_LABEL.identificacao_escolar}
               </h4>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${
-                solicitacao.validacaoEscolar === 'validado'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : solicitacao.validacaoEscolar === 'nao_validado'
-                    ? 'bg-red-50 text-red-700 border-red-200'
-                    : 'bg-amber-50 text-amber-700 border-amber-200'
-              }`}>
-                {(solicitacao.validacaoEscolar || 'NÃO AVALIADO').replace(/_/g, ' ')}
+              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${secBadge(getStatusSecao(solicitacao, 'identificacao_escolar').status)}`}>
+                {secLabel(getStatusSecao(solicitacao, 'identificacao_escolar').status)}
               </span>
             </div>
 
@@ -906,15 +898,15 @@ export default function ProcessAnalysisPanel({
                   <button
                     type="button"
                     disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoEscolar: 'validado', motivoNaoValidacaoEscolar: '' })}
+                    onClick={() => onUpdate({ ...solicitacao, ...validarSecao(solicitacao, 'identificacao_escolar') })}
                     className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoEscolar === 'validado'
+                      getStatusSecao(solicitacao, 'identificacao_escolar').status === 'validado'
                         ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
                         : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoEscolar === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoEscolar === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${getStatusSecao(solicitacao, 'identificacao_escolar').status === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                      {getStatusSecao(solicitacao, 'identificacao_escolar').status === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </span>
                     <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>Validado</span>
@@ -923,48 +915,31 @@ export default function ProcessAnalysisPanel({
                   <button
                     type="button"
                     disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoEscolar: 'nao_validado' })}
+                    onClick={() => onUpdate({ ...solicitacao, ...naoValidarSecao(solicitacao, 'identificacao_escolar', getStatusSecao(solicitacao, 'identificacao_escolar').motivo || '') })}
                     className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoEscolar === 'nao_validado'
+                      getStatusSecao(solicitacao, 'identificacao_escolar').status === 'nao_validado'
                         ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
                         : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoEscolar === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoEscolar === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${getStatusSecao(solicitacao, 'identificacao_escolar').status === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                      {getStatusSecao(solicitacao, 'identificacao_escolar').status === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </span>
                     <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                     <span>Não Validado</span>
                   </button>
-
-                  <button
-                    type="button"
-                    disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoEscolar: 'editado' })}
-                    className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoEscolar === 'editado'
-                        ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoEscolar === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoEscolar === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </span>
-                    <Edit3 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>Editado</span>
-                  </button>
                 </div>
               </div>
             )}
-            
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && solicitacao.validacaoEscolar === 'nao_validado' && (
+
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && getStatusSecao(solicitacao, 'identificacao_escolar').status === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
                   rows={2}
                   disabled={!isMyAssignment}
-                  value={solicitacao.motivoNaoValidacaoEscolar || ''}
-                  onChange={(e) => onUpdate({ ...solicitacao, motivoNaoValidacaoEscolar: e.target.value })}
+                  value={getStatusSecao(solicitacao, 'identificacao_escolar').motivo || ''}
+                  onChange={(e) => onUpdate({ ...solicitacao, ...naoValidarSecao(solicitacao, 'identificacao_escolar', e.target.value) })}
                   placeholder="Indique os motivos de infraestrutura ou inconsistências para regularização..."
                   className="w-full text-xs p-2.5 border border-red-200 rounded-lg bg-white focus:outline-hidden"
                 />
@@ -973,20 +948,15 @@ export default function ProcessAnalysisPanel({
           </div>
 
           {/* SEÇÃO 2: Classificação Patrimonial do Imóvel */}
-          <div id="sec-patrimonial" className={`p-5 rounded-xl border space-y-4 transition-colors ${
-            [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].some(v => v === 'nao_validado')
-              ? secBorder('nao_validado')
-              : [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].every(v => v === 'validado')
-                ? secBorder('validado')
-                : [solicitacao.validacaoFormaOcupacao, solicitacao.validacaoPredioEscola, solicitacao.validacaoTombamento, solicitacao.validacaoCoabitado].some(v => v === 'editado')
-                  ? secBorder('editado')
-                  : secBorder(undefined)
-          }`}>
+          <div id="sec-patrimonial" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(getStatusSecao(solicitacao, 'classificacao_patrimonial').status)}`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-705 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
-                2. Classificação Patrimonial do Imóvel
+                2. {SECAO_LABEL.classificacao_patrimonial}
               </h4>
+              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${secBadge(getStatusSecao(solicitacao, 'classificacao_patrimonial').status)}`}>
+                {secLabel(getStatusSecao(solicitacao, 'classificacao_patrimonial').status)}
+              </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -994,17 +964,6 @@ export default function ProcessAnalysisPanel({
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Forma de Ocupação *</span>
-                  {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
-                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md border ${
-                      solicitacao.validacaoFormaOcupacao === 'validado'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : solicitacao.validacaoFormaOcupacao === 'nao_validado'
-                          ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}>
-                      {(solicitacao.validacaoFormaOcupacao || 'PENDENTE').replace(/_/g, ' ')}
-                    </span>
-                  )}
                 </div>
                 <select
                   value={solicitacao.formaOcupacao || 'PRÓPRIO'}
@@ -1017,78 +976,12 @@ export default function ProcessAnalysisPanel({
                   <option value="CEDIDO">CEDIDO</option>
                   <option value="OUTRO">OUTRO</option>
                 </select>
-
-                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
-                  <div className="pt-2.5 border-t border-slate-200/50 flex flex-col gap-1.5 text-left">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avaliação do Analista:</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoFormaOcupacao: 'validado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoFormaOcupacao === 'validado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoFormaOcupacao === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoFormaOcupacao === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Validar</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoFormaOcupacao: 'nao_validado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoFormaOcupacao === 'nao_validado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoFormaOcupacao === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoFormaOcupacao === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Não Validado</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoFormaOcupacao: 'editado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoFormaOcupacao === 'editado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoFormaOcupacao === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoFormaOcupacao === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Editado</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Card 2: Prédio Escola */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prédio Escola *</span>
-                  {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
-                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md border ${
-                      solicitacao.validacaoPredioEscola === 'validado'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : solicitacao.validacaoPredioEscola === 'nao_validado'
-                          ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}>
-                      {(solicitacao.validacaoPredioEscola || 'PENDENTE').replace(/_/g, ' ')}
-                    </span>
-                  )}
                 </div>
                 <select
                   value={solicitacao.predio || 'PRINCIPAL'}
@@ -1099,78 +992,12 @@ export default function ProcessAnalysisPanel({
                   <option value="PRINCIPAL">PRINCIPAL</option>
                   <option value="ANEXO">ANEXO</option>
                 </select>
-
-                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
-                  <div className="pt-2.5 border-t border-slate-200/50 flex flex-col gap-1.5 text-left">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avaliação do Analista:</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoPredioEscola: 'validado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoPredioEscola === 'validado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPredioEscola === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoPredioEscola === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Validar</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoPredioEscola: 'nao_validado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoPredioEscola === 'nao_validado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPredioEscola === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoPredioEscola === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Não Validado</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoPredioEscola: 'editado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoPredioEscola === 'editado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoPredioEscola === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoPredioEscola === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Editado</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Card 3: Tombamento */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tombamento *</span>
-                  {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
-                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md border ${
-                      solicitacao.validacaoTombamento === 'validado'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : solicitacao.validacaoTombamento === 'nao_validado'
-                          ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}>
-                      {(solicitacao.validacaoTombamento || 'PENDENTE').replace(/_/g, ' ')}
-                    </span>
-                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
@@ -1201,78 +1028,12 @@ export default function ProcessAnalysisPanel({
                     </select>
                   </div>
                 </div>
-
-                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
-                  <div className="pt-2.5 border-t border-slate-200/50 flex flex-col gap-1.5 text-left">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avaliação do Analista:</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoTombamento: 'validado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoTombamento === 'validado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTombamento === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoTombamento === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Validar</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoTombamento: 'nao_validado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoTombamento === 'nao_validado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTombamento === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoTombamento === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Não Validado</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoTombamento: 'editado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoTombamento === 'editado'
-                            ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTombamento === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoTombamento === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Editado</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Card 4: Imóvel Coabitado? */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Imóvel Coabitado? *</span>
-                  {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
-                    <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-md border ${
-                      solicitacao.validacaoCoabitado === 'validado'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : solicitacao.validacaoCoabitado === 'nao_validado'
-                          ? 'bg-red-50 text-red-700 border-red-200'
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                    }`}>
-                      {(solicitacao.validacaoCoabitado || 'PENDENTE').replace(/_/g, ' ')}
-                    </span>
-                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
@@ -1302,61 +1063,6 @@ export default function ProcessAnalysisPanel({
                     </select>
                   </div>
                 </div>
-
-                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
-                  <div className="pt-2.5 border-t border-slate-200/50 flex flex-col gap-1.5 text-left">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avaliação do Analista:</span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoCoabitado: 'validado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoCoabitado === 'validado'
-                            ? 'bg-blue-50 border-blue-555 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoCoabitado === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoCoabitado === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Validar</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoCoabitado: 'nao_validado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoCoabitado === 'nao_validado'
-                            ? 'bg-blue-50 border-blue-555 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoCoabitado === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoCoabitado === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Não Validado</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={!isMyAssignment}
-                        onClick={() => onUpdate({ ...solicitacao, validacaoCoabitado: 'editado' })}
-                        className={`flex-1 py-1 px-2 text-[10.5px] font-bold rounded-md border transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                          solicitacao.validacaoCoabitado === 'editado'
-                            ? 'bg-blue-50 border-blue-555 text-blue-700 shadow-3xs'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span className={`w-2.5 h-2.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoCoabitado === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                          {solicitacao.validacaoCoabitado === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        <span>Editado</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Card 5: Notificação / Órgão Regulador */}
@@ -1379,14 +1085,57 @@ export default function ProcessAnalysisPanel({
               </div>
             </div>
 
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (solicitacao.validacaoFormaOcupacao === 'nao_validado' || solicitacao.validacaoPredioEscola === 'nao_validado' || solicitacao.validacaoTombamento === 'nao_validado' || solicitacao.validacaoCoabitado === 'nao_validado') && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1">
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+              <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
+                <span className="text-xs font-bold text-slate-600">
+                  Validação Geral da Classificação Patrimonial:
+                </span>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    type="button"
+                    disabled={!isMyAssignment}
+                    onClick={() => onUpdate({ ...solicitacao, ...validarSecao(solicitacao, 'classificacao_patrimonial') })}
+                    className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                      getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'validado'
+                        ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                      {getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </span>
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Validado</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!isMyAssignment}
+                    onClick={() => onUpdate({ ...solicitacao, ...naoValidarSecao(solicitacao, 'classificacao_patrimonial', getStatusSecao(solicitacao, 'classificacao_patrimonial').motivo || '') })}
+                    className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                      getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'nao_validado'
+                        ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
+                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                      {getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </span>
+                    <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                    <span>Não Validado</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'nao_validado' && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação Patrimonial *</label>
                 <textarea
                   rows={2}
                   disabled={!isMyAssignment}
-                  value={solicitacao.motivoNaoValidacaoPatrimonial || ''}
-                  onChange={(e) => onUpdate({ ...solicitacao, motivoNaoValidacaoPatrimonial: e.target.value })}
+                  value={getStatusSecao(solicitacao, 'classificacao_patrimonial').motivo || ''}
+                  onChange={(e) => onUpdate({ ...solicitacao, ...naoValidarSecao(solicitacao, 'classificacao_patrimonial', e.target.value) })}
                   placeholder="Informe irregularidade dominial do terreno ou escritura ausente..."
                   className="w-full text-xs p-2.5 border border-red-200 rounded-lg bg-white focus:outline-hidden text-slate-800"
                 />
@@ -1395,20 +1144,14 @@ export default function ProcessAnalysisPanel({
           </div>
 
           {/* SEÇÃO 3: Detalhamento Técnico e Demanda */}
-          <div id="sec-tecnico" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(solicitacao.validacaoTecnica)}`}>
+          <div id="sec-tecnico" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(getStatusSecao(solicitacao, 'detalhamento_tecnico').status)}`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
-                3. Detalhamento Técnico e Demanda
+                3. {SECAO_LABEL.detalhamento_tecnico}
               </h4>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${
-                solicitacao.validacaoTecnica === 'validado'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : solicitacao.validacaoTecnica === 'nao_validado'
-                    ? 'bg-red-50 text-red-700 border-red-200'
-                    : 'bg-amber-50 text-amber-700 border-amber-200'
-              }`}>
-                {(solicitacao.validacaoTecnica || 'NÃO AVALIADO').replace(/_/g, ' ')}
+              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${secBadge(getStatusSecao(solicitacao, 'detalhamento_tecnico').status)}`}>
+                {secLabel(getStatusSecao(solicitacao, 'detalhamento_tecnico').status)}
               </span>
             </div>
 
@@ -1515,15 +1258,15 @@ export default function ProcessAnalysisPanel({
                   <button
                     type="button"
                     disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoTecnica: 'validado', motivoNaoValidacaoTecnica: '' })}
+                    onClick={() => onUpdate({ ...solicitacao, ...validarSecao(solicitacao, 'detalhamento_tecnico') })}
                     className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoTecnica === 'validado'
+                      getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'validado'
                         ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
                         : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTecnica === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoTecnica === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                      {getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </span>
                     <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>Validado</span>
@@ -1532,48 +1275,31 @@ export default function ProcessAnalysisPanel({
                   <button
                     type="button"
                     disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoTecnica: 'nao_validado' })}
+                    onClick={() => onUpdate({ ...solicitacao, ...naoValidarSecao(solicitacao, 'detalhamento_tecnico', getStatusSecao(solicitacao, 'detalhamento_tecnico').motivo || '') })}
                     className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoTecnica === 'nao_validado'
+                      getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'nao_validado'
                         ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
                         : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTecnica === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoTecnica === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                      {getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </span>
                     <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                     <span>Não Validado</span>
                   </button>
-
-                  <button
-                    type="button"
-                    disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoTecnica: 'editado' })}
-                    className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoTecnica === 'editado'
-                        ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoTecnica === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoTecnica === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </span>
-                    <Edit3 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>Editado</span>
-                  </button>
                 </div>
               </div>
             )}
-            
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && solicitacao.validacaoTecnica === 'nao_validado' && (
+
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
                   rows={2}
                   disabled={!isMyAssignment}
-                  value={solicitacao.motivoNaoValidacaoTecnica || ''}
-                  onChange={(e) => onUpdate({ ...solicitacao, motivoNaoValidacaoTecnica: e.target.value })}
+                  value={getStatusSecao(solicitacao, 'detalhamento_tecnico').motivo || ''}
+                  onChange={(e) => onUpdate({ ...solicitacao, ...naoValidarSecao(solicitacao, 'detalhamento_tecnico', e.target.value) })}
                   placeholder="Descreva problemas com o escopo físico da reforma do telhado ou ampliações..."
                   className="w-full text-xs p-2.5 border border-red-200 rounded-lg bg-white focus:outline-hidden text-slate-800"
                 />
@@ -1582,20 +1308,14 @@ export default function ProcessAnalysisPanel({
           </div>
 
           {/* SEÇÃO 4: Informações de Referência e Dotação Orçamentária SGO */}
-          <div id="sec-referencia" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(solicitacao.validacaoReferenciaDotacao)}`}>
+          <div id="sec-referencia" className={`p-5 rounded-xl border space-y-4 transition-colors ${secBorder(getStatusSecao(solicitacao, 'referencia_dotacao').status)}`}>
             <div className="border-b border-slate-100 pb-2 flex items-center justify-between">
               <h4 className="text-xs font-extrabold text-slate-700 uppercase tracking-wider font-mono flex items-center gap-1.5">
                 <Database className="w-4 h-4 text-blue-500" />
-                4. Informações de Referência e Dotação Orçamentária SGO
+                4. {SECAO_LABEL.referencia_dotacao}
               </h4>
-              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${
-                solicitacao.validacaoReferenciaDotacao === 'validado'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : solicitacao.validacaoReferenciaDotacao === 'nao_validado'
-                    ? 'bg-red-50 text-red-700 border-red-200'
-                    : 'bg-amber-50 text-amber-700 border-amber-200'
-              }`}>
-                {(solicitacao.validacaoReferenciaDotacao || 'NÃO AVALIADO').replace(/_/g, ' ')}
+              <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border ${secBadge(getStatusSecao(solicitacao, 'referencia_dotacao').status)}`}>
+                {secLabel(getStatusSecao(solicitacao, 'referencia_dotacao').status)}
               </span>
             </div>
 
@@ -1612,6 +1332,24 @@ export default function ProcessAnalysisPanel({
                     disabled={!isMyAssignment}
                     className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg font-mono font-bold text-slate-800"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Prazo Estimado da Obra
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={solicitacao.prazoEstimadoObra ?? ''}
+                    onChange={(e) => handleUpdateReferencia('prazoEstimadoObra', e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                    disabled={!isMyAssignment}
+                    className="w-full px-3 py-2 pr-10 text-xs border border-slate-200 rounded-lg font-mono font-bold text-slate-800"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">dias</span>
                 </div>
               </div>
 
@@ -1652,15 +1390,15 @@ export default function ProcessAnalysisPanel({
                   <button
                     type="button"
                     disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoReferenciaDotacao: 'validado', motivoNaoValidacaoReferenciaDotacao: '' })}
+                    onClick={() => onUpdate({ ...solicitacao, ...validarSecao(solicitacao, 'referencia_dotacao') })}
                     className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoReferenciaDotacao === 'validado'
+                      getStatusSecao(solicitacao, 'referencia_dotacao').status === 'validado'
                         ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
                         : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoReferenciaDotacao === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoReferenciaDotacao === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${getStatusSecao(solicitacao, 'referencia_dotacao').status === 'validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                      {getStatusSecao(solicitacao, 'referencia_dotacao').status === 'validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </span>
                     <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     <span>Validado</span>
@@ -1669,48 +1407,31 @@ export default function ProcessAnalysisPanel({
                   <button
                     type="button"
                     disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoReferenciaDotacao: 'nao_validado' })}
+                    onClick={() => onUpdate({ ...solicitacao, ...naoValidarSecao(solicitacao, 'referencia_dotacao', getStatusSecao(solicitacao, 'referencia_dotacao').motivo || '') })}
                     className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoReferenciaDotacao === 'nao_validado'
+                      getStatusSecao(solicitacao, 'referencia_dotacao').status === 'nao_validado'
                         ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
                         : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoReferenciaDotacao === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoReferenciaDotacao === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${getStatusSecao(solicitacao, 'referencia_dotacao').status === 'nao_validado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
+                      {getStatusSecao(solicitacao, 'referencia_dotacao').status === 'nao_validado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </span>
                     <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                     <span>Não Validado</span>
                   </button>
-
-                  <button
-                    type="button"
-                    disabled={!isMyAssignment}
-                    onClick={() => onUpdate({ ...solicitacao, validacaoReferenciaDotacao: 'editado' })}
-                    className={`px-3 py-1.5 flex items-center gap-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                      solicitacao.validacaoReferenciaDotacao === 'editado'
-                        ? 'bg-blue-50 border-blue-550 text-blue-700 shadow-3xs'
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${solicitacao.validacaoReferenciaDotacao === 'editado' ? 'border-blue-600 bg-blue-600' : 'border-slate-300 bg-white'}`}>
-                      {solicitacao.validacaoReferenciaDotacao === 'editado' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                    </span>
-                    <Edit3 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>Editado</span>
-                  </button>
                 </div>
               </div>
             )}
-            
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && solicitacao.validacaoReferenciaDotacao === 'nao_validado' && (
+
+            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && getStatusSecao(solicitacao, 'referencia_dotacao').status === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
                   rows={2}
                   disabled={!isMyAssignment}
-                  value={solicitacao.motivoNaoValidacaoReferenciaDotacao || ''}
-                  onChange={(e) => onUpdate({ ...solicitacao, motivoNaoValidacaoReferenciaDotacao: e.target.value })}
+                  value={getStatusSecao(solicitacao, 'referencia_dotacao').motivo || ''}
+                  onChange={(e) => onUpdate({ ...solicitacao, ...naoValidarSecao(solicitacao, 'referencia_dotacao', e.target.value) })}
                   placeholder="Justifique a não-conformidade orçamentária ou aliquota incompatível..."
                   className="w-full text-xs p-2.5 border border-red-200 rounded-lg bg-white focus:outline-hidden text-slate-800"
                 />
@@ -1801,7 +1522,7 @@ export default function ProcessAnalysisPanel({
                             </div>
                             <button
                               type="button"
-                              onClick={() => alert(`Baixando arquivo: ${doc.fileName}`)}
+                              onClick={() => handleDownloadDoc(doc)}
                               className="text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded transition text-[10px] uppercase font-bold shrink-0 cursor-pointer"
                             >
                               Baixar
@@ -1920,7 +1641,7 @@ export default function ProcessAnalysisPanel({
                             </div>
                             <button
                               type="button"
-                              onClick={() => alert(`Baixando arquivo: ${doc.fileName}`)}
+                              onClick={() => handleDownloadDoc(doc)}
                               className="text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded transition text-[10px] uppercase font-bold shrink-0 cursor-pointer"
                             >
                               Baixar
@@ -2053,7 +1774,7 @@ export default function ProcessAnalysisPanel({
                               </div>
                               <button
                                 type="button"
-                                onClick={() => alert(`Baixando: ${doc.fileName}`)}
+                                onClick={() => handleDownloadDoc(doc)}
                                 className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 border border-blue-200 px-2 py-1 rounded text-[10px] uppercase font-bold cursor-pointer"
                               >
                                 Baixar
