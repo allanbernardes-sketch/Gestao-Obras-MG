@@ -459,24 +459,6 @@ export function NovoAtendimentoPanel({
     setOutrosDocumentosChecklist(prev => prev.filter(doc => doc.id !== docId));
   };
 
-  // Simulate attaching all documents for instant completion
-  const handleAnexarTodosControle = () => {
-    const mockFiles = [
-      'planilha_orcamento_v1.xlsx',
-      'registro_imovel_certidao.pdf',
-      'projeto_cobertura_arquitetonico.dwg',
-      'parecer_viabilidade_infra.pdf',
-      'guia_iss_recolhido.pdf'
-    ];
-    setDocumentosChecklist(prev => prev.map((doc, idx) => ({
-      ...doc,
-      status: 'pendente' as const,
-      fileName: mockFiles[idx] || 'laudo_tecnico.pdf',
-      fileSize: '1.4 MB',
-      uploadedAt: new Date().toISOString().split('T')[0]
-    })));
-  };
-
   // Save either as 'cadastro' (draft) or 'analise' (finalize)
   const handleFinalizarEGravar = (isDraft: boolean) => {
     const etapaAtual = isDraft ? 'cadastro' : 'analise';
@@ -617,28 +599,6 @@ export function NovoAtendimentoPanel({
     setSelectedAtendimentoForEdit(null);
   };
 
-  // Helper inside checklist upload to simulate filling / uploading checklist docs
-  const handleSimularUploadDoc = (docId: string, nomeArquivo: string) => {
-    if (!selectedAtendimentoForEdit) return;
-    const novosDocumentos = selectedAtendimentoForEdit.documentos.map(doc => {
-      if (doc.id === docId) {
-        return {
-          ...doc,
-          status: 'pendente' as const,
-          fileName: nomeArquivo,
-          uploadedAt: new Date().toISOString().split('T')[0],
-          fileSize: '1.2 MB'
-        };
-      }
-      return doc;
-    });
-
-    setSelectedAtendimentoForEdit({
-      ...selectedAtendimentoForEdit,
-      documentos: novosDocumentos
-    });
-  };
-
   const handleUploadDocReal = (docId: string, file: File) => {
     if (!selectedAtendimentoForEdit) return;
     const fileSize = file.size < 1024 * 1024
@@ -669,22 +629,6 @@ export function NovoAtendimentoPanel({
       });
     };
     reader.readAsDataURL(file);
-  };
-
-  // Helper inside checklist to change required / optional or status directly
-  const handleChangeDocStatus = (docId: string, status: 'pendente' | 'aprovado' | 'recusado' | 'nao_se_aplica') => {
-    if (!selectedAtendimentoForEdit) return;
-    const novosDocumentos = selectedAtendimentoForEdit.documentos.map(doc => {
-      if (doc.id === docId) {
-        return { ...doc, status };
-      }
-      return doc;
-    });
-
-    setSelectedAtendimentoForEdit({
-      ...selectedAtendimentoForEdit,
-      documentos: novosDocumentos
-    });
   };
 
   return (
@@ -2587,7 +2531,7 @@ export function AtribuicaoPanel({
   const [filtroAtribuicao, setFiltroAtribuicao] = useState<'todos' | 'minhas'>('todos');
 
   const analistasSgo = usuariosSeguranca.filter(
-    u => u.perfil === 'analista_dore' || u.perfil === 'tecnico_infra' || u.perfil === 'tecnico_infra'
+    u => u.perfil === 'analista_dore' || u.perfil === 'tecnico_infra'
   );
 
   // Valores Únicos para os selects

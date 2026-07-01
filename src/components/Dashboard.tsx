@@ -12,7 +12,6 @@ interface DashboardProps {
   onNovaSolicitacao: () => void;
   perfilUsuario: PerfilUsuario;
   somenteLeitura?: boolean;
-  onMudarPerfil: (perfil: PerfilUsuario) => void;
   onDelete: (id: string) => void;
   onUpdate?: (updated: Solicitacao) => void;
   onEdit?: (sol: Solicitacao) => void;
@@ -28,7 +27,6 @@ export default function Dashboard({
   onNovaSolicitacao,
   perfilUsuario,
   somenteLeitura = false,
-  onMudarPerfil,
   onDelete,
   onUpdate,
   onEdit,

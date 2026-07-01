@@ -123,7 +123,6 @@ export interface Solicitacao {
   dataHomologacao?: string;
   dataVigenciaPAF?: string;
   dataFinHomologacao?: string;
-  pago?: boolean;
   parcelasPAF?: ParcelaPAF[];
   cnpjCaixaEscolar?: string;
 
@@ -162,8 +161,6 @@ export interface Solicitacao {
   ieeClasse?: 'I' | 'II' | 'III' | 'IV';
   ieePontos?: number; // 1 a 4 — quanto da capacidade (35 pts) do analista este processo consome
   ieeComplexidade?: string; // 'Baixa' | 'Média' | 'Alta' | 'Muito Alta'
-  /** @deprecated use origemDemanda */
-  notificacao?: string;
   descricaoFolhaRosto?: string;
   valorPlanilha?: number;
   prazoEstimadoObra?: number; // dias — seção 4 da análise DORE (Referência e Dotação Orçamentária SGO), opcional
@@ -175,8 +172,6 @@ export interface Solicitacao {
   coabitado?: string;
   tipoCoabitado?: string;
   fichaVerificada?: boolean;
-  fichaVerificadaPor?: string;
-  fichaVerificadaData?: string;
   observacoesFicha?: string;
 
   // Informações da obra
@@ -221,7 +216,6 @@ export interface Solicitacao {
   medicoes: Medicao[];
   aditivos: Aditivo[];
   ajustes?: AjustePlanilha[];
-  analistasSugeridos?: string[];
   analistaAtribuido?: string;
   atribuicaoForcada?: boolean; // true quando Admin/Gestor atribuiu acima da capacidade disponível do analista (Parte 4 do IEE)
   contadorAnalises?: number;
@@ -292,32 +286,6 @@ export interface Solicitacao {
   planilhaMedicaoFinalFileName?: string;
   planilhaMedicaoFinalFileSize?: string;
   planilhaMedicaoFinalUploadedAt?: string;
-
-  // Validações da aba Análise de Processo
-  /** @deprecated substituído por statusSecoes['identificacao_escolar'] — mantido só para migração de dados antigos */
-  validacaoEscolar?: 'validado' | 'nao_validado' | 'editado';
-  /** @deprecated substituído por statusSecoes['identificacao_escolar'].motivo */
-  motivoNaoValidacaoEscolar?: string;
-  /** @deprecated campo nunca foi usado — a seção Patrimonial sempre teve status por sub-campo */
-  validacaoPatrimonial?: 'validado' | 'nao_validado' | 'editado';
-  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'].motivo */
-  motivoNaoValidacaoPatrimonial?: string;
-  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'] */
-  validacaoFormaOcupacao?: 'validado' | 'nao_validado' | 'editado';
-  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'] */
-  validacaoPredioEscola?: 'validado' | 'nao_validado' | 'editado';
-  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'] */
-  validacaoTombamento?: 'validado' | 'nao_validado' | 'editado';
-  /** @deprecated substituído por statusSecoes['classificacao_patrimonial'] */
-  validacaoCoabitado?: 'validado' | 'nao_validado' | 'editado';
-  /** @deprecated substituído por statusSecoes['detalhamento_tecnico'] */
-  validacaoTecnica?: 'validado' | 'nao_validado' | 'editado';
-  /** @deprecated substituído por statusSecoes['detalhamento_tecnico'].motivo */
-  motivoNaoValidacaoTecnica?: string;
-  /** @deprecated substituído por statusSecoes['referencia_dotacao'] */
-  validacaoReferenciaDotacao?: 'validado' | 'nao_validado' | 'editado';
-  /** @deprecated substituído por statusSecoes['referencia_dotacao'].motivo */
-  motivoNaoValidacaoReferenciaDotacao?: string;
 
   // Modelo novo (Nível 1, por seção) — ver src/utils/validacaoTecnica.ts
   statusSecoes?: Record<SecaoDadosGerais, StatusSecao>;

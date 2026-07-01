@@ -728,7 +728,6 @@ ${totalPendencias > 0
       dataHomologacao: dataPAFInput,
       dataVigenciaPAF: dataVigenciaPAFInput,
       dataFinHomologacao: dataFinHomologacaoInput,
-      pago: pagoPAFDerived,
       statusPAF: statusPAFDerived,
       parcelasPAF: parcelasPAFInput,
       cnpjCaixaEscolar: cnpjCaixaAuto || undefined,
@@ -754,7 +753,6 @@ ${totalPendencias > 0
       dataHomologacao: dataPAFInput,
       dataVigenciaPAF: dataVigenciaPAFInput,
       dataFinHomologacao: dataFinHomologacaoInput,
-      pago: pagoPAFDerived,
       statusPAF: statusPAFDerived,
       parcelasPAF: parcelasPAFInput,
       cnpjCaixaEscolar: cnpjCaixaAuto || undefined,
@@ -795,7 +793,6 @@ ${totalPendencias > 0
       dataHomologacao: dataPAFInput,
       dataVigenciaPAF: dataVigenciaPAFInput,
       dataFinHomologacao: dataFinHomologacaoInput,
-      pago: pagoPAFDerived,
       statusPAF: statusPAFDerived,
       parcelasPAF: parcelasPAFInput,
       cnpjCaixaEscolar: cnpjCaixaAuto || undefined,
@@ -1978,11 +1975,11 @@ ${totalPendencias > 0
             </span>
           </div>
 
-          {solicitacao.notificacao && solicitacao.notificacao !== 'Não há notificação' && (
+          {solicitacao.origemDemanda && solicitacao.origemDemanda !== 'Não há notificação' && (
             <div className="col-span-2">
               <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest block mb-1">Notificação / Órgão Regulador</span>
               <span className="text-amber-800 font-semibold bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs leading-normal block">
-                🚨 {solicitacao.notificacao}
+                🚨 {solicitacao.origemDemanda}
               </span>
             </div>
           )}

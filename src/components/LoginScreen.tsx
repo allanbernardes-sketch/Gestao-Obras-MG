@@ -1,19 +1,11 @@
 import React, { useState } from 'react';
 import { HardHat, LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { PerfilUsuario } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface LoginScreenProps {
   onLogin: (perfil: PerfilUsuario, nome: string) => void;
 }
-
-const USUARIOS_DEMO = [
-  { email: 'admin',                            senha: 'admin',    perfil: 'admin' as PerfilUsuario,              nome: 'Administrador SGO',    cargo: 'Administrador do Sistema' },
-  { email: 'joao.paulo@sre.mg.gov.br',         senha: 'sgo@2026', perfil: 'tecnico_infra' as PerfilUsuario,     nome: 'João Paulo Penfield',  cargo: 'Técnico de Infraestrutura (SRE)' },
-  { email: 'aline.davino@educacao.mg.gov.br',  senha: 'sgo@2026', perfil: 'gestor_dore' as PerfilUsuario,       nome: 'Aline Davino',         cargo: 'Gestor Atendimento (DORE)' },
-  { email: 'flavia.borges@educacao.mg.gov.br', senha: 'sgo@2026', perfil: 'analista_dore' as PerfilUsuario,     nome: 'Flavia Borges',        cargo: 'Analista de Engenharia (DORE)' },
-  { email: 'silas.fagundes@paf.mg.gov.br',     senha: 'sgo@2026', perfil: 'gestor_paf' as PerfilUsuario,        nome: 'Silas Fagundes',       cargo: 'Subsecretário de Administração' },
-  { email: 'rui.lages@educacao.mg.gov.br',     senha: 'sgo@2026', perfil: 'administrativo_dore' as PerfilUsuario, nome: 'Rui Lages',          cargo: 'Administrativo DORE' },
-];
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [email, setEmail]               = useState('');
@@ -22,28 +14,38 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   const [erro, setErro]                 = useState('');
   const [loading, setLoading]           = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro('');
     setLoading(true);
 
-    setTimeout(() => {
-      const usuario = USUARIOS_DEMO.find(
-        u => u.email === email.trim().toLowerCase() && u.senha === senha
-      );
-      if (usuario) {
-        onLogin(usuario.perfil, usuario.nome);
-      } else {
-        setErro('E-mail ou senha inválidos. Verifique suas credenciais.');
-      }
-      setLoading(false);
-    }, 600);
-  };
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password: senha,
+    });
 
-  const preencherDemo = (u: typeof USUARIOS_DEMO[0]) => {
-    setEmail(u.email);
-    setSenha(u.senha);
-    setErro('');
+    if (error) {
+      setErro('E-mail ou senha inválidos. Verifique suas credenciais.');
+      setLoading(false);
+      return;
+    }
+
+    const { data: usuario, error: erroUsuario } = await supabase
+      .from('usuarios')
+      .select('nome, perfis(codigo)')
+      .eq('id', data.user.id)
+      .single();
+
+    if (erroUsuario || !usuario) {
+      setErro('Usuário autenticado mas sem perfil cadastrado. Contate o administrador.');
+      await supabase.auth.signOut();
+      setLoading(false);
+      return;
+    }
+
+    const perfil = (usuario.perfis as unknown as { codigo: string }).codigo as PerfilUsuario;
+    onLogin(perfil, usuario.nome as string);
+    setLoading(false);
   };
 
   return (
@@ -122,29 +124,6 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               {loading ? 'Autenticando...' : 'Entrar'}
             </button>
           </form>
-
-          {/* Credenciais de demonstração */}
-          <div className="mt-6 p-3 bg-slate-50 rounded-xl border border-slate-100">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Usuários disponíveis (Demo)
-            </p>
-            <div className="space-y-0.5">
-              {USUARIOS_DEMO.map(u => (
-                <button
-                  key={u.email}
-                  type="button"
-                  onClick={() => preencherDemo(u)}
-                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer group"
-                >
-                  <span className="text-[11px] font-semibold text-slate-700 group-hover:text-slate-900">{u.nome}</span>
-                  <span className="text-[10px] text-slate-400 ml-1.5">— {u.cargo}</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-[9px] text-slate-400 mt-2 text-center border-t border-slate-200 pt-2">
-              Senha padrão para todos: <span className="font-mono font-bold text-slate-600">sgo@2026</span>
-            </p>
-          </div>
         </div>
 
         <p className="text-center text-slate-500 text-[10px] mt-6">

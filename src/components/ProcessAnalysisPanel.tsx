@@ -275,7 +275,7 @@ export default function ProcessAnalysisPanel({
     };
 
     if (key === 'formaAtendimento') {
-      updated.documentos = syncChecklistDocs(updated.documentos || [], updated.notificacao, val);
+      updated.documentos = syncChecklistDocs(updated.documentos || [], updated.origemDemanda, val);
     }
 
     onUpdate({ ...updated, ...aplicarEdicaoSecao(updated, 'detalhamento_tecnico') });
@@ -1071,8 +1071,8 @@ export default function ProcessAnalysisPanel({
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Há alguma notificação? *</span>
                 </div>
                 <select
-                  value={solicitacao.notificacao || 'Não há notificação'}
-                  onChange={(e) => handleUpdatePatrimonial('notificacao', e.target.value)}
+                  value={solicitacao.origemDemanda || 'Não há notificação'}
+                  onChange={(e) => handleUpdatePatrimonial('origemDemanda', e.target.value)}
                   disabled={!isMyAssignment}
                   className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white text-slate-800 font-medium cursor-pointer"
                 >

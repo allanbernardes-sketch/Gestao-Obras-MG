@@ -13,7 +13,7 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, DollarSign, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Menu, Lock, Coins, MapPin, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Paperclip, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Zap, Database, XCircle, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, AtribuicaoHistoricoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
@@ -23,6 +23,7 @@ import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
 import CentralNavegacaoObras from './components/CentralNavegacaoObras';
 import OrcamentoModule from './components/orcamento/OrcamentoModule';
 import PatrimonioModule from './components/patrimonio/PatrimonioModule';
+import { supabase } from './lib/supabase';
 
 
 export default function App() {
@@ -34,7 +35,6 @@ export default function App() {
   const [abrirModalCadastro, setAbrirModalCadastro] = useState(false);
   const [solicitacaoEmEdicao, setSolicitacaoEmEdicao] = useState<Solicitacao | null>(null);
   const [atendimentoEmEdicaoDirect, setAtendimentoEmEdicaoDirect] = useState<Solicitacao | null>(null);
-  const [mostrarMenuPerfil, setMostrarMenuPerfil] = useState(false);
   const [mostrarMenuNotif, setMostrarMenuNotif] = useState(false);
   const [viewMode, setViewMode] = useState<'lista' | 'kanban_status' | 'kanban_analista'>('lista');
 
@@ -148,13 +148,6 @@ export default function App() {
     { id: 'USR-00', nome: 'Administrador SGO', email: 'admin', perfil: 'admin', departamento: 'Administração do Sistema' }
   ]);
 
-  const [enderecosSeguranca, setEnderecosSeguranca] = useState([
-    { id: 'END-01', cep: '38700-000', rua: 'Rua Major Gote', numero: '1200', bairro: 'Alto Caiçaras', cidade: 'Patos de Minas', estado: 'MG', escola: 'E.E. Padre Almir Neves' },
-    { id: 'END-02', cep: '30120-010', rua: 'Av. Afonso Pena', numero: '4000', bairro: 'Cruzeiro', cidade: 'Belo Horizonte', estado: 'MG', escola: 'E.E. Milton Campos' },
-    { id: 'END-03', cep: '39100-000', rua: 'Praça Conselheiro Matta', numero: '82', bairro: 'Centro', cidade: 'Diamantina', estado: 'MG', escola: 'E.E. Juscelino Kubitschek' },
-    { id: 'END-04', cep: '37500-050', rua: 'Rua Francisco Masseli', numero: '345', bairro: 'Bonsucesso', cidade: 'Itajubá', estado: 'MG', escola: 'E.E. Wenceslau Braz' },
-    { id: 'END-05', cep: '37550-000', rua: 'Av. Vicente Simões', numero: '101', bairro: 'Centro', cidade: 'Pouso Alegre', estado: 'MG', escola: 'E.E. Delfim Moreira' }
-  ]);
 
   const [empresasSeguranca, setEmpresasSeguranca] = useState<EmpresaSeguranca[]>([
     { id: 'EMP-01', nome: 'Construtora Mantiqueira Ltda', cnpj: '45.123.456/0001-80', responsavelTecnico: 'Eng. Roberto Albuquerque', situacaoCadastral: 'Regular', telefone: '(31) 3244-9088', email: 'contato@mantiqueira.com.br' },
@@ -194,8 +187,6 @@ export default function App() {
   const [usrIdEmEdicao, setUsrIdEmEdicao] = useState<string | null>(null);
   const [usrNome, setUsrNome] = useState('');
   const [usrEmail, setUsrEmail] = useState('');
-  const [usrPerfil, setUsrPerfil] = useState<PerfilUsuario>('tecnico_infra');
-  const [usrDepto, setUsrDepto] = useState('SRE Geral');
   const [usrCargo, setUsrCargo] = useState('Engenheiro Civil');
   const [usrFormacao, setUsrFormacao] = useState('Engenharia Civil');
   const [usrCreaNum, setUsrCreaNum] = useState('');
@@ -210,17 +201,8 @@ export default function App() {
   const [filtroUsrBusca, setFiltroUsrBusca] = useState('');
   const [filtroUsrCargo, setFiltroUsrCargo] = useState('todos');
   const [filtroUsrSituacao, setFiltroUsrSituacao] = useState('todos');
-  const [filtroUsrPerfil, setFiltroUsrPerfil] = useState('todos');
   const [filtroUsrVinculo, setFiltroUsrVinculo] = useState('todos');
   const [resetSenhaUsrId, setResetSenhaUsrId] = useState<string | null>(null);
-
-  // SEGURANÇA FORM STATES - ADDRESS
-  const [endCep, setEndCep] = useState('');
-  const [endRua, setEndRua] = useState('');
-  const [endNum, setEndNum] = useState('');
-  const [endBairro, setEndBairro] = useState('');
-  const [endCidade, setEndCidade] = useState('');
-  const [endEscola, setEndEscola] = useState('');
 
   // SEGURANÇA FORM STATES - SCHOOL
   const [escNome, setEscNome] = useState('');
@@ -365,32 +347,6 @@ export default function App() {
       resetFormUsuario();
       alert(`Usuário "${usrNome}" cadastrado com sucesso nas diretivas de Segurança!`);
     }
-  };
-
-  const handleCadastrarEndereco = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!endCep || !endRua || !endCidade) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
-      return;
-    }
-    const novo = {
-      id: `END-${String(enderecosSeguranca.length + 1).padStart(2, '0')}`,
-      cep: endCep,
-      rua: endRua,
-      numero: endNum || 'S/N',
-      bairro: endBairro || 'Centro',
-      cidade: endCidade,
-      estado: 'MG',
-      escola: endEscola || 'Geral'
-    };
-    setEnderecosSeguranca([...enderecosSeguranca, novo]);
-    setEndCep('');
-    setEndRua('');
-    setEndNum('');
-    setEndBairro('');
-    setEndCidade('');
-    setEndEscola('');
-    alert('Endereço cadastrado com sucesso no banco de dados escolar regional!');
   };
 
   const handleCadastrarEscolaCompleto = (e: React.FormEvent) => {
@@ -640,12 +596,10 @@ export default function App() {
         localStorage.setItem('gesto_solicitacoes', JSON.stringify(migradoComPrioridade));
       } catch (e) {
         console.error('Falha ao parsear localStorage, resetando...', e);
-        setSolicitacoes(SOLICITACOES_INICIAIS.map(recalcularPrioridade).map(recalcularIEE));
+        setSolicitacoes([]);
       }
     } else {
-      const iniciaisComPrioridade = SOLICITACOES_INICIAIS.map(recalcularPrioridade).map(recalcularIEE);
-      setSolicitacoes(iniciaisComPrioridade);
-      localStorage.setItem('gesto_solicitacoes', JSON.stringify(iniciaisComPrioridade));
+      setSolicitacoes([]);
     }
   }, []);
 
@@ -654,6 +608,35 @@ export default function App() {
     setSchoolSearchQuery('');
     setIsSelectorOpen(false);
   }, [activeSubTask]);
+
+  // Restaura sessão do Supabase Auth ao recarregar a página
+  useEffect(() => {
+    async function restaurarUsuario(userId: string) {
+      const { data: usuario } = await supabase
+        .from('usuarios')
+        .select('nome, perfis(codigo)')
+        .eq('id', userId)
+        .single();
+      if (usuario) {
+        setPerfilUsuario((usuario.perfis as unknown as { codigo: string }).codigo as PerfilUsuario);
+        setNomeUsuario(usuario.nome as string);
+        setLogado(true);
+      }
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) restaurarUsuario(session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setLogado(false);
+        setNomeUsuario('');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Persists updates to localStorage
   const atualizarEGuardarSolicitacoes = (novasBrutas: Solicitacao[]) => {
@@ -1012,9 +995,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    supabase.auth.signOut();
     setLogado(false);
     setNomeUsuario('');
-    setMostrarMenuPerfil(false);
     setMostrarMenuNotif(false);
   };
 
@@ -1053,7 +1036,6 @@ export default function App() {
               type="button"
               onClick={() => {
                 setMostrarMenuNotif(!mostrarMenuNotif);
-                setMostrarMenuPerfil(false);
               }}
               className="relative p-2 text-slate-300 hover:text-white hover:bg-blue-900/60 rounded-xl transition-all cursor-pointer flex items-center justify-center shrink-0 border border-slate-500/10"
               title="Notificações do Sistema"
@@ -3265,7 +3247,6 @@ export default function App() {
                       onNovaSolicitacao={() => setAbrirModalCadastro(true)}
                       perfilUsuario={perfilUsuario}
                       somenteLeitura={somenteLeitura}
-                      onMudarPerfil={(perf) => setPerfilUsuario(perf)}
                       onDelete={handleDeleteSolicitacao}
                       onUpdate={handleUpdateSolicitacao}
                       onEdit={(sol) => {
@@ -3351,8 +3332,8 @@ export default function App() {
                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                             <Search className="w-3.5 h-3.5 text-rose-500" /> Filtros de Pesquisa
                           </span>
-                          {(filtroUsrBusca || filtroUsrCargo !== 'todos' || filtroUsrSituacao !== 'todos' || filtroUsrPerfil !== 'todos' || filtroUsrVinculo !== 'todos') && (
-                            <button type="button" onClick={() => { setFiltroUsrBusca(''); setFiltroUsrCargo('todos'); setFiltroUsrSituacao('todos'); setFiltroUsrPerfil('todos'); setFiltroUsrVinculo('todos'); }} className="text-[10px] text-rose-600 font-bold hover:underline cursor-pointer">
+                          {(filtroUsrBusca || filtroUsrCargo !== 'todos' || filtroUsrSituacao !== 'todos' || filtroUsrVinculo !== 'todos') && (
+                            <button type="button" onClick={() => { setFiltroUsrBusca(''); setFiltroUsrCargo('todos'); setFiltroUsrSituacao('todos'); setFiltroUsrVinculo('todos'); }} className="text-[10px] text-rose-600 font-bold hover:underline cursor-pointer">
                               Limpar Filtros
                             </button>
                           )}

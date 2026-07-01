@@ -18,47 +18,15 @@ export const SECAO_LABEL: Record<SecaoDadosGerais, string> = {
 // Campos de Solicitacao pertencentes a cada seção — usados para o diff de EDITADO contra valoresOriginaisTecnico.
 export const SECAO_CAMPOS: Record<SecaoDadosGerais, (keyof Solicitacao)[]> = {
   identificacao_escolar: ['codesc', 'nomeEscola', 'sre', 'municipio', 'codigoEndereco'],
-  classificacao_patrimonial: ['formaOcupacao', 'predio', 'tombado', 'orgaoTombador', 'coabitado', 'tipoCoabitado', 'notificacao'],
+  classificacao_patrimonial: ['formaOcupacao', 'predio', 'tombado', 'orgaoTombador', 'coabitado', 'tipoCoabitado'],
   detalhamento_tecnico: ['tipo', 'tipoAtendimento', 'numPaf', 'anoEmenda', 'formaAtendimento', 'descricaoFolhaRosto'],
   referencia_dotacao: ['valorPlanilha', 'iss', 'observacoesFicha']
 };
 
-// Consolida os 4 sub-status legados da seção Patrimonial em um único status:
-// nao_validado vence (precisa de correção) > editado > validado (só se todos validados) > pendente.
-function consolidarSubStatusLegado(valores: (StatusValidacao | undefined)[]): StatusValidacao {
-  if (valores.some(v => v === 'nao_validado')) return 'nao_validado';
-  if (valores.some(v => v === 'editado')) return 'editado';
-  if (valores.length > 0 && valores.every(v => v === 'validado')) return 'validado';
-  return 'pendente';
-}
-
-// Deriva o StatusSecao a partir dos 8 campos validacao* legados — usado só como fallback de leitura
-// para processos criados antes da existência de statusSecoes (não persiste nada).
-function migrarStatusLegado(sol: Solicitacao, secao: SecaoDadosGerais): StatusSecao {
-  switch (secao) {
-    case 'identificacao_escolar':
-      return { status: sol.validacaoEscolar ?? 'pendente', motivo: sol.motivoNaoValidacaoEscolar };
-    case 'classificacao_patrimonial':
-      return {
-        status: consolidarSubStatusLegado([
-          sol.validacaoFormaOcupacao,
-          sol.validacaoPredioEscola,
-          sol.validacaoTombamento,
-          sol.validacaoCoabitado
-        ]),
-        motivo: sol.motivoNaoValidacaoPatrimonial
-      };
-    case 'detalhamento_tecnico':
-      return { status: sol.validacaoTecnica ?? 'pendente', motivo: sol.motivoNaoValidacaoTecnica };
-    case 'referencia_dotacao':
-      return { status: sol.validacaoReferenciaDotacao ?? 'pendente', motivo: sol.motivoNaoValidacaoReferenciaDotacao };
-  }
-}
-
 export function getStatusSecoes(sol: Solicitacao): Record<SecaoDadosGerais, StatusSecao> {
   if (sol.statusSecoes) return sol.statusSecoes;
   const resultado = {} as Record<SecaoDadosGerais, StatusSecao>;
-  SECOES_DADOS_GERAIS.forEach(secao => { resultado[secao] = migrarStatusLegado(sol, secao); });
+  SECOES_DADOS_GERAIS.forEach(secao => { resultado[secao] = { status: 'pendente' }; });
   return resultado;
 }
 

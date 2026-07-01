@@ -762,17 +762,6 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
     }
   };
 
-  // Keep end date synced when start date or duration changes
-  const handleDateOrDurationCalc = (start: string, monthsStr: string) => {
-    setDataInicioInput(start);
-    setDuracaoMeses(monthsStr);
-    const months = parseInt(monthsStr) || 1;
-    if (start) {
-      const d = new Date(start + 'T12:00:00');
-      d.setMonth(d.getMonth() + months);
-      setDataTerminoInput(d.toISOString().split('T')[0]);
-    }
-  };
 
   const submitNovaObra = (e: React.FormEvent) => {
     e.preventDefault();
