@@ -477,13 +477,65 @@ export default function App() {
       )
     : solicitacoes;
 
-  // Initialize from LocalStorage or the rich pre-defined mock set
+  // Initialize from Supabase, falling back to LocalStorage or the rich pre-defined mock set
   useEffect(() => {
-    const saved = localStorage.getItem('gesto_solicitacoes');
-    if (saved) {
+    async function carregarSolicitacoes() {
+      try {
+        const { data, error } = await supabase
+          .from('solicitacoes')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          // Arrays aninhados (documentos, medições, aditivos, ajustes, histórico) ainda
+          // não são persistidos no Supabase nesta etapa — iniciam vazios por enquanto.
+          const doSupabase: Solicitacao[] = data.map((row: any) => ({
+            id: row.codigo_sgo,
+            nomeEscola: row.nome_escola,
+            codesc: row.codesc,
+            tipo: row.tipo ?? '',
+            municipio: row.municipio ?? '',
+            sre: row.sre ?? '',
+            dataCriacao: row.created_at ? String(row.created_at).split('T')[0] : '',
+            etapaAtual: row.etapa_atual,
+            historicoEtapas: [],
+            documentos: [],
+            medicoes: [],
+            aditivos: [],
+            ajustes: [],
+            prioridadeScore: row.prioridade_score ?? undefined,
+            estrelas: row.estrelas ?? undefined,
+            iee: row.iee ?? undefined,
+            ieeClasse: row.iee_classe ?? undefined,
+            ieePontos: row.iee_pontos ?? undefined,
+            contadorAnalises: row.contador_analises ?? undefined,
+            valorPlanilha: row.valor_planilha ?? undefined,
+            cadastroObraConfirmado: row.cadastro_obra_confirmado ?? undefined,
+            atribuicaoForcada: row.atribuicao_forcada ?? undefined,
+            fichaVerificada: row.ficha_verificada ?? undefined,
+            valoresOriginaisTecnico: row.valores_originais_tecnico ?? undefined,
+            statusSecoes: {
+              identificacao_escolar: { status: row.status_identificacao_escolar, motivo: row.motivo_identificacao_escolar ?? undefined },
+              classificacao_patrimonial: { status: row.status_classificacao_patrimonial, motivo: row.motivo_classificacao_patrimonial ?? undefined },
+              detalhamento_tecnico: { status: row.status_detalhamento_tecnico, motivo: row.motivo_detalhamento_tecnico ?? undefined },
+              referencia_dotacao: { status: row.status_referencia_dotacao, motivo: row.motivo_referencia_dotacao ?? undefined },
+            },
+          }));
+          setSolicitacoes(doSupabase);
+          return;
+        }
+      } catch (e) {
+        console.error('Falha ao carregar do Supabase, caindo para localStorage:', e);
+      }
+
+      // Fallback: localStorage (comportamento original)
+      const saved = localStorage.getItem('gesto_solicitacoes');
+      if (saved) {
       try {
         const parsed = JSON.parse(saved) as Solicitacao[];
-        
+
         // Dynamic clean migration of checklists to use current structural constraints
         // preserving user-uploaded filenames, sizes, and statuses
         const migrado = parsed.map(s => {
@@ -598,9 +650,12 @@ export default function App() {
         console.error('Falha ao parsear localStorage, resetando...', e);
         setSolicitacoes([]);
       }
-    } else {
-      setSolicitacoes([]);
+      } else {
+        setSolicitacoes([]);
+      }
     }
+
+    carregarSolicitacoes();
   }, []);
 
   // Autoreset search criteria on subtask change to avoid bleed
@@ -638,18 +693,50 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Persists updates to localStorage
+  // Persists updates: state React (síncrono) + localStorage (fallback) + Supabase (assíncrono)
   const atualizarEGuardarSolicitacoes = (novasBrutas: Solicitacao[]) => {
     // Recalcula score/estrelas/etiquetas a cada criação, atualização ou ajuste de prioridade manual
     const novas = novasBrutas.map(recalcularPrioridade).map(recalcularIEE);
     setSolicitacoes(novas);
+
+    // Fallback localStorage durante transição
     try {
       localStorage.setItem('gesto_solicitacoes', JSON.stringify(novas));
     } catch (err) {
-      // Limite de armazenamento do navegador excedido (comum ao anexar muitos arquivos reais)
-      alert('Não foi possível salvar: o limite de armazenamento do navegador foi excedido. Isso costuma ocorrer quando há muitos documentos anexados. Remova ou substitua algum arquivo grande e tente novamente.');
-      console.error('Falha ao salvar no localStorage:', err);
+      console.warn('localStorage cheio:', err);
     }
+
+    // Escrita assíncrona no Supabase
+    novas.forEach(async (sol) => {
+      const { error } = await supabase
+        .from('solicitacoes')
+        .upsert({
+          codigo_sgo: sol.id,
+          codesc: sol.codesc,
+          nome_escola: sol.nomeEscola,
+          municipio: sol.municipio,
+          sre: sol.sre,
+          tipo: sol.tipo,
+          etapa_atual: sol.etapaAtual,
+          prioridade_score: sol.prioridadeScore ?? 0,
+          estrelas: sol.estrelas ?? 0,
+          iee: sol.iee ?? 0,
+          iee_classe: sol.ieeClasse ?? null,
+          iee_pontos: sol.ieePontos ?? 0,
+          status_identificacao_escolar: sol.statusSecoes?.identificacao_escolar?.status ?? 'pendente',
+          status_classificacao_patrimonial: sol.statusSecoes?.classificacao_patrimonial?.status ?? 'pendente',
+          status_detalhamento_tecnico: sol.statusSecoes?.detalhamento_tecnico?.status ?? 'pendente',
+          status_referencia_dotacao: sol.statusSecoes?.referencia_dotacao?.status ?? 'pendente',
+          analista_atribuido_id: null,
+          fiscal_obra_atribuido_id: null,
+          valores_originais_tecnico: sol.valoresOriginaisTecnico ?? null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'codigo_sgo' });
+
+      if (error) {
+        console.error('Erro Supabase:', error);
+      }
+    });
   };
 
   const handleInjetarDemandaTeste = (subTask: string) => {
@@ -3042,7 +3129,7 @@ export default function App() {
                     <NovoAtendimentoPanel
                       solicitacoes={solicitacoesVisiveis}
                       onSolicitacaoCriada={(nova) => {
-                        setSolicitacoes(prev => [nova, ...prev]);
+                        handleNovaSolicitacao(nova);
                         setActiveSubTask('cadastro');
                       }}
                       onUpdateSolicitacao={handleUpdateSolicitacao}
