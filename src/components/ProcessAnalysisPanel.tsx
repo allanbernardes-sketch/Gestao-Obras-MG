@@ -1065,23 +1065,14 @@ export default function ProcessAnalysisPanel({
                 </div>
               </div>
 
-              {/* Card 5: Notificação / Órgão Regulador */}
+              {/* Card 5: Origem da Demanda — preenchida no Atendimento Inicial, somente leitura na Análise DORE */}
               <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/55 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Há alguma notificação? *</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Origem da Demanda</span>
                 </div>
-                <select
-                  value={solicitacao.origemDemanda || 'Não há notificação'}
-                  onChange={(e) => handleUpdatePatrimonial('origemDemanda', e.target.value)}
-                  disabled={!isMyAssignment}
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white text-slate-800 font-medium cursor-pointer"
-                >
-                  <option value="Não há notificação">Não há notificação</option>
-                  <option value="Ministério Publico">Ministério Publico</option>
-                  <option value="Prefeitura">Prefeitura</option>
-                  <option value="Defesa Civil">Defesa Civil</option>
-                  <option value="TCE">TCE</option>
-                </select>
+                <div className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-100 text-slate-600 font-medium">
+                  {solicitacao.origemDemanda || 'Não informado no Atendimento Inicial'}
+                </div>
               </div>
             </div>
 

@@ -25,6 +25,30 @@ import OrcamentoModule from './components/orcamento/OrcamentoModule';
 import PatrimonioModule from './components/patrimonio/PatrimonioModule';
 import { supabase } from './lib/supabase';
 
+// status_obra no banco é um enum snake_case computado (nao_iniciada | em_andamento | paralisada
+// | concluida | distratada), diferente do campo statusObra do frontend (que é só um override manual
+// usado por computeStatusObra para o caso "Paralisada"). Convertemos a partir do valor computado,
+// que é o que realmente aparece pra o usuário. 'distratada' e os estados intermediários de
+// contratação (computeStatusObra retorna 6 labels, o banco só tem 5 valores) caem em 'nao_iniciada'
+// por não terem equivalente direto — ver computeStatusObra em src/types.ts.
+function statusObraParaBanco(sol: Solicitacao): string {
+  switch (computeStatusObra(sol).label) {
+    case 'Paralisada': return 'paralisada';
+    case 'Concluída': return 'concluida';
+    case 'Em execução': return 'em_andamento';
+    default: return 'nao_iniciada';
+  }
+}
+
+function statusObraDoBanco(v: string | null | undefined): Solicitacao['statusObra'] {
+  switch (v) {
+    case 'paralisada': return 'Paralisada';
+    case 'concluida': return 'Concluída';
+    case 'em_andamento': return 'Em Andamento';
+    case 'nao_iniciada': return 'Não Iniciada';
+    default: return undefined; // 'distratada' não tem equivalente no frontend hoje
+  }
+}
 
 export default function App() {
   const [logado, setLogado] = useState(false);
@@ -510,12 +534,47 @@ export default function App() {
             iee: row.iee ?? undefined,
             ieeClasse: row.iee_classe ?? undefined,
             ieePontos: row.iee_pontos ?? undefined,
+            ieeComplexidade: row.iee_complexidade ?? undefined,
             contadorAnalises: row.contador_analises ?? undefined,
             valorPlanilha: row.valor_planilha ?? undefined,
             cadastroObraConfirmado: row.cadastro_obra_confirmado ?? undefined,
             atribuicaoForcada: row.atribuicao_forcada ?? undefined,
             fichaVerificada: row.ficha_verificada ?? undefined,
             valoresOriginaisTecnico: row.valores_originais_tecnico ?? undefined,
+            tipoAtendimento: row.tipo_atendimento ?? undefined,
+            atendimentoOrgao: row.atendimento_orgao ?? undefined,
+            formaAtendimento: row.forma_atendimento ?? undefined,
+            origemDemanda: row.origem_demanda ?? undefined,
+            numPaf: row.num_paf ?? undefined,
+            anoEmenda: row.ano_emenda ?? undefined,
+            emendaImpositiva: row.emenda_impositiva ?? undefined,
+            descricaoFolhaRosto: row.descricao_folha_rosto ?? undefined,
+            valorHomologado: row.valor_homologado ?? undefined,
+            numeroPAF: row.numero_paf ?? undefined,
+            dataHomologacao: row.data_homologacao ?? undefined,
+            dataVigenciaPAF: row.data_vigencia_paf ?? undefined,
+            dataFinHomologacao: row.data_fin_homologacao ?? undefined,
+            statusPAF: row.status_paf ?? undefined,
+            cnpjCaixaEscolar: row.cnpj_caixa_escolar ?? undefined,
+            prazoEstimadoObra: row.prazo_estimado_obra ?? undefined,
+            prazoEstimadoMeses: row.prazo_estimado_meses ?? undefined,
+            iss: row.iss ?? undefined,
+            codigoEndereco: row.codigo_endereco ?? undefined,
+            formaOcupacao: row.forma_ocupacao ?? undefined,
+            predio: row.predio ?? undefined,
+            tombado: row.tombado ?? undefined,
+            orgaoTombador: row.orgao_tombador ?? undefined,
+            coabitado: row.coabitado ?? undefined,
+            tipoCoabitado: row.tipo_coabitado ?? undefined,
+            observacoesFicha: row.observacoes_ficha ?? undefined,
+            empresaContratada: row.empresa_contratada ?? undefined,
+            cnpjEmpresa: row.cnpj_empresa ?? undefined,
+            responsavel: row.responsavel ?? undefined,
+            dataOrdemInicio: row.data_ordem_inicio ?? undefined,
+            previsaoTerminoObra: row.previsao_termino_obra ?? undefined,
+            garantiaTipo: row.garantia_tipo ?? undefined,
+            contratoValorInicial: row.valor_contrato ?? undefined,
+            statusObra: statusObraDoBanco(row.status_obra),
             statusSecoes: {
               identificacao_escolar: { status: row.status_identificacao_escolar, motivo: row.motivo_identificacao_escolar ?? undefined },
               classificacao_patrimonial: { status: row.status_classificacao_patrimonial, motivo: row.motivo_classificacao_patrimonial ?? undefined },
@@ -723,18 +782,66 @@ export default function App() {
           iee: sol.iee ?? 0,
           iee_classe: sol.ieeClasse ?? null,
           iee_pontos: sol.ieePontos ?? 0,
+          iee_complexidade: sol.ieeComplexidade ?? null,
           status_identificacao_escolar: sol.statusSecoes?.identificacao_escolar?.status ?? 'pendente',
+          motivo_identificacao_escolar: sol.statusSecoes?.identificacao_escolar?.motivo ?? null,
           status_classificacao_patrimonial: sol.statusSecoes?.classificacao_patrimonial?.status ?? 'pendente',
+          motivo_classificacao_patrimonial: sol.statusSecoes?.classificacao_patrimonial?.motivo ?? null,
           status_detalhamento_tecnico: sol.statusSecoes?.detalhamento_tecnico?.status ?? 'pendente',
+          motivo_detalhamento_tecnico: sol.statusSecoes?.detalhamento_tecnico?.motivo ?? null,
           status_referencia_dotacao: sol.statusSecoes?.referencia_dotacao?.status ?? 'pendente',
+          motivo_referencia_dotacao: sol.statusSecoes?.referencia_dotacao?.motivo ?? null,
+          valores_originais_tecnico: sol.valoresOriginaisTecnico ?? null,
+          tipo_atendimento: sol.tipoAtendimento ?? null,
+          atendimento_orgao: sol.atendimentoOrgao ?? null,
+          forma_atendimento: sol.formaAtendimento ?? null,
+          origem_demanda: sol.origemDemanda ?? null,
+          num_paf: sol.numPaf ?? null,
+          ano_emenda: sol.anoEmenda ?? null,
+          emenda_impositiva: sol.emendaImpositiva ?? null,
+          descricao_folha_rosto: sol.descricaoFolhaRosto ?? null,
+          valor_planilha: sol.valorPlanilha ?? null,
+          valor_homologado: sol.valorHomologado ?? null,
+          numero_paf: sol.numeroPAF ?? null,
+          data_homologacao: sol.dataHomologacao ?? null,
+          data_vigencia_paf: sol.dataVigenciaPAF ?? null,
+          data_fin_homologacao: sol.dataFinHomologacao ?? null,
+          status_paf: sol.statusPAF ?? null,
+          cnpj_caixa_escolar: sol.cnpjCaixaEscolar ?? null,
+          prazo_estimado_obra: sol.prazoEstimadoObra ?? null,
+          prazo_estimado_meses: sol.prazoEstimadoMeses ?? null,
+          iss: sol.iss ?? null,
+          codigo_endereco: sol.codigoEndereco ?? null,
+          forma_ocupacao: sol.formaOcupacao ?? null,
+          predio: sol.predio ?? null,
+          tombado: sol.tombado ?? null,
+          orgao_tombador: sol.orgaoTombador ?? null,
+          coabitado: sol.coabitado ?? null,
+          tipo_coabitado: sol.tipoCoabitado ?? null,
+          ficha_verificada: sol.fichaVerificada ?? false,
+          observacoes_ficha: sol.observacoesFicha ?? null,
+          empresa_contratada: sol.empresaContratada ?? null,
+          cnpj_empresa: sol.cnpjEmpresa ?? null,
+          responsavel: sol.responsavel ?? null,
+          data_ordem_inicio: sol.dataOrdemInicio ?? null,
+          previsao_termino_obra: sol.previsaoTerminoObra ?? null,
+          garantia_tipo: sol.garantiaTipo ?? null,
+          cadastro_obra_confirmado: sol.cadastroObraConfirmado ?? false,
+          atribuicao_forcada: sol.atribuicaoForcada ?? false,
+          contador_analises: sol.contadorAnalises ?? 0,
+          valor_contrato: sol.contratoValorInicial ?? null,
+          status_obra: statusObraParaBanco(sol),
           analista_atribuido_id: null,
           fiscal_obra_atribuido_id: null,
-          valores_originais_tecnico: sol.valoresOriginaisTecnico ?? null,
           updated_at: new Date().toISOString()
         }, { onConflict: 'codigo_sgo' });
 
       if (error) {
-        console.error('Erro Supabase:', error);
+        console.error('Erro Supabase completo:', JSON.stringify(error, null, 2));
+        console.error('Código:', error.code);
+        console.error('Mensagem:', error.message);
+        console.error('Detalhes:', error.details);
+        console.error('Hint:', error.hint);
       }
     });
   };
