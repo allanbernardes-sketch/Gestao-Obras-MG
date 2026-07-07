@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, ParcelaPAF } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
+import { supabase } from '../lib/supabase';
 import { gerarParecerIA } from './GeradorParecerIA';
 import ProcessAnalysisPanel from './ProcessAnalysisPanel';
 import { SECOES_DADOS_GERAIS, SECAO_LABEL, getStatusSecoes, capturarSnapshotTecnico } from '../utils/validacaoTecnica';
@@ -663,7 +664,7 @@ ${totalPendencias > 0
     });
   };
 
-  const enviarReprovacaoFinal = () => {
+  const enviarReprovacaoFinal = async () => {
     const contador = (solicitacao.historicoCorrecoes?.length || 0) + 1;
     const hoje = new Date().toISOString().split('T')[0];
     const statusSecoes = getStatusSecoes(solicitacao);
@@ -683,6 +684,60 @@ ${totalPendencias > 0
         { etapa: 'correcao', data: hoje, responsavel: `${currentUserNome || perfilUsuario} (Reprovação)` }
       ]
     });
+
+    // Gravação assíncrona do histórico de correções no Supabase
+    try {
+      let dbId = solicitacao._dbId;
+      if (!dbId) {
+        const { data: solRow, error: solError } = await supabase
+          .from('solicitacoes')
+          .select('id')
+          .eq('codigo_sgo', solicitacao.id)
+          .single();
+        if (solError || !solRow) {
+          console.error('Não foi possível localizar o uuid da solicitação para gravar o histórico de correções:', solError);
+          return;
+        }
+        dbId = solRow.id;
+      }
+
+      const { data: userData } = await supabase.auth.getUser();
+
+      const { data: correcaoRow, error: correcaoError } = await supabase
+        .from('solicitacao_historico_correcoes')
+        .insert({ solicitacao_id: dbId, usuario_id: userData.user?.id ?? null })
+        .select('id')
+        .single();
+
+      if (correcaoError || !correcaoRow) {
+        console.error('Erro ao gravar solicitacao_historico_correcoes:', correcaoError);
+        return;
+      }
+
+      const correcaoId = correcaoRow.id;
+
+      if (motivosAtivos.length > 0) {
+        const { error: motivosError } = await supabase
+          .from('historico_correcao_motivos')
+          .insert(motivosAtivos.map(motivo => ({
+            correcao_id: correcaoId,
+            motivo: `${motivo.motivo} (${motivo.label})`,
+          })));
+        if (motivosError) console.error('Erro ao gravar historico_correcao_motivos:', motivosError);
+      }
+
+      if (docsRecusados.length > 0) {
+        const { error: docsError } = await supabase
+          .from('historico_correcao_docs_recusados')
+          .insert(docsRecusados.map(doc => ({
+            correcao_id: correcaoId,
+            nome_doc: `${doc.nome}: ${doc.justificativa}`,
+          })));
+        if (docsError) console.error('Erro ao gravar historico_correcao_docs_recusados:', docsError);
+      }
+    } catch (err) {
+      console.error('Falha ao gravar histórico de correções no Supabase:', err);
+    }
   };
 
   // PAF PROCESSORS

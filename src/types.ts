@@ -105,6 +105,7 @@ export interface ParcelaPAF {
 
 export interface Solicitacao {
   id: string;
+  _dbId?: string; // uuid real da linha em solicitacoes (Supabase) — uso interno, não exibir na UI
   nomeEscola: string;
   codesc: string;
   tipo: string;

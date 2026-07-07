@@ -517,6 +517,7 @@ export default function App() {
           // não são persistidos no Supabase nesta etapa — iniciam vazios por enquanto.
           const doSupabase: Solicitacao[] = data.map((row: any) => ({
             id: row.codigo_sgo,
+            _dbId: row.id,
             nomeEscola: row.nome_escola,
             codesc: row.codesc,
             tipo: row.tipo ?? '',
@@ -582,7 +583,48 @@ export default function App() {
               referencia_dotacao: { status: row.status_referencia_dotacao, motivo: row.motivo_referencia_dotacao ?? undefined },
             },
           }));
-          setSolicitacoes(doSupabase);
+
+          // Carrega o histórico de correções (rodadas de devolução) de cada solicitação
+          let comHistorico = doSupabase;
+          const dbIds = doSupabase.map(s => s._dbId).filter((id): id is string => !!id);
+          if (dbIds.length > 0) {
+            const { data: correcoesData, error: correcoesError } = await supabase
+              .from('solicitacao_historico_correcoes')
+              .select(`
+                id, created_at, solicitacao_id,
+                historico_correcao_motivos ( motivo ),
+                historico_correcao_docs_recusados ( nome_doc )
+              `)
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: true });
+
+            if (correcoesError) {
+              console.error('Erro ao carregar histórico de correções:', correcoesError);
+            } else if (correcoesData) {
+              const porSolicitacao = new Map<string, any[]>();
+              (correcoesData as any[]).forEach((row) => {
+                const lista = porSolicitacao.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacao.set(row.solicitacao_id, lista);
+              });
+
+              comHistorico = doSupabase.map(sol => {
+                const linhas = sol._dbId ? porSolicitacao.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  historicoCorrecoes: linhas.map((row: any, index: number) => ({
+                    contador: index + 1,
+                    data: row.created_at ? String(row.created_at).split('T')[0] : '',
+                    motivos: (row.historico_correcao_motivos || []).map((m: any) => ({ label: '', campo: '', motivo: m.motivo })),
+                    docsRecusados: (row.historico_correcao_docs_recusados || []).map((d: any) => ({ nome: d.nome_doc, id: '', justificativa: '' })),
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comHistorico);
           return;
         }
       } catch (e) {
