@@ -33,46 +33,7 @@ import { CHECKLIST_PADRAO } from '../initialData';
 import { calcularPrioridade, calcularEstrelas, getInfoEtiqueta, compararPorPrioridade, CodigoEtiqueta } from '../utils/prioridade';
 import { calcularIEE, CLASSE_IEE_INFO, getPontosIEEDisponiveis } from '../utils/iee';
 import { getStatusSecao, getStatusSecoes, tecnicoCorrigiuSecao } from '../utils/validacaoTecnica';
-
-// DEFAULT AUTOPREFILL BASE DATA
-const baseDados = [
-  // SRE Patos de Minas — regional do técnico de infraestrutura (simulação)
-  { codesc: '145236', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Padre Almir Neves' },
-  { codesc: '145298', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Santos Dumont' },
-  { codesc: '145312', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Coronel Linhares' },
-  { codesc: '145401', sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'EE Governador Milton Campos' },
-  { codesc: '145489', sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'EE Professor Arlindo Luz' },
-  { codesc: '145524', sre: 'SRE Patos de Minas', municipio: 'Lagoa Formosa', escola: 'EE Padre Eustáquio' },
-  { codesc: '145603', sre: 'SRE Patos de Minas', municipio: 'Varjão de Minas', escola: 'EE Deputado Geraldo Pereira' },
-  { codesc: '145678', sre: 'SRE Patos de Minas', municipio: 'Rio Paranaíba', escola: 'EE Tiradentes' },
-  // SRE Metropolitana A
-  { codesc: '1821', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Professora Maria Amélia Guimarães' },
-  { codesc: '102547', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Milton Campos' },
-  { codesc: '103210', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Henrique Diniz' },
-  { codesc: '103456', sre: 'SRE Metropolitana A', municipio: 'Contagem', escola: 'EE João Monlevade' },
-  // SRE Metropolitana B
-  { codesc: '1902', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Professora Maria Belmira Trindade' },
-  { codesc: '1104', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Professor Francisco Brant' },
-  { codesc: '104112', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Dom Pedro II' },
-  // SRE Metropolitana C
-  { codesc: '205', sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'EE Professora Francisca Malheiros' },
-  { codesc: '201334', sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'EE Estadual Centro' },
-  // SRE Ouro Preto
-  { codesc: '106470', sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'EE Dom Velloso' },
-  { codesc: '106537', sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'EE Tiradentes' },
-  // SRE Diamantina
-  { codesc: '304958', sre: 'SRE Diamantina', municipio: 'Diamantina', escola: 'EE Juscelino Kubitschek' },
-  { codesc: '305012', sre: 'SRE Diamantina', municipio: 'Serro', escola: 'EE Cônego Guimarães' },
-  // SRE Itajubá
-  { codesc: '205847', sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'EE Wenceslau Braz' },
-  { codesc: '205901', sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'EE Professor Oswaldo Cruz' },
-  // SRE Pouso Alegre
-  { codesc: '405912', sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'EE Delfim Moreira' },
-  { codesc: '405988', sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'EE Coronel José Caetano' },
-  // SRE Juiz de Fora
-  { codesc: '501234', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Carlos Drummond de Andrade' },
-  { codesc: '501301', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Duque de Caxias' },
-];
+import { useEscolas, type EnderecoEscola } from '../hooks/useEscolas';
 
 // Códigos de endereço únicos por edificação (CODESC pode se repetir para principal + anexos)
 export const enderecosDados = [
@@ -139,10 +100,12 @@ export function NovoAtendimentoPanel({
   atendimentoEmEdicaoDirect,
   onLimparEdicaoDirect
 }: NovoAtendimentoPanelProps) {
+  const { escolas, buscarEnderecos, carregando: carregandoEscolas } = useEscolas();
+
   // Filtra o banco de escolas pela SRE do técnico (se aplicável)
   const baseDadosFiltrados = sreDoTecnico
-    ? baseDados.filter(item => item.sre.toLowerCase() === sreDoTecnico.toLowerCase())
-    : baseDados;
+    ? escolas.filter(item => item.sre.toLowerCase() === sreDoTecnico.toLowerCase())
+    : escolas;
 
   // Pré-preenche a SRE ao montar o componente para tecnico_infra
   useEffect(() => {
@@ -151,13 +114,15 @@ export function NovoAtendimentoPanel({
 
   // Navigation: 'form' | 'checklist' | 'intermediaria'
   const [currentView, setCurrentView] = useState<'form' | 'checklist' | 'intermediaria'>('form');
-  
+
   // Create / Register Form States
   const [codesc, setCodesc] = useState('');
   const [nomeEscola, setNomeEscola] = useState('');
   const [municipio, setMunicipio] = useState('');
   const [sre, setSre] = useState('');
   const [codigoEndereco, setCodigoEndereco] = useState('');
+  const [enderecosCreate, setEnderecosCreate] = useState<EnderecoEscola[]>([]);
+  const [enderecosEdit, setEnderecosEdit] = useState<EnderecoEscola[]>([]);
   const [formaOcupacao, setFormaOcupacao] = useState('PRÓPRIO');
   const [outraFormaOcupacao, setOutraFormaOcupacao] = useState('');
   const [seiMinutaOcupacao, setSeiMinutaOcupacao] = useState('');
@@ -229,6 +194,33 @@ export function NovoAtendimentoPanel({
     }
   }, [atendimentoEmEdicaoDirect]);
 
+  // Busca endereços do CODESC informado no formulário de criação
+  React.useEffect(() => {
+    let ativo = true;
+    if (!codesc.trim()) {
+      setEnderecosCreate([]);
+      return;
+    }
+    buscarEnderecos(codesc.trim()).then(res => {
+      if (ativo) setEnderecosCreate(res);
+    });
+    return () => { ativo = false; };
+  }, [codesc, buscarEnderecos]);
+
+  // Busca endereços do CODESC do atendimento em edição/correção
+  React.useEffect(() => {
+    let ativo = true;
+    const codescEdit = selectedAtendimentoForEdit?.codesc;
+    if (!codescEdit) {
+      setEnderecosEdit([]);
+      return;
+    }
+    buscarEnderecos(codescEdit).then(res => {
+      if (ativo) setEnderecosEdit(res);
+    });
+    return () => { ativo = false; };
+  }, [selectedAtendimentoForEdit?.codesc, buscarEnderecos]);
+
   // Synchronize documentosChecklist with origemDemanda and formaAtendimento during creation
   React.useEffect(() => {
     setDocumentosChecklist(prev => {
@@ -292,7 +284,7 @@ export function NovoAtendimentoPanel({
     setCodigoEndereco('');
     const match = baseDadosFiltrados.find(item => item.codesc === val.trim());
     if (match) {
-      setNomeEscola(match.escola);
+      setNomeEscola(match.nome);
       setMunicipio(match.municipio);
       if (perfilUsuario !== 'tecnico_infra') setSre(match.sre);
     } else {
@@ -304,9 +296,9 @@ export function NovoAtendimentoPanel({
 
   const codescNaoEncontrado = codescTouched && codesc.trim() !== '' && !baseDadosFiltrados.some(item => item.codesc === codesc.trim());
 
-  const preencherDados = (item: typeof baseDados[0]) => {
+  const preencherDados = (item: typeof escolas[0]) => {
     setCodesc(item.codesc);
-    setNomeEscola(item.escola);
+    setNomeEscola(item.nome);
     setMunicipio(item.municipio);
     setSre(item.sre);
     setErro('');
@@ -674,7 +666,9 @@ export function NovoAtendimentoPanel({
                   <Database className="w-4 h-4 text-blue-500" />
                   1. Identificação Escolar
                 </h4>
-                <div className="text-[10px] text-slate-400 font-sans">Selecione o CODESC ou a escola para preencher automaticamente</div>
+                <div className="text-[10px] text-slate-400 font-sans">
+                  {carregandoEscolas ? 'Carregando escolas...' : 'Selecione o CODESC ou a escola para preencher automaticamente'}
+                </div>
               </div>
 
               {/* Passo 1: CODESC + Código do Endereço lado a lado */}
@@ -719,7 +713,7 @@ export function NovoAtendimentoPanel({
                       // Preenche escola, município e SRE ao selecionar o endereço
                       const match = baseDadosFiltrados.find(item => item.codesc === codesc);
                       if (match) {
-                        setNomeEscola(match.escola);
+                        setNomeEscola(match.nome);
                         setMunicipio(match.municipio);
                         if (perfilUsuario !== 'tecnico_infra') setSre(match.sre);
                       }
@@ -727,13 +721,11 @@ export function NovoAtendimentoPanel({
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white font-mono text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     <option value="">Selecione o endereço...</option>
-                    {enderecosDados
-                      .filter(e => e.codesc === codesc)
-                      .map(e => (
-                        <option key={e.codigoEndereco} value={e.codigoEndereco}>
-                          {e.codigoEndereco} — {e.descricao}
-                        </option>
-                      ))}
+                    {enderecosCreate.map(e => (
+                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                        {e.codigoEndereco} — {e.descricao}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1710,7 +1702,7 @@ export function NovoAtendimentoPanel({
                   onChange={(e) => {
                     const val = e.target.value;
                     const match = baseDadosFiltrados.find(item => item.codesc === val);
-                    setSelectedAtendimentoForEdit({ ...sol, codesc: val, ...(match ? { nomeEscola: match.escola, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('identificacao_escolar') });
+                    setSelectedAtendimentoForEdit({ ...sol, codesc: val, ...(match ? { nomeEscola: match.nome, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('identificacao_escolar') });
                   }}
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
@@ -1728,14 +1720,14 @@ export function NovoAtendimentoPanel({
                   value={sol.nomeEscola || ''}
                   onChange={(e) => {
                     const val = e.target.value;
-                    const match = baseDadosFiltrados.find(item => item.escola === val);
+                    const match = baseDadosFiltrados.find(item => item.nome === val);
                     setSelectedAtendimentoForEdit({ ...sol, nomeEscola: val, ...(match ? { codesc: match.codesc, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('identificacao_escolar') });
                   }}
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecione a escola...</option>
                   {baseDadosFiltrados.map(item => (
-                    <option key={item.codesc} value={item.escola}>{item.escola}</option>
+                    <option key={item.codesc} value={item.nome}>{item.nome}</option>
                   ))}
                 </select>
               </div>
@@ -1782,13 +1774,11 @@ export function NovoAtendimentoPanel({
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 font-mono cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecione o endereço...</option>
-                  {enderecosDados
-                    .filter(e => !sol.codesc || e.codesc === sol.codesc)
-                    .map(e => (
-                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
-                        {e.codigoEndereco} — {e.descricao}
-                      </option>
-                    ))}
+                  {enderecosEdit.map(e => (
+                    <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                      {e.codigoEndereco} — {e.descricao}
+                    </option>
+                  ))}
                 </select>
                 <p className="text-[9px] text-slate-400 mt-0.5">Identifica unicamente cada edificação (principal ou anexo)</p>
               </div>

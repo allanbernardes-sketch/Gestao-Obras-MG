@@ -1,10 +1,10 @@
-﻿import React, { useState } from 'react';
-import { 
-  CheckCircle, XCircle, FileText, AlertCircle, Sparkles, UploadCloud, Trash2, 
+﻿import React, { useState, useEffect } from 'react';
+import {
+  CheckCircle, XCircle, FileText, AlertCircle, Sparkles, UploadCloud, Trash2,
   ChevronRight, Download, Layers, Plus, Database, Check, MessageSquare, RefreshCw
 } from 'lucide-react';
 import { Solicitacao, DocumentoChecklist, PerfilUsuario, SecaoDadosGerais, StatusValidacao, syncChecklistDocs, Aditivo, AjustePlanilha } from '../types';
-import { enderecosDados } from './GestaoObrasViews';
+import { useEscolas, type EnderecoEscola } from '../hooks/useEscolas';
 import {
   SECAO_LABEL,
   getStatusSecao,
@@ -52,6 +52,21 @@ export default function ProcessAnalysisPanel({
   const [novoCustomDocNome, setNovoCustomDocNome] = useState('');
   const [opinioesAditivo, setOpinioesAditivo] = useState<{[key: string]: string}>({});
   const [opinioesAjuste, setOpinioesAjuste] = useState<{[key: string]: string}>({});
+  const { escolas, buscarEnderecos, carregando: carregandoEscolas } = useEscolas();
+  const [enderecosDisponiveis, setEnderecosDisponiveis] = useState<EnderecoEscola[]>([]);
+
+  // Busca endereços do CODESC da solicitação em análise
+  useEffect(() => {
+    let ativo = true;
+    if (!solicitacao.codesc) {
+      setEnderecosDisponiveis([]);
+      return;
+    }
+    buscarEnderecos(solicitacao.codesc).then(res => {
+      if (ativo) setEnderecosDisponiveis(res);
+    });
+    return () => { ativo = false; };
+  }, [solicitacao.codesc, buscarEnderecos]);
 
   // Baixa o arquivo real anexado pelo técnico (fileContent é um data URL gerado via FileReader no upload)
   const handleDownloadDoc = (doc: DocumentoChecklist) => {
@@ -67,15 +82,6 @@ export default function ProcessAnalysisPanel({
     document.body.removeChild(link);
   };
 
-  // SRE Base Dados match helper (simulated)
-  const baseDadosSimulada = [
-    { codesc: '145236', escola: 'E.E. Padre Almir', municipio: 'Patos de Minas', sre: 'SRE Patos de Minas' },
-    { codesc: '102547', escola: 'E.E. Milton Campos', municipio: 'Belo Horizonte', sre: 'SRE Metropolitana A' },
-    { codesc: '128914', escola: 'E.E. Júlia Kubitschek', municipio: 'Diamantina', sre: 'SRE Diamantina' },
-    { codesc: '189652', escola: 'E.E. Tiradentes', municipio: 'São João del Rei', sre: 'SRE São João del Rei' },
-    { codesc: '154784', escola: 'E.E. Alcindo de Souza', municipio: 'Uberaba', sre: 'SRE Uberaba' }
-  ];
-
   // Identificação Escolar edits
   const handleUpdateEscolar = (key: keyof Solicitacao, val: any) => {
     const updated = {
@@ -85,9 +91,9 @@ export default function ProcessAnalysisPanel({
 
     // If typing codesc, try to auto-fill
     if (key === 'codesc') {
-      const match = baseDadosSimulada.find(item => item.codesc === String(val).trim());
+      const match = escolas.find(item => item.codesc === String(val).trim());
       if (match) {
-        updated.nomeEscola = match.escola;
+        updated.nomeEscola = match.nome;
         updated.municipio = match.municipio;
         updated.sre = match.sre;
       }
@@ -876,15 +882,15 @@ export default function ProcessAnalysisPanel({
                   className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/15 text-slate-800 font-mono font-bold bg-white cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecione...</option>
-                  {enderecosDados
-                    .filter(e => !solicitacao.codesc || e.codesc === solicitacao.codesc)
-                    .map(e => (
-                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
-                        {e.codigoEndereco} — {e.descricao}
-                      </option>
-                    ))}
+                  {enderecosDisponiveis.map(e => (
+                    <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                      {e.codigoEndereco} — {e.descricao}
+                    </option>
+                  ))}
                 </select>
-                <p className="text-[9px] text-slate-400 mt-0.5">Único por edificação — diferente do CODESC</p>
+                <p className="text-[9px] text-slate-400 mt-0.5">
+                  {carregandoEscolas ? 'Carregando...' : 'Único por edificação — diferente do CODESC'}
+                </p>
               </div>
             </div>
 

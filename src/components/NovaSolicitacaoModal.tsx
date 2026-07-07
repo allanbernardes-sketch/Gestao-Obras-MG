@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { Solicitacao, DocumentoChecklist, syncChecklistDocs } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
-import { enderecosDados } from './GestaoObrasViews';
+import { useEscolas, type EnderecoEscola } from '../hooks/useEscolas';
 import { X, AlertCircle, Database, FileText, CheckCircle2 } from 'lucide-react';
 
 interface NovaSolicitacaoModalProps {
@@ -12,49 +12,12 @@ interface NovaSolicitacaoModalProps {
   sreDoTecnico?: string;
 }
 
-const baseDados = [
-  // SRE Patos de Minas
-  { codesc: '145236', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Padre Almir Neves' },
-  { codesc: '145298', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Santos Dumont' },
-  { codesc: '145312', sre: 'SRE Patos de Minas', municipio: 'Patos de Minas', escola: 'EE Coronel Linhares' },
-  { codesc: '145401', sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'EE Governador Milton Campos' },
-  { codesc: '145489', sre: 'SRE Patos de Minas', municipio: 'Carmo do Paranaíba', escola: 'EE Professor Arlindo Luz' },
-  { codesc: '145524', sre: 'SRE Patos de Minas', municipio: 'Lagoa Formosa', escola: 'EE Padre Eustáquio' },
-  { codesc: '145603', sre: 'SRE Patos de Minas', municipio: 'Varjão de Minas', escola: 'EE Deputado Geraldo Pereira' },
-  { codesc: '145678', sre: 'SRE Patos de Minas', municipio: 'Rio Paranaíba', escola: 'EE Tiradentes' },
-  // SRE Metropolitana A
-  { codesc: '1821', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Professora Maria Amélia Guimarães' },
-  { codesc: '102547', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Milton Campos' },
-  { codesc: '103210', sre: 'SRE Metropolitana A', municipio: 'Belo Horizonte', escola: 'EE Henrique Diniz' },
-  { codesc: '103456', sre: 'SRE Metropolitana A', municipio: 'Contagem', escola: 'EE João Monlevade' },
-  // SRE Metropolitana B
-  { codesc: '1902', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Professora Maria Belmira Trindade' },
-  { codesc: '1104', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Professor Francisco Brant' },
-  { codesc: '104112', sre: 'SRE Metropolitana B', municipio: 'Belo Horizonte', escola: 'EE Dom Pedro II' },
-  // SRE Metropolitana C
-  { codesc: '205', sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'EE Professora Francisca Malheiros' },
-  { codesc: '201334', sre: 'SRE Metropolitana C', municipio: 'Belo Horizonte', escola: 'EE Estadual Centro' },
-  // SRE Ouro Preto
-  { codesc: '106470', sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'EE Dom Velloso' },
-  { codesc: '106537', sre: 'SRE Ouro Preto', municipio: 'Ouro Preto', escola: 'EE Tiradentes' },
-  // SRE Diamantina
-  { codesc: '304958', sre: 'SRE Diamantina', municipio: 'Diamantina', escola: 'EE Juscelino Kubitschek' },
-  { codesc: '305012', sre: 'SRE Diamantina', municipio: 'Serro', escola: 'EE Cônego Guimarães' },
-  // SRE Itajubá
-  { codesc: '205847', sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'EE Wenceslau Braz' },
-  { codesc: '205901', sre: 'SRE Itajubá', municipio: 'Itajubá', escola: 'EE Professor Oswaldo Cruz' },
-  // SRE Pouso Alegre
-  { codesc: '405912', sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'EE Delfim Moreira' },
-  { codesc: '405988', sre: 'SRE Pouso Alegre', municipio: 'Pouso Alegre', escola: 'EE Coronel José Caetano' },
-  // SRE Juiz de Fora
-  { codesc: '501234', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Carlos Drummond de Andrade' },
-  { codesc: '501301', sre: 'SRE Juiz de Fora', municipio: 'Juiz de Fora', escola: 'EE Duque de Caxias' },
-];
-
 export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, usuariosSeguranca, sreDoTecnico }: NovaSolicitacaoModalProps) {
+  const { escolas, buscarEnderecos, carregando: carregandoEscolas } = useEscolas();
   const baseDadosFiltrados = sreDoTecnico
-    ? baseDados.filter(item => item.sre.toLowerCase() === sreDoTecnico.toLowerCase())
-    : baseDados;
+    ? escolas.filter(item => item.sre.toLowerCase() === sreDoTecnico.toLowerCase())
+    : escolas;
+  const [enderecosDisponiveis, setEnderecosDisponiveis] = useState<EnderecoEscola[]>([]);
   const [codesc, setCodesc] = useState('');
   const [nomeEscola, setNomeEscola] = useState('');
   const [municipio, setMunicipio] = useState('');
@@ -64,7 +27,20 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
   useEffect(() => {
     if (sreDoTecnico) setSre(sreDoTecnico);
   }, [sreDoTecnico]);
-  
+
+  // Busca endereços do CODESC informado
+  useEffect(() => {
+    let ativo = true;
+    if (!codesc.trim()) {
+      setEnderecosDisponiveis([]);
+      return;
+    }
+    buscarEnderecos(codesc.trim()).then(res => {
+      if (ativo) setEnderecosDisponiveis(res);
+    });
+    return () => { ativo = false; };
+  }, [codesc, buscarEnderecos]);
+
   // Custom states
   const [codigoEndereco, setCodigoEndereco] = useState('');
   const [formaOcupacao, setFormaOcupacao] = useState('PRÓPRIO');
@@ -102,7 +78,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
   const [codescTouched, setCodescTouched] = useState(false);
   const [tentouSubmeter, setTentouSubmeter] = useState(false);
 
-  const codescNaoEncontrado = codesc.trim().length > 0 && enderecosDados.filter(e => e.codesc === codesc.trim()).length === 0;
+  const codescNaoEncontrado = codesc.trim().length > 0 && !baseDadosFiltrados.some(item => item.codesc === codesc.trim());
   const fieldErrorClass = 'border-red-400 bg-red-50/30';
 
   // Handle CODESC change — limpa endereço e dados da escola
@@ -119,16 +95,16 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
     setCodigoEndereco(val);
     const match = baseDadosFiltrados.find(item => item.codesc === currentCodesc.trim());
     if (match) {
-      setNomeEscola(match.escola);
+      setNomeEscola(match.nome);
       setMunicipio(match.municipio);
       if (perfilUsuario !== 'tecnico_infra') setSre(match.sre);
     }
   };
 
   // Safe import button
-  const preencherDados = (item: typeof baseDados[0]) => {
+  const preencherDados = (item: typeof escolas[0]) => {
     setCodesc(item.codesc);
-    setNomeEscola(item.escola);
+    setNomeEscola(item.nome);
     setMunicipio(item.municipio);
     setSre(item.sre);
     setErro('');
@@ -290,6 +266,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             <h4 className="text-xs font-bold text-slate-700 border-b border-slate-100 pb-2 flex items-center gap-1.5 uppercase tracking-wider font-mono">
               <Database className="w-4 h-4 text-blue-500" />
               1. Identificação Escolar
+              {carregandoEscolas && <span className="text-[10px] text-slate-400 normal-case font-normal ml-1">(carregando escolas...)</span>}
             </h4>
 
             {/* Passo 1: CODESC + Código do Endereço lado a lado */}
@@ -331,13 +308,11 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-550 bg-white font-mono text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   <option value="">Selecione o endereço...</option>
-                  {enderecosDados
-                    .filter(e => e.codesc === codesc)
-                    .map(e => (
-                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
-                        {e.codigoEndereco} — {e.descricao}
-                      </option>
-                    ))}
+                  {enderecosDisponiveis.map(e => (
+                    <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                      {e.codigoEndereco} — {e.descricao}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
