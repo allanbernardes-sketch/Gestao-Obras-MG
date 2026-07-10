@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, computeStatusObra } from './types';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, computeStatusObra } from './types';
 import { recalcularPrioridade } from './utils/prioridade';
 import { recalcularIEE } from './utils/iee';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
@@ -681,7 +681,67 @@ export default function App() {
             }
           }
 
-          setSolicitacoes(comMedicoes);
+          // Carrega os aditivos registrados de cada solicitação
+          let comAditivos = comMedicoes;
+          if (dbIds.length > 0) {
+            const { data: aditivosData, error: aditivosError } = await supabase
+              .from('aditivos')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('numero_aditivo', { ascending: true });
+
+            if (aditivosError) {
+              console.error('Erro ao carregar aditivos:', aditivosError);
+            } else if (aditivosData) {
+              const tipoDoBanco = (v: string | null): Aditivo['tipo'] => {
+                switch (v) {
+                  case 'valor_prazo': return 'Valor e Prazo';
+                  case 'prazo': return 'Prazo';
+                  default: return 'Valor';
+                }
+              };
+              const statusDoBanco = (v: string | null): Aditivo['status'] => {
+                switch (v) {
+                  case 'aprovado': return 'Aprovado';
+                  case 'recusado': return 'Recusado';
+                  default: return 'Pendente';
+                }
+              };
+
+              const porSolicitacaoAdt = new Map<string, any[]>();
+              (aditivosData as any[]).forEach((row) => {
+                const lista = porSolicitacaoAdt.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoAdt.set(row.solicitacao_id, lista);
+              });
+
+              comAditivos = comMedicoes.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoAdt.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  aditivos: linhas.map((row: any): Aditivo => ({
+                    id: row.id,
+                    data: row.data_aditivo ? String(row.data_aditivo) : '',
+                    tipo: tipoDoBanco(row.tipo),
+                    valorExtra: row.valor_adicional ?? undefined,
+                    prazoExtraDias: row.prazo_adicional_dias ?? undefined,
+                    justificativa: row.motivo ?? '',
+                    status: statusDoBanco(row.status),
+                    numeroAditivo: row.numero_aditivo != null ? String(row.numero_aditivo) : undefined,
+                    parecerConsolidado: row.parecer_consolidado ?? undefined,
+                    supressao: row.supressao ?? undefined,
+                    reprogramacao: row.reprogramacao ?? undefined,
+                    saldoComplementar: row.saldo_complementar ?? undefined,
+                    valorAditivo: row.valor_aditivo ?? undefined,
+                    percentualContrato: row.percentual_contrato ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comAditivos);
           return;
         }
       } catch (e) {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Aditivo, AjustePlanilha, UsuarioSistema, ParcelaPAF } from '../types';
+import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, AjustePlanilha, UsuarioSistema, ParcelaPAF } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { supabase } from '../lib/supabase';
 import { gerarParecerIA } from './GeradorParecerIA';
@@ -321,13 +321,6 @@ Plataforma e-SGO - SEE-MG`;
   
   // State for rejecting document (modal / input trigger)
   const [justificativaFields, setJustificativaFields] = useState<{ [key: string]: string }>({});
-
-  // States for new aditivo
-  const [novoAditivoTipo, setNovoAditivoTipo] = useState<'Valor' | 'Prazo' | 'Valor e Prazo'>('Valor');
-  const [novoAditivoValor, setNovoAditivoValor] = useState('');
-  const [novoAditivoPrazo, setNovoAditivoPrazo] = useState('');
-  const [novoAditivoJust, setNovoAditivoJust] = useState('');
-  const [mostrandoNovoAditivo, setMostrandoNovoAditivo] = useState(false);
 
   // General execution state
   const [empresaInput, setEmpresaInput] = useState(solicitacao.empresaContratada || '');
@@ -1323,152 +1316,6 @@ ${totalPendencias > 0
       justificativaParalizacao: statusObraInput === 'Paralisada' ? justificativaParalizacaoInput : undefined
     });
     alert('Dados gerais salvos com sucesso!');
-  };
-
-  // Aditivos
-  const adicionarAditivo = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!novoAditivoJust) {
-      alert('Insira uma justificativa.');
-      return;
-    }
-
-    const novoAdt: Aditivo = {
-      id: `adt-${Math.floor(1000 + Math.random() * 9000)}`,
-      data: new Date().toISOString().split('T')[0],
-      tipo: novoAditivoTipo,
-      valorExtra: novoAditivoTipo !== 'Prazo' ? parseFloat(novoAditivoValor) || 0 : undefined,
-      prazoExtraDias: novoAditivoTipo !== 'Valor' ? parseInt(novoAditivoPrazo) || 0 : undefined,
-      justificativa: novoAditivoJust,
-      status: 'Pendente',
-      analistaAtribuido: undefined,
-      documentos: [
-        { id: 'relatorio_tecnico', nome: 'Parecer Circunstanciado de Engenharia / Memorial Descritivo', desc: 'Justificativa técnica circunstanciada assinada por engenheiro.', status: 'pendente', obrigatorio: true },
-        { id: 'planilha_orcamentaria_ref', nome: 'Planilha de Custos Unitários Aditiva Refatorada e Cronograma', desc: 'Apresentação de custos aditivos detalhados com indicação do reajuste.', status: 'pendente', obrigatorio: true },
-        { id: 'anotacao_responsabilidade_tecnica', nome: 'ART do Responsável Técnico do Projeto Alterado', desc: 'Anotação de responsabilidade registrada no CREA.', status: 'pendente', obrigatorio: false }
-      ]
-    };
-
-    onUpdate({
-      ...solicitacao,
-      etapaAtual: 'analise' as const,
-      analistaAtribuido: undefined,
-      historicoEtapas: [
-        ...(solicitacao.historicoEtapas || []),
-        {
-          etapa: 'analise' as const,
-          data: new Date().toISOString().split('T')[0],
-          responsavel: 'Fiscal de Obra (Novo Pleito de Aditivo)'
-        }
-      ],
-      aditivos: [...solicitacao.aditivos, novoAdt]
-    });
-
-    // Reset
-    setNovoAditivoValor('');
-    setNovoAditivoPrazo('');
-    setNovoAditivoJust('');
-    setMostrandoNovoAditivo(false);
-    alert('Nova solicitação de aditivo cadastrada e encaminhada com sucesso para Análise Técnica da DORE para atribuição de um analista!');
-  };
-
-  const alterarStatusAditivo = (aditivoId: string, status: 'Aprovado' | 'Recusado') => {
-    const updatedAditivos = solicitacao.aditivos.map(a => {
-      if (a.id === aditivoId) {
-        return { ...a, status };
-      }
-      return a;
-    });
-
-    onUpdate({
-      ...solicitacao,
-      aditivos: updatedAditivos
-    });
-  };
-
-  // ADITIVO ADVANCED WORKFLOW HANDLERS
-  const anexarDocumentoAditivo = (aditivoId: string, docId: string, fileName: string) => {
-    const updatedAditivos = solicitacao.aditivos.map(adt => {
-      if (adt.id === aditivoId) {
-        const docs = adt.documentos || [];
-        const updatedDocs = docs.map(doc => {
-          if (doc.id === docId) {
-            return {
-              ...doc,
-              fileName,
-              uploadedAt: new Date().toISOString().split('T')[0],
-              fileSize: '2.4 MB',
-              status: 'pendente' as const
-            };
-          }
-          return doc;
-        });
-        return { ...adt, documentos: updatedDocs };
-      }
-      return adt;
-    });
-
-    onUpdate({
-      ...solicitacao,
-      aditivos: updatedAditivos
-    });
-  };
-
-  const atualizarStatusDocAditivo = (aditivoId: string, docId: string, status: 'aprovado' | 'recusado' | 'nao_se_aplica', justificativa?: string) => {
-    const updatedAditivos = solicitacao.aditivos.map(adt => {
-      if (adt.id === aditivoId) {
-        const docs = adt.documentos || [];
-        const updatedDocs = docs.map(doc => {
-          if (doc.id === docId) {
-            return {
-              ...doc,
-              status,
-              justificativa
-            };
-          }
-          return doc;
-        });
-        return { ...adt, documentos: updatedDocs };
-      }
-      return adt;
-    });
-
-    onUpdate({
-      ...solicitacao,
-      aditivos: updatedAditivos
-    });
-  };
-
-  const atribuirAnalistaAditivo = (aditivoId: string, nomeAnalista: string) => {
-    const updatedAditivos = solicitacao.aditivos.map(adt => {
-      if (adt.id === aditivoId) {
-        return { ...adt, analistaAtribuido: nomeAnalista };
-      }
-      return adt;
-    });
-
-    onUpdate({
-      ...solicitacao,
-      aditivos: updatedAditivos
-    });
-  };
-
-  const alterarStatusAditivoCompleto = (aditivoId: string, status: 'Aprovado' | 'Recusado', parecer?: string) => {
-    const updatedAditivos = solicitacao.aditivos.map(adt => {
-      if (adt.id === aditivoId) {
-        return { 
-          ...adt, 
-          status,
-          parecerConsolidado: parecer
-        };
-      }
-      return adt;
-    });
-
-    onUpdate({
-      ...solicitacao,
-      aditivos: updatedAditivos
-    });
   };
 
   const salvarConclusaoObra = (e: React.FormEvent) => {
@@ -4969,81 +4816,10 @@ ${totalPendencias > 0
               {/* Left Side: Creation and Audit lists */}
               <div className="lg:col-span-2 space-y-6">
                 
-                {/* 1. REGISTER NEW ADITIVO */}
-                {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
-                  <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
-                    <div className="flex justify-between items-center border-b border-neutral-100 pb-2">
-                      <h3 className="font-bold text-sm text-neutral-800">Nova Solicitação de Aditivo</h3>
-                      <span className="text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Processo de Engenharia</span>
-                    </div>
-
-                    <form onSubmit={adicionarAditivo} className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-xs font-semibold text-neutral-600 mb-1">Tipo de Modificação</label>
-                          <select
-                            value={novoAditivoTipo}
-                            onChange={(e) => setNovoAditivoTipo(e.target.value as any)}
-                            className="w-full text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white"
-                          >
-                            <option value="Valor">Valor (Financeiro)</option>
-                            <option value="Prazo">Prazo (Evolução Temporal)</option>
-                            <option value="Valor e Prazo">Valor & Prazo Simultâneos</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-neutral-600 mb-1">Acréscimo de Valor (R$)</label>
-                          <input
-                            type="number"
-                            placeholder="Ex: 120000"
-                            disabled={novoAditivoTipo === 'Prazo'}
-                            value={novoAditivoValor}
-                            onChange={(e) => setNovoAditivoValor(e.target.value)}
-                            className="w-full text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white disabled:opacity-50"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-neutral-600 mb-1">Prorrogação de Prazo (Dias)</label>
-                          <input
-                            type="number"
-                            placeholder="Ex: 90"
-                            disabled={novoAditivoTipo === 'Valor'}
-                            value={novoAditivoPrazo}
-                            onChange={(e) => setNovoAditivoPrazo(e.target.value)}
-                            className="w-full text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white disabled:opacity-50"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-600 mb-1">Justificativa Técnica Circunstanciada</label>
-                        <textarea
-                          placeholder="Digite detalhadamente os motivos que fundamentam a ampliação dos recursos financeiros ou prazo da execução física da obra."
-                          value={novoAditivoJust}
-                          onChange={(e) => setNovoAditivoJust(e.target.value)}
-                          className="w-full text-xs p-3 border border-neutral-300 rounded-lg h-24 focus:outline-hidden bg-white resize-none"
-                          required
-                        />
-                      </div>
-
-                      <div className="flex justify-end">
-                        <button
-                          type="submit"
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer transition"
-                        >
-                          Protocolar Nova Solicitação
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-
-                {/* 2. LIST AND INTERACTIVE WORKFLOW AUDITS */}
+                {/* Aditivos são criados e avaliados em Execução › Aditivos (SubAditivos) — aqui é somente leitura */}
                 <div className="space-y-4">
                   <h3 className="font-bold text-xs text-neutral-400 uppercase tracking-widest">
-                    Pedidos de Aditivos Sob Análise
+                    Pedidos de Aditivos
                   </h3>
 
                   {solicitacao.aditivos.length === 0 ? (
@@ -5058,7 +4834,7 @@ ${totalPendencias > 0
                           <div className="flex justify-between items-start border-b border-neutral-100 pb-3 flex-wrap gap-2 text-xs">
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono text-[9px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded-sm">ID: {adt.id}</span>
+                                <span className="font-mono text-[9px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded-sm">Aditivo nº {adt.numeroAditivo || '—'}</span>
                                 <h4 className="font-extrabold text-neutral-800 text-sm">Aditivo de {adt.tipo}</h4>
                                 <span className="text-neutral-350">•</span>
                                 <span className="text-neutral-500">{adt.data}</span>
@@ -5083,160 +4859,6 @@ ${totalPendencias > 0
                             <span className="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Motivos / Justificativas do Pedido</span>
                             <p className="text-neutral-600 text-xs leading-relaxed mt-1">{adt.justificativa}</p>
                           </div>
-
-                          {/* 1. ATRIBUIR ANALISTA DO ADITIVO (WORKFLOW ADHERENCE) */}
-                          <div className="p-3 bg-neutral-50/60 rounded-lg border border-neutral-150 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[18px]">👷</span>
-                              <div>
-                                <span className="text-slate-500 block text-[9px] uppercase font-bold">Analista de Obras Atribuído</span>
-                                <span className="font-semibold text-neutral-700">{adt.analistaAtribuido || 'Aguardando atribuição do gestor'}</span>
-                              </div>
-                            </div>
-
-                            {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && adt.status === 'Pendente' && (
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <select
-                                  onChange={(e) => atribuirAnalistaAditivo(adt.id, e.target.value)}
-                                  value={adt.analistaAtribuido || ''}
-                                  className="text-xs p-1.5 border border-neutral-300 rounded bg-white cursor-pointer"
-                                >
-                                  <option value="">Atribuir Engenheiro...</option>
-                                  <option value="Eng. Mariana Santos (DORE)">Eng. Mariana Santos (DORE)</option>
-                                  <option value="Eng. Eduardo Ribeiro (DORE)">Eng. Eduardo Ribeiro (DORE)</option>
-                                  <option value="Eng. Bruno Albuquerque (DORE)">Eng. Bruno Albuquerque (DORE)</option>
-                                </select>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* 2. SUB-CHECKLIST INDUSTRIAL DE DOCUMENTOS DO ADITIVO */}
-                          <div className="space-y-2 pt-1">
-                            <h5 className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">Checklist Documental Obrigatório da Solicitação de Aditivo</h5>
-                            <div className="bg-white rounded-lg border border-neutral-200/80 overflow-hidden divide-y divide-neutral-150 text-xs shadow-xs">
-                              {adt.documentos && adt.documentos.map((doc) => {
-                                return (
-                                  <div key={doc.id} className="p-3.5 space-y-3 bg-neutral-50/20">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                      <div className="flex items-start gap-2 max-w-lg font-sans">
-                                        <span className={`text-[12px] shrink-0 mt-0.5 ${doc.status === 'aprovado' ? '✅' : doc.status === 'recusado' ? '❌' : '⏳'}`}>
-                                          {doc.status === 'aprovado' ? '•' : doc.status === 'recusado' ? '•' : '•'}
-                                        </span>
-                                        <div>
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="font-bold text-neutral-700">{doc.nome}</span>
-                                            {doc.obrigatorio && (
-                                              <span className="text-[9px] font-bold text-red-600 bg-red-50/85 px-1.5 py-0.2 rounded">Obrigatório</span>
-                                            )}
-                                          </div>
-                                          {doc.fileName ? (
-                                            <span className="text-[10px] text-blue-600 font-medium block font-mono mt-1">📎 {doc.fileName} (carregado em {doc.uploadedAt})</span>
-                                          ) : (
-                                            <span className="text-[10px] text-slate-400 italic block mt-1">Nenhum documento carregado para este requisito</span>
-                                          )}
-                                          {doc.justificativa && (
-                                            <p className="text-[11px] text-red-600 bg-red-50 p-1.5 rounded-md border border-red-100 mt-2 font-medium">
-                                              Motivo da Rejeição: {doc.justificativa}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </div>
-
-                                      {/* Document operations */}
-                                      <div className="shrink-0 flex items-center gap-2">
-                                        {/* Audit actions for assigned analysts */}
-                                        {doc.status === 'pendente' && doc.fileName && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
-                                          <div className="flex items-center gap-1.5">
-                                            <button
-                                              type="button"
-                                              onClick={() => atualizarStatusDocAditivo(adt.id, doc.id, 'aprovado')}
-                                              className="px-2 py-1 bg-emerald-600 text-white rounded text-[10px] hover:bg-emerald-700 font-bold cursor-pointer"
-                                            >
-                                              Deferir
-                                            </button>
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                const rejJust = prompt("Por favor, digite o motivo de rejeição para este documento:") || '';
-                                                if (rejJust) {
-                                                  atualizarStatusDocAditivo(adt.id, doc.id, 'recusado', rejJust);
-                                                } else {
-                                                  alert("Justificativa de rejeição é obrigatória.");
-                                                }
-                                              }}
-                                              className="px-2 py-1 bg-red-600 text-white rounded text-[10px] hover:bg-red-700 font-bold cursor-pointer"
-                                            >
-                                              Rejeitar
-                                            </button>
-                                          </div>
-                                        )}
-
-                                        {doc.status !== 'pendente' && (
-                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                            doc.status === 'aprovado'
-                                              ? 'bg-emerald-50 text-emerald-800'
-                                              : 'bg-red-50 text-red-750 font-semibold'
-                                          }`}>
-                                            {doc.status.toUpperCase()}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* 3. DECISION PANEL / HOMOLOGAR ADITIVO */}
-                          {adt.status === 'Pendente' && (perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
-                            <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-250 space-y-3 font-sans text-xs shadow-2xs">
-                              <h5 className="font-bold text-blue-900">Análise de Homologação de Termo Aditivo</h5>
-                              <p className="text-neutral-500 leading-normal">
-                                O Termo Aditivo passará por deferimento final com base na consistência legal e técnica dos documentos atestados acima pelo analista credenciado.
-                              </p>
-                              <div className="flex flex-col sm:flex-row gap-3 py-1">
-                                <div className="flex-1">
-                                  <label className="block text-[10px] font-bold text-neutral-500 mb-1 uppercase">Parecer de Engenharia Consolidado</label>
-                                  <input
-                                    type="text"
-                                    id={`parecer-input-${adt.id}`}
-                                    placeholder="Ex: Nota Técnica Deferida. Escopo necessário devido a surpresas geotécnicas."
-                                    className="w-full text-xs p-2.5 border border-neutral-300 rounded bg-white"
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex justify-end gap-2 text-xs">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const input = document.getElementById(`parecer-input-${adt.id}`) as HTMLInputElement;
-                                    alterarStatusAditivoCompleto(adt.id, 'Recusado', input?.value || 'Sem parecer');
-                                    alert('Contrato Aditivo REJEITADO!');
-                                  }}
-                                  className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold cursor-pointer"
-                                >
-                                  Recusar Aditivo
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const input = document.getElementById(`parecer-input-${adt.id}`) as HTMLInputElement;
-                                    const missingDocs = adt.documentos?.some(d => d.obrigatorio && d.status !== 'aprovado');
-                                    if (missingDocs) {
-                                      const confirmAction = confirm("⚠️ ATENÇÃO: Nem todos os documentos obrigatórios exigidos foram validados e aprovados. Deseja homologar o aditivo de qualquer forma?");
-                                      if (!confirmAction) return;
-                                    }
-                                    alterarStatusAditivoCompleto(adt.id, 'Aprovado', input?.value || 'Aprovado de acordo com requisitos regimentais.');
-                                    alert('Contrato Aditivo APROVADO! O orçamento foi recalculado com sucesso e os limites contratuais foram reajustados para a sequência da obra.');
-                                  }}
-                                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold cursor-pointer"
-                                >
-                                  Homologar & Reajustar Orçamento
-                                </button>
-                              </div>
-                            </div>
-                          )}
 
                           {/* Consolidating display if decided */}
                           {adt.status !== 'Pendente' && adt.parecerConsolidado && (

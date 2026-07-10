@@ -5665,16 +5665,73 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
     setStep(2);
   };
 
-  const handleCreateAditivo = (e: React.FormEvent) => {
+  const handleCreateAditivo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!justificativa.trim()) {
       alert('Por favor, preencha a justificativa!');
       return;
     }
 
+    // Resolve o uuid real da solicitação (usa o cache local ou busca pelo codigo_sgo)
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        alert('Não foi possível localizar o registro da obra no banco para gravar o aditivo.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const { count, error: countError } = await supabase
+      .from('aditivos')
+      .select('id', { count: 'exact', head: true })
+      .eq('solicitacao_id', dbId);
+    if (countError) {
+      console.error('Erro ao contar aditivos existentes:', countError);
+      alert('Erro ao calcular o número do aditivo. Tente novamente.');
+      return;
+    }
+    const numeroAditivoInt = (count ?? 0) + 1;
+
+    const tipoBanco = tipo === 'Valor e Prazo' ? 'valor_prazo' : tipo === 'Valor' ? 'valor' : 'prazo';
+    const dataAditivo = new Date().toISOString().split('T')[0];
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data: aditivoRow, error: aditivoError } = await supabase
+      .from('aditivos')
+      .insert({
+        solicitacao_id: dbId,
+        numero_aditivo: numeroAditivoInt,
+        tipo: tipoBanco,
+        valor_adicional: numAcre > 0 ? numAcre : null,
+        prazo_adicional_dias: prazoExtra ? parseInt(prazoExtra) : null,
+        motivo: justificativa,
+        status: 'pendente',
+        supressao: numSup > 0 ? numSup : null,
+        reprogramacao,
+        saldo_complementar: saldoComplementar,
+        valor_aditivo: valorAditivoLiquido,
+        percentual_contrato: parseFloat(displayPercentual.toFixed(2)),
+        data_aditivo: dataAditivo,
+        usuario_id: userData.user?.id ?? null,
+      })
+      .select('id')
+      .single();
+
+    if (aditivoError || !aditivoRow) {
+      console.error('Erro ao gravar aditivo no Supabase:', aditivoError);
+      alert('Erro ao gravar o aditivo no banco de dados. Tente novamente.');
+      return;
+    }
+
     const novoAditivo: Aditivo = {
-      id: `adt_${Date.now()}`,
-      data: new Date().toISOString().split('T')[0],
+      id: aditivoRow.id,
+      data: dataAditivo,
       tipo,
       valorExtra: numAcre > 0 ? numAcre : undefined,
       prazoExtraDias: prazoExtra ? parseInt(prazoExtra) : undefined,
@@ -5686,6 +5743,7 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
       justificativa,
       status: 'Pendente',
       analistaAtribuido: undefined,
+      numeroAditivo: String(numeroAditivoInt),
       checklistDocs: checklist.map(c => ({ item: c.item, checked: c.checked })),
       parecerConsolidado: '',
       documentos: [
@@ -5703,7 +5761,7 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
         ...(currentSol.historicoEtapas || []),
         {
           etapa: 'analise' as const,
-          data: new Date().toISOString().split('T')[0],
+          data: dataAditivo,
           responsavel: 'Fiscal de Obra (Novo Pleito de Aditivo de Contrato)'
         }
       ],
@@ -5727,23 +5785,44 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
     setActiveTab('historico');
   };
 
-  const handleDoreAction = (id: string, decision: 'Aprovado' | 'Recusado') => {
+  const handleDoreAction = async (id: string, decision: 'Aprovado' | 'Recusado') => {
     if (!parecerDoreInput.trim()) {
       alert('Favor inserir uma justificativa/parecer consolidado para a decisão.');
       return;
     }
 
-    let updatedSolMock = { ...currentSol };
-    const targetAdt = (updatedSolMock.aditivos || []).find(a => a.id === id);
+    const targetAdt = (currentSol.aditivos || []).find(a => a.id === id);
+    if (!targetAdt) return;
 
-    if (targetAdt) {
-      targetAdt.status = decision;
-      targetAdt.parecerConsolidado = parecerDoreInput;
-      targetAdt.data = new Date().toISOString().split('T')[0];
+    const statusBanco = decision === 'Aprovado' ? 'aprovado' : 'recusado';
+    const dataDecisao = new Date().toISOString().split('T')[0];
+
+    const { error } = await supabase
+      .from('aditivos')
+      .update({
+        status: statusBanco,
+        parecer_consolidado: parecerDoreInput,
+        data_aditivo: dataDecisao,
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Erro ao atualizar aditivo no Supabase:', error);
+      alert('Erro ao atualizar o aditivo no banco de dados. Tente novamente.');
+      return;
+    }
+
+    let updatedSolMock = { ...currentSol };
+    const targetAdtLocal = (updatedSolMock.aditivos || []).find(a => a.id === id);
+
+    if (targetAdtLocal) {
+      targetAdtLocal.status = decision;
+      targetAdtLocal.parecerConsolidado = parecerDoreInput;
+      targetAdtLocal.data = dataDecisao;
 
       // If approved, update main financial/timeline of the project
       if (decision === 'Aprovado') {
-        const adtVal = targetAdt.valorAditivo || 0;
+        const adtVal = targetAdtLocal.valorAditivo || 0;
         updatedSolMock.valorPlanilha = (updatedSolMock.valorPlanilha || 0) + adtVal;
         updatedSolMock.valorHomologadoContratacao = (updatedSolMock.valorHomologadoContratacao || 0) + adtVal;
       }
@@ -5754,7 +5833,13 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
     }
   };
 
-  const handleExcluirAditivo = (id: string) => {
+  const handleExcluirAditivo = async (id: string) => {
+    const { error } = await supabase.from('aditivos').delete().eq('id', id);
+    if (error) {
+      console.error('Erro ao excluir aditivo no Supabase:', error);
+      return;
+    }
+
     let updatedSolMock = { ...currentSol };
     const targetAdt = (updatedSolMock.aditivos || []).find(a => a.id === id);
     if (targetAdt && targetAdt.status === 'Aprovado') {
