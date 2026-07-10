@@ -5755,22 +5755,12 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
 
     const updated = {
       ...currentSol,
-      etapaAtual: 'analise' as const,
-      analistaAtribuido: undefined,
-      historicoEtapas: [
-        ...(currentSol.historicoEtapas || []),
-        {
-          etapa: 'analise' as const,
-          data: dataAditivo,
-          responsavel: 'Fiscal de Obra (Novo Pleito de Aditivo de Contrato)'
-        }
-      ],
       aditivos: [novoAditivo, ...(currentSol.aditivos || [])]
     };
 
     onUpdate(updated);
 
-    alert('Nova solicitação de aditivo cadastrada e encaminhada com sucesso para Análise Técnica da DORE para atribuição de um analista!');
+    alert('Nova solicitação de aditivo cadastrada com sucesso e está pendente de análise. A obra continua em execução.');
 
     // Reset Form
     setTipo('Valor');
