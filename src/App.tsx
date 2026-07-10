@@ -575,6 +575,14 @@ export default function App() {
             previsaoTerminoObra: row.previsao_termino_obra ?? undefined,
             garantiaTipo: row.garantia_tipo ?? undefined,
             contratoValorInicial: row.valor_contrato ?? undefined,
+            contratoDataAssinatura: row.contrato_data_assinatura ?? undefined,
+            contratoInicioVigencia: row.contrato_inicio_vigencia ?? undefined,
+            contratoFimVigencia: row.contrato_fim_vigencia ?? undefined,
+            garantiaValidade: row.garantia_validade ?? undefined,
+            garantiaValor: row.garantia_valor ?? undefined,
+            garantiaExigida: row.garantia_exigida ?? undefined,
+            statusContratoEmpresa: row.status_contrato_empresa ?? undefined,
+            duracaoObraMeses: row.duracao_obra_meses ?? undefined,
             statusObra: statusObraDoBanco(row.status_obra),
             statusSecoes: {
               identificacao_escolar: { status: row.status_identificacao_escolar, motivo: row.motivo_identificacao_escolar ?? undefined },
@@ -799,7 +807,30 @@ export default function App() {
       }
     }
 
+    async function carregarUsuarios() {
+      const { data: usuariosData, error: usuariosError } = await supabase
+        .from('usuarios')
+        .select('id, nome, email, perfil_id, perfis(codigo)')
+        .eq('ativo', true);
+
+      if (usuariosError) {
+        console.error('Erro ao carregar usuários:', usuariosError);
+        return;
+      }
+
+      if (usuariosData) {
+        setUsuariosSeguranca(usuariosData.map((u: any) => ({
+          id: u.id,
+          nome: u.nome,
+          email: u.email,
+          perfil: u.perfis?.codigo ?? '',
+          departamento: '',
+        })));
+      }
+    }
+
     carregarSolicitacoes();
+    carregarUsuarios();
   }, []);
 
   // Autoreset search criteria on subtask change to avoid bleed
@@ -911,6 +942,14 @@ export default function App() {
           data_ordem_inicio: sol.dataOrdemInicio ?? null,
           previsao_termino_obra: sol.previsaoTerminoObra ?? null,
           garantia_tipo: sol.garantiaTipo ?? null,
+          contrato_data_assinatura: sol.contratoDataAssinatura ?? null,
+          contrato_inicio_vigencia: sol.contratoInicioVigencia ?? null,
+          contrato_fim_vigencia: sol.contratoFimVigencia ?? null,
+          garantia_validade: sol.garantiaValidade ?? null,
+          garantia_valor: sol.garantiaValor ?? null,
+          garantia_exigida: sol.garantiaExigida ?? null,
+          status_contrato_empresa: sol.statusContratoEmpresa ?? null,
+          duracao_obra_meses: sol.duracaoObraMeses ?? null,
           cadastro_obra_confirmado: sol.cadastroObraConfirmado ?? false,
           atribuicao_forcada: sol.atribuicaoForcada ?? false,
           contador_analises: sol.contadorAnalises ?? 0,

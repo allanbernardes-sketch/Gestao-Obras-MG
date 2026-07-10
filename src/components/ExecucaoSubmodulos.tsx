@@ -419,6 +419,7 @@ export default function ExecucaoSubmodulos({
           onSelect={onSelect}
           setFocoObra={setSelectedSolId}
           setActiveSubTask={setActiveSubTask}
+          usuariosSeguranca={usuariosSeguranca}
           somenteLeitura={somenteLeitura}
         />
       )}
@@ -485,6 +486,7 @@ export default function ExecucaoSubmodulos({
           currentSol={selectedSol}
           onUpdate={handlePropagateUpdate}
           solicitacoes={solicitacoes}
+          usuariosSeguranca={usuariosSeguranca}
           somenteLeitura={somenteLeitura}
         />
       )}
@@ -550,7 +552,7 @@ export function getFiscalPoints(fiscalName: string, allSolicitacoes: Solicitacao
 }
 
 // --- 1. SUB CADASTRO DE OBRAS ---
-function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, onSelect, setFocoObra, setActiveSubTask, somenteLeitura = false }: {
+function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, onSelect, setFocoObra, setActiveSubTask, usuariosSeguranca = [], somenteLeitura = false }: {
   solicitacoes: Solicitacao[];
   todasSolicitacoes: Solicitacao[];
   currentSol: Solicitacao | null;
@@ -558,6 +560,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
   onSelect: (sol: Solicitacao) => void;
   setFocoObra: (id: string) => void;
   setActiveSubTask?: (subTask: string) => void;
+  usuariosSeguranca?: UsuarioSistema[];
   somenteLeitura?: boolean;
 }) {
   const [showNovoForm, setShowNovoForm] = useState(false);
@@ -893,10 +896,14 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                   onChange={(e) => setNovoFiscalSelecionado(e.target.value)}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer"
                 >
-                  <option value="Eng. Roberto Mendes">Eng. Roberto Mendes (CREA 142.532/D)</option>
-                  <option value="Arq. Patrícia Silveira">Arq. Patrícia Silveira (CAU A44.120-3)</option>
-                  <option value="Eng. Marcos Pontes">Eng. Marcos Pontes (CREA 95.841/D)</option>
-                  <option value="Enga. Luciana Duarte">Enga. Luciana Duarte (CREA 168.990/D)</option>
+                  {usuariosSeguranca
+                    .filter(u => u.perfil === 'tecnico_infra')
+                    .map(u => (
+                      <option key={u.id} value={u.nome}>
+                        {u.nome}
+                      </option>
+                    ))
+                  }
                 </select>
               </div>
 
@@ -1212,11 +1219,14 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden"
                   >
                     <option value="">Selecione o fiscal...</option>
-                    <option value="João Paulo Penfield">João Paulo Penfield (Téc. Infraestrutura SRE)</option>
-                    <option value="Eng. Roberto Mendes">Eng. Roberto Mendes (CREA 142.532/D)</option>
-                    <option value="Arq. Patrícia Silveira">Arq. Patrícia Silveira (CAU A44.120-3)</option>
-                    <option value="Eng. Marcos Pontes">Eng. Marcos Pontes (CREA 95.841/D)</option>
-                    <option value="Enga. Luciana Duarte">Enga. Luciana Duarte (CREA 168.990/D)</option>
+                    {usuariosSeguranca
+                      .filter(u => u.perfil === 'tecnico_infra')
+                      .map(u => (
+                        <option key={u.id} value={u.nome}>
+                          {u.nome}
+                        </option>
+                      ))
+                    }
                   </select>
 
                   {fiscalObraAtribuido && (() => {
@@ -6915,11 +6925,13 @@ function SubFiscalizacao({
   currentSol,
   onUpdate,
   solicitacoes = [],
+  usuariosSeguranca = [],
   somenteLeitura = false
 }: {
   currentSol: Solicitacao | null;
   onUpdate: (sol: Solicitacao) => void;
   solicitacoes?: Solicitacao[];
+  usuariosSeguranca?: UsuarioSistema[];
   somenteLeitura?: boolean;
 }) {
   const [fiscalInput, setFiscalInput] = useState(() => currentSol?.fiscalObraAtribuido || '');
@@ -6985,10 +6997,14 @@ function SubFiscalizacao({
               className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer"
             >
               <option value="">-- Atribuir Fiscal de Engenharia --</option>
-              <option value="Eng. Roberto Mendes">Eng. Roberto Mendes (CREA 142.532/D)</option>
-              <option value="Arq. Patrícia Silveira">Arq. Patrícia Silveira (CAU A44.120-3)</option>
-              <option value="Eng. Marcos Pontes">Eng. Marcos Pontes (CREA 95.841/D)</option>
-              <option value="Enga. Luciana Duarte">Enga. Luciana Duarte (CREA 168.990/D)</option>
+              {usuariosSeguranca
+                .filter(u => u.perfil === 'tecnico_infra')
+                .map(u => (
+                  <option key={u.id} value={u.nome}>
+                    {u.nome}
+                  </option>
+                ))
+              }
             </select>
 
             {fiscalInput && (() => {
