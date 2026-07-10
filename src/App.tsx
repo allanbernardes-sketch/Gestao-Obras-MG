@@ -50,6 +50,12 @@ function statusObraDoBanco(v: string | null | undefined): Solicitacao['statusObr
   }
 }
 
+// Colunas `date` do Postgres rejeitam string vazia — campos de data não preenchidos
+// devem virar null, nunca "".
+function dataOuNull(val?: string): string | null {
+  return val && val.trim() !== '' ? val : null;
+}
+
 export default function App() {
   const [logado, setLogado] = useState(false);
   const [nomeUsuario, setNomeUsuario] = useState('');
@@ -919,9 +925,9 @@ export default function App() {
           valor_planilha: sol.valorPlanilha ?? null,
           valor_homologado: sol.valorHomologado ?? null,
           numero_paf: sol.numeroPAF ?? null,
-          data_homologacao: sol.dataHomologacao ?? null,
-          data_vigencia_paf: sol.dataVigenciaPAF ?? null,
-          data_fin_homologacao: sol.dataFinHomologacao ?? null,
+          data_homologacao: dataOuNull(sol.dataHomologacao),
+          data_vigencia_paf: dataOuNull(sol.dataVigenciaPAF),
+          data_fin_homologacao: dataOuNull(sol.dataFinHomologacao),
           status_paf: sol.statusPAF ?? null,
           cnpj_caixa_escolar: sol.cnpjCaixaEscolar ?? null,
           prazo_estimado_obra: sol.prazoEstimadoObra ?? null,
@@ -939,13 +945,13 @@ export default function App() {
           empresa_contratada: sol.empresaContratada ?? null,
           cnpj_empresa: sol.cnpjEmpresa ?? null,
           responsavel: sol.responsavel ?? null,
-          data_ordem_inicio: sol.dataOrdemInicio ?? null,
-          previsao_termino_obra: sol.previsaoTerminoObra ?? null,
+          data_ordem_inicio: dataOuNull(sol.dataOrdemInicio),
+          previsao_termino_obra: dataOuNull(sol.previsaoTerminoObra),
           garantia_tipo: sol.garantiaTipo ?? null,
-          contrato_data_assinatura: sol.contratoDataAssinatura ?? null,
-          contrato_inicio_vigencia: sol.contratoInicioVigencia ?? null,
-          contrato_fim_vigencia: sol.contratoFimVigencia ?? null,
-          garantia_validade: sol.garantiaValidade ?? null,
+          contrato_data_assinatura: dataOuNull(sol.contratoDataAssinatura),
+          contrato_inicio_vigencia: dataOuNull(sol.contratoInicioVigencia),
+          contrato_fim_vigencia: dataOuNull(sol.contratoFimVigencia),
+          garantia_validade: dataOuNull(sol.garantiaValidade),
           garantia_valor: sol.garantiaValor ?? null,
           garantia_exigida: sol.garantiaExigida ?? null,
           status_contrato_empresa: sol.statusContratoEmpresa ?? null,
