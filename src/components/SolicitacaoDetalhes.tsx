@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, ParcelaPAF } from '../types';
+import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, Aditivo, AjustePlanilha, UsuarioSistema, ParcelaPAF } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { supabase } from '../lib/supabase';
 import { gerarParecerIA } from './GeradorParecerIA';
@@ -322,13 +322,6 @@ Plataforma e-SGO - SEE-MG`;
   // State for rejecting document (modal / input trigger)
   const [justificativaFields, setJustificativaFields] = useState<{ [key: string]: string }>({});
 
-  // States for new measurement
-  const [novaMedicaoData, setNovaMedicaoData] = useState(new Date().toISOString().split('T')[0]);
-  const [novaMedicaoDesc, setNovaMedicaoDesc] = useState('');
-  const [novaMedicaoValor, setNovaMedicaoValor] = useState('');
-  const [novaMedicaoPorc, setNovaMedicaoPorc] = useState('');
-  const [mostrandoNovaMedicao, setMostrandoNovaMedicao] = useState(false);
-
   // States for new aditivo
   const [novoAditivoTipo, setNovoAditivoTipo] = useState<'Valor' | 'Prazo' | 'Valor e Prazo'>('Valor');
   const [novoAditivoValor, setNovoAditivoValor] = useState('');
@@ -362,11 +355,6 @@ Plataforma e-SGO - SEE-MG`;
 
   // File Input Ref for Distrato document
   const distratoInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Measurement file / photo uploads states
-  const [medicaoDocName, setMedicaoDocName] = useState('');
-  const [medicaoFotos, setMedicaoFotos] = useState<string[]>([]);
-  const [fotoInputSimulada, setFotoInputSimulada] = useState('');
 
   // Aditivos Process states
   const [selectedAditivoId, setSelectedAditivoId] = useState<string | null>(null);
@@ -1335,49 +1323,6 @@ ${totalPendencias > 0
       justificativaParalizacao: statusObraInput === 'Paralisada' ? justificativaParalizacaoInput : undefined
     });
     alert('Dados gerais salvos com sucesso!');
-  };
-
-  const adicionarMedicao = (e: React.FormEvent) => {
-    e.preventDefault();
-    const val = parseFloat(novaMedicaoValor);
-    const porc = parseFloat(novaMedicaoPorc);
-
-    if (isNaN(val) || val <= 0 || isNaN(porc) || porc <= 0 || !novaMedicaoDesc) {
-      alert('Campos de medição inválidos.');
-      return;
-    }
-
-    const novaMed: Medicao = {
-      id: `med-${Math.floor(1000 + Math.random() * 9000)}`,
-      data: novaMedicaoData,
-      valor: val,
-      porcentagem: porc,
-      descricao: novaMedicaoDesc,
-      empresaNome: solicitacao.empresaContratada || 'Empresa Geral',
-      empresaCnpj: solicitacao.cnpjEmpresa || '',
-      fileName: medicaoDocName || undefined,
-      fotos: medicaoFotos.length > 0 ? medicaoFotos : undefined
-    };
-
-    onUpdate({
-      ...solicitacao,
-      medicoes: [...solicitacao.medicoes, novaMed]
-    });
-
-    // Reset form
-    setNovaMedicaoValor('');
-    setNovaMedicaoPorc('');
-    setNovaMedicaoDesc('');
-    setMedicaoDocName('');
-    setMedicaoFotos([]);
-    setMostrandoNovaMedicao(false);
-  };
-
-  const excluirMedicao = (medId: string) => {
-    onUpdate({
-      ...solicitacao,
-      medicoes: solicitacao.medicoes.filter(m => m.id !== medId)
-    });
   };
 
   // Aditivos
@@ -4108,175 +4053,11 @@ ${totalPendencias > 0
                   <div className="flex justify-between items-center flex-wrap gap-2 pb-2 border-b border-neutral-100">
                     <div>
                       <h3 className="font-display font-bold text-sm text-neutral-700">Cronograma de Medições Realizadas</h3>
-                      <p className="text-[11px] text-neutral-400">Medições mensais avaliadas pelo fiscal.</p>
+                      <p className="text-[11px] text-neutral-400">Medições mensais avaliadas pelo fiscal. Lançamentos e exclusões são feitos em Execução › Medições.</p>
                     </div>
-
-                    {/* Button to show Measurement Form */}
-                    {(perfilUsuario === 'tecnico_infra') && !mostrandoNovaMedicao && (
-                      <button
-                        onClick={() => setMostrandoNovaMedicao(true)}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition-all"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Lançar Medição
-                      </button>
-                    )}
                   </div>
 
-                  {/* Form to insert mediação */}
-                  {mostrandoNovaMedicao && (
-                    <form onSubmit={adicionarMedicao} className="p-4 bg-neutral-50/70 border border-neutral-200/80 rounded-lg space-y-4">
-                      <h4 className="text-xs font-bold text-neutral-700 flex items-center gap-1.5 justify-between">
-                        <span>Nova Medição de Campo</span>
-                        <span className="text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-mono">
-                          Empresa Ativa: {solicitacao.empresaContratada || 'Geral'}
-                        </span>
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1">Data</label>
-                          <input
-                            type="date"
-                            value={novaMedicaoData}
-                            onChange={(e) => setNovaMedicaoData(e.target.value)}
-                            className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1">Valor Medido (R$)</label>
-                          <input
-                            type="number"
-                            placeholder="Ex: 50000"
-                            value={novaMedicaoValor}
-                            onChange={(e) => setNovaMedicaoValor(e.target.value)}
-                            className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1">Evolução Física (%)</label>
-                          <input
-                            type="number"
-                            placeholder="Ex: 15"
-                            value={novaMedicaoPorc}
-                            onChange={(e) => setNovaMedicaoPorc(e.target.value)}
-                            className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1">Descrição Detalhada do Serviço Executado</label>
-                        <textarea
-                          placeholder="Ex: Finalização da estrutura de pilares metálicos e preparação do contrapiso."
-                          value={novaMedicaoDesc}
-                          onChange={(e) => setNovaMedicaoDesc(e.target.value)}
-                          className="w-full text-xs p-2 border border-neutral-300 rounded bg-white h-16 resize-none"
-                          required
-                        />
-                      </div>
-
-                      {/* SIMULATED DOCUMENT UPLOAD FOR MEDIÇÃO */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 font-sans">
-                        <div>
-                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1 text-slate-705">Anexar Documento de Medição (PDF / XLS)</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder="Nenhum arquivo anexado"
-                              value={medicaoDocName}
-                              onChange={(e) => setMedicaoDocName(e.target.value)}
-                              className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
-                              readOnly
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setMedicaoDocName(`relatorio_medicao_${Math.floor(10 + Math.random() * 90)}.pdf`)}
-                              className="px-3 bg-neutral-150 border border-neutral-350 rounded hover:bg-neutral-200 text-xs font-semibold cursor-pointer shrink-0 transition-all"
-                            >
-                              Anexar Doc
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] uppercase font-semibold text-neutral-500 mb-1 text-slate-705">Anexar Fotos do Avanço Físico (Múltiplas)</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder="Digite ou escolha aleatória"
-                              value={fotoInputSimulada}
-                              onChange={(e) => setFotoInputSimulada(e.target.value)}
-                              className="w-full text-xs p-2 border border-neutral-300 rounded bg-white"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (fotoInputSimulada) {
-                                  setMedicaoFotos([...medicaoFotos, fotoInputSimulada]);
-                                  setFotoInputSimulada('');
-                                } else {
-                                  const randomNames = [
-                                    'estrutura_concreto.jpg', 'alvenaria_blocos.jpg', 'reboco_externo.jpg', 
-                                    'cobertura_telhas.jpg', 'instalacao_hidraulica.jpg', 'pintura_final.jpg'
-                                  ];
-                                  const picker = randomNames[Math.floor(Math.random() * randomNames.length)];
-                                  if (!medicaoFotos.includes(picker)) {
-                                    setMedicaoFotos([...medicaoFotos, picker]);
-                                  }
-                                }
-                              }}
-                              className="px-3 bg-neutral-150 border border-neutral-350 rounded hover:bg-neutral-200 text-xs font-semibold cursor-pointer shrink-0 transition-all font-sans"
-                            >
-                              + Adicionar Foto
-                            </button>
-                          </div>
-
-                          {/* Render photo tags preview */}
-                          {medicaoFotos.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
-                              {medicaoFotos.map((f, i) => (
-                                <span key={i} className="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded border border-blue-100 font-mono">
-                                  <span>{f}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setMedicaoFotos(medicaoFotos.filter((_, idx) => idx !== i))}
-                                    className="text-red-500 hover:text-red-700 font-bold ml-1 text-[9px]"
-                                  >
-                                    ✕
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end gap-2 text-xs pt-2 border-t border-neutral-150">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMostrandoNovaMedicao(false);
-                            setMedicaoDocName('');
-                            setMedicaoFotos([]);
-                          }}
-                          className="px-3 py-1.5 border border-neutral-300 rounded text-neutral-700 font-medium hover:bg-neutral-50 cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold cursor-pointer"
-                        >
-                          Salvar Medição
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  {/* List of measurements */}
+                  {/* List of measurements — somente leitura; o lançamento vive em ExecucaoSubmodulos/SubMedicoes */}
                   {solicitacao.medicoes.length === 0 ? (
                     <div className="text-center py-6 text-neutral-400 text-xs italic">
                       Nenhuma medição cadastrada. Lance a primeira medição realizada.
@@ -4308,48 +4089,28 @@ ${totalPendencias > 0
                               <span className="font-mono font-extrabold text-neutral-900 text-base">
                                 R$ {med.valor.toLocaleString('pt-BR')}
                               </span>
-
-                              {perfilUsuario === 'tecnico_infra' && (
-                                <button
-                                  onClick={() => excluirMedicao(med.id)}
-                                  className="text-red-500 hover:bg-red-50 p-1.5 rounded-lg hover:text-red-700 transition cursor-pointer"
-                                  title="Excluir Medição"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
                             </div>
                           </div>
 
-                          {/* ATTACHMENT AND PHOTO GALLERIES COMPONENT */}
-                          {(med.fileName || (med.fotos && med.fotos.length > 0)) && (
+                          {/* ATTACHMENT COMPONENT — documentos anexados via Execução › Medições */}
+                          {(med.relatorioFiscalizacaoFileName || med.boletimMedicaoFileName) && (
                             <div className="pt-3 border-t border-neutral-100 flex flex-col md:flex-row gap-4">
-                              {med.fileName && (
+                              {med.relatorioFiscalizacaoFileName && (
                                 <div className="space-y-1 max-w-xs">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">Documento de Engenharia</span>
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">Relatório de Fiscalização</span>
                                   <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 p-2 rounded-lg text-xs leading-none font-sans">
                                     <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
-                                    <div className="truncate">
-                                      <span className="font-medium text-neutral-700 block truncate" title={med.fileName}>{med.fileName}</span>
-                                      <span className="text-[9px] text-neutral-400 font-mono mt-0.5 block">Revisado pelo fiscal</span>
-                                    </div>
+                                    <span className="font-medium text-neutral-700 block truncate" title={med.relatorioFiscalizacaoFileName}>{med.relatorioFiscalizacaoFileName}</span>
                                   </div>
                                 </div>
                               )}
 
-                              {med.fotos && med.fotos.length > 0 && (
-                                <div className="space-y-1 flex-1">
-                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">Galeria Fotográfica de Campo</span>
-                                  <div className="flex gap-2 overflow-x-auto pb-1">
-                                    {med.fotos.map((f, fIdx) => (
-                                      <div key={fIdx} className="relative group shrink-0 w-24 h-16 bg-neutral-900 rounded-lg overflow-hidden border border-neutral-200 flex flex-col justify-end p-1.5 shadow-xs">
-                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent z-10" />
-                                        <span className="font-mono text-[8px] text-white truncate z-20 font-bold block bg-neutral-950/40 px-1 rounded">{f}</span>
-                                        <div className="absolute inset-0 flex items-center justify-center text-slate-400 font-semibold text-lg bg-neutral-100/10 hover:bg-neutral-100/20 transition-all cursor-pointer">
-                                          📸
-                                        </div>
-                                      </div>
-                                    ))}
+                              {med.boletimMedicaoFileName && (
+                                <div className="space-y-1 max-w-xs">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-sans">Boletim de Medição</span>
+                                  <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 p-2 rounded-lg text-xs leading-none font-sans">
+                                    <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span className="font-medium text-neutral-700 block truncate" title={med.boletimMedicaoFileName}>{med.boletimMedicaoFileName}</span>
                                   </div>
                                 </div>
                               )}

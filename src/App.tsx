@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, computeStatusObra } from './types';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, computeStatusObra } from './types';
 import { recalcularPrioridade } from './utils/prioridade';
 import { recalcularIEE } from './utils/iee';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
@@ -624,7 +624,50 @@ export default function App() {
             }
           }
 
-          setSolicitacoes(comHistorico);
+          // Carrega as medições registradas de cada solicitação
+          let comMedicoes = comHistorico;
+          if (dbIds.length > 0) {
+            const { data: medicoesData, error: medicoesError } = await supabase
+              .from('medicoes')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: false });
+
+            if (medicoesError) {
+              console.error('Erro ao carregar medições:', medicoesError);
+            } else if (medicoesData) {
+              const porSolicitacaoMed = new Map<string, any[]>();
+              (medicoesData as any[]).forEach((row) => {
+                const lista = porSolicitacaoMed.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoMed.set(row.solicitacao_id, lista);
+              });
+
+              comMedicoes = comHistorico.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoMed.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  medicoes: linhas.map((row: any): Medicao => ({
+                    id: row.id,
+                    data: row.data_medicao ? String(row.data_medicao) : '',
+                    valor: row.valor,
+                    porcentagem: row.porcentagem ?? 0,
+                    descricao: row.descricao ?? '',
+                    empresaNome: row.empresa_nome ?? undefined,
+                    empresaCnpj: row.empresa_cnpj ?? undefined,
+                    numeroMedicao: row.numero_medicao_display ?? String(row.numero_medicao),
+                    periodoMedicao: row.periodo_medicao ?? undefined,
+                    responsavelMedicao: row.responsavel_medicao ?? undefined,
+                    observacoes: row.observacao ?? undefined,
+                    porcentagemFisica: row.porcentagem_fisica ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comMedicoes);
           return;
         }
       } catch (e) {

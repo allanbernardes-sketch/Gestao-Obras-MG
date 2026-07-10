@@ -8,6 +8,7 @@ import {
   BarChart2, Coins,
 } from 'lucide-react';
 import { Solicitacao, Medicao, Aditivo, AjustePlanilha, SaldoComplementarItem, ReequilibrioItem, PerfilUsuario, EmpresaSeguranca, UsuarioSistema, computeStatusObra } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface ExecucaoSubmodulosProps {
   activeSubTask: string;
@@ -3450,7 +3451,7 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
     }
   };
 
-  const registrarNovaMedicao = (e: React.FormEvent) => {
+  const registrarNovaMedicao = async (e: React.FormEvent) => {
     e.preventDefault();
     setAttemptedSubmit(true);
     setErrorMessage(null);
@@ -3501,16 +3502,65 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
       return;
     }
 
+    const periodoFormatado = `${new Date(periodoMInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(periodoMFim + 'T12:00:00').toLocaleDateString('pt-BR')}`;
+    const empresaNomeFinal = currentSol.empresaContratada || 'Construtora Convencionada';
+    const empresaCnpjFinal = currentSol.cnpjEmpresa || '01.242.000/0001-33';
+
+    // Resolve o uuid real da solicitação (usa o cache local ou busca pelo codigo_sgo)
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        setErrorMessage('Não foi possível localizar o registro da obra no banco para gravar a medição.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    const numeroMedicaoInt = parseInt(numeroM, 10);
+
+    const { data: medicaoRow, error: medicaoError } = await supabase
+      .from('medicoes')
+      .insert({
+        solicitacao_id: dbId,
+        numero_medicao: Number.isFinite(numeroMedicaoInt) ? numeroMedicaoInt : (currentSol.medicoes?.length || 0) + 1,
+        numero_medicao_display: numeroM,
+        valor: v,
+        data_medicao: dataM,
+        descricao: descricaoM,
+        empresa_nome: empresaNomeFinal,
+        empresa_cnpj: empresaCnpjFinal,
+        periodo_medicao: periodoFormatado,
+        responsavel_medicao: responsavelFinal,
+        observacao: observacoesM || null,
+        porcentagem: pFinanceira,
+        porcentagem_fisica: pFisica,
+        usuario_id: userData.user?.id ?? null,
+      })
+      .select('id')
+      .single();
+
+    if (medicaoError || !medicaoRow) {
+      console.error('Erro ao gravar medição no Supabase:', medicaoError);
+      setErrorMessage('Erro ao gravar a medição no banco de dados. Tente novamente.');
+      return;
+    }
+
     const novaM: Medicao = {
-      id: `med_${Date.now()}`,
+      id: medicaoRow.id,
       data: dataM,
       valor: v,
       porcentagem: pFinanceira,
       descricao: descricaoM,
-      empresaNome: currentSol.empresaContratada || 'Construtora Convencionada',
-      empresaCnpj: currentSol.cnpjEmpresa || '01.242.000/0001-33',
+      empresaNome: empresaNomeFinal,
+      empresaCnpj: empresaCnpjFinal,
       numeroMedicao: numeroM,
-      periodoMedicao: `${new Date(periodoMInicio + 'T12:00:00').toLocaleDateString('pt-BR')} a ${new Date(periodoMFim + 'T12:00:00').toLocaleDateString('pt-BR')}`,
+      periodoMedicao: periodoFormatado,
       responsavelMedicao: responsavelFinal,
       observacoes: observacoesM,
       porcentagemFisica: pFisica,
@@ -3539,7 +3589,12 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
     setAttemptedSubmit(false);
   };
 
-  const deletarMedicao = (id: string) => {
+  const deletarMedicao = async (id: string) => {
+    const { error } = await supabase.from('medicoes').delete().eq('id', id);
+    if (error) {
+      console.error('Erro ao excluir medição no Supabase:', error);
+      return;
+    }
     const updated = {
       ...currentSol,
       medicoes: currentSol.medicoes.filter(m => m.id !== id)
