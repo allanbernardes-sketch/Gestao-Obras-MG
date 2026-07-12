@@ -216,7 +216,7 @@ export default function KanbanViews({
       const pontosDisponiveis = getPontosIEEDisponiveis(destino, outrosProcessos);
 
       if (pontosObra > pontosDisponiveis) {
-        const podeForcar = perfilUsuario === 'admin' || perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf';
+        const podeForcar = (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') || perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf';
         const mensagem = `Analista sem capacidade disponível para esta obra (${pontosDisponiveis} pontos disponíveis, obra requer ${pontosObra} pontos).`;
 
         if (!podeForcar) {
@@ -430,7 +430,7 @@ export default function KanbanViews({
           
           {/* Quick Assign Dropdown — Admin/Gestor podem atribuir a qualquer analista;
               Analista de Engenharia (DORE) só pode se auto-atribuir (validado em handleMudarAnalista) */}
-          {(!isReadOnly && (perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin' || perfilUsuario === 'analista_dore')) ? (
+          {(!isReadOnly && (perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') || perfilUsuario === 'analista_dore')) ? (
             <div className="space-y-1">
               <label className="text-[8.5px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
                 <User className="w-2.5 h-2.5 text-slate-400" /> Atribuição:
@@ -451,7 +451,7 @@ export default function KanbanViews({
                   <option key={ana} value={ana}>{ana}</option>
                 ))}
               </select>
-              {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && sol.analistaAtribuido && (
+              {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && sol.analistaAtribuido && (
                 <button
                   type="button"
                   onClick={() => handleRemoverAtribuicao(sol)}

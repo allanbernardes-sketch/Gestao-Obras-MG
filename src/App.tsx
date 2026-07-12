@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, computeStatusObra } from './types';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, UsuarioSistema, computeStatusObra } from './types';
 import { recalcularPrioridade } from './utils/prioridade';
 import { recalcularIEE } from './utils/iee';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
@@ -16,7 +16,7 @@ import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
 import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import KanbanViews from './components/KanbanViews';
-import { NovoAtendimentoPanel, AtribuicaoPanel, AtribuicaoHistoricoPanel, RelatoriosPanel } from './components/GestaoObrasViews';
+import { NovoAtendimentoPanel, AtribuicaoPanel, AtribuicaoHistoricoPanel, AprovacaoRegionalPanel } from './components/GestaoObrasViews';
 import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
 import AcompanhamentoPaf from './components/AcompanhamentoPaf';
 import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
@@ -24,6 +24,32 @@ import CentralNavegacaoObras from './components/CentralNavegacaoObras';
 import OrcamentoModule from './components/orcamento/OrcamentoModule';
 import PatrimonioModule from './components/patrimonio/PatrimonioModule';
 import { supabase } from './lib/supabase';
+
+// Perfis selecionáveis diretamente no Cadastro de Usuário (Segurança). 'fiscal_obra' fica de fora
+// por não ter nenhum comportamento implementado no restante do sistema ainda.
+const PERFIS_SELECIONAVEIS: { value: PerfilUsuario; label: string; regional: boolean }[] = [
+  { value: 'tecnico_infra', label: 'Técnico de Infraestrutura (SRE)', regional: true },
+  { value: 'coordenador_regional', label: 'Coordenador Regional (SRE)', regional: true },
+  { value: 'gestor_dore', label: 'Gestor Atendimento (DORE)', regional: false },
+  { value: 'analista_dore', label: 'Analista de Engenharia (DORE)', regional: false },
+  { value: 'administrativo_dore', label: 'Administrativo (DORE)', regional: false },
+  { value: 'gestor_paf', label: 'Subsecretário de Administração (PAF)', regional: false },
+  { value: 'diretor_dore', label: 'Diretor (DORE)', regional: false },
+  { value: 'admin', label: 'Administrador do Sistema', regional: false },
+];
+
+// Departamento padrão exibido para perfis do órgão central (perfis regionais usam a SRE escolhida).
+const DEPARTAMENTO_POR_PERFIL_CENTRAL: Record<string, string> = {
+  gestor_dore: 'DORE Atendimento',
+  analista_dore: 'DORE Engenharia',
+  administrativo_dore: 'Administrativo DORE',
+  gestor_paf: 'SAF/PAF Secretarias',
+  diretor_dore: 'Diretoria DORE',
+  admin: 'Administração do Sistema',
+};
+
+// Formações que exigem registro profissional (CREA/CAU) obrigatório no cadastro.
+const FORMACOES_EXIGEM_REGISTRO = ['Engenharia Civil', 'Arquitetura', 'Técnico em Edificações'];
 
 // status_obra no banco é um enum snake_case computado (nao_iniciada | em_andamento | paralisada
 // | concluida | distratada), diferente do campo statusObra do frontend (que é só um override manual
@@ -94,10 +120,12 @@ export default function App() {
       usuario: nomeUsuario || 'Usuário SGO',
       perfil: perfilUsuario === 'admin' ? 'Administrador do Sistema' :
               perfilUsuario === 'tecnico_infra' ? 'Técnico de Infraestrutura SRE' :
+              perfilUsuario === 'coordenador_regional' ? 'Coordenador Regional' :
               perfilUsuario === 'gestor_dore' ? 'Gestor Atendimento DORE' :
               perfilUsuario === 'analista_dore' ? 'Analista de Engenharia DORE' :
               perfilUsuario === 'gestor_paf' ? 'Subsecretário de Administração' :
-              perfilUsuario === 'administrativo_dore' ? 'Administrativo DORE' : 'Operador',
+              perfilUsuario === 'administrativo_dore' ? 'Administrativo DORE' :
+              perfilUsuario === 'diretor_dore' ? 'Diretor DORE' : 'Operador',
       acao,
       detalhe,
       tipo,
@@ -169,7 +197,7 @@ export default function App() {
   const [confirmingSolId, setConfirmingSolId] = useState<string | null>(null);
 
   // REGISTROS DE SEGURANÇA (INTERACTIVE STATE MODEL)
-  const [usuariosSeguranca, setUsuariosSeguranca] = useState([
+  const [usuariosSeguranca, setUsuariosSeguranca] = useState<UsuarioSistema[]>([
     { id: 'USR-01', nome: 'João Paulo Penfield', email: 'joao.paulo@sre.mg.gov.br', perfil: 'tecnico_infra', departamento: 'SRE Patos de Minas' },
     { id: 'USR-02', nome: 'Aline Davino', email: 'aline.davino@educacao.mg.gov.br', perfil: 'gestor_dore', departamento: 'DORE Atendimento' },
     { id: 'USR-03', nome: 'Flavia Borges', email: 'flavia.borges@educacao.mg.gov.br', perfil: 'analista_dore', departamento: 'DORE Engenharia' },
@@ -192,7 +220,6 @@ export default function App() {
     paf: false,
     execucao: false,
     encerramento: false,
-    relatorios: false,
     orca_orcamentos: false,
     orca_banco: false,
     orca_analises: false,
@@ -223,8 +250,7 @@ export default function App() {
   const [usrCreaSituacao, setUsrCreaSituacao] = useState<'Ativo' | 'Inativo'>('Ativo');
   const [usrDataIngresso, setUsrDataIngresso] = useState('');
   const [usrSituacaoFuncional, setUsrSituacaoFuncional] = useState<'Ativo' | 'Férias' | 'Licença' | 'Afastado' | 'Desligado'>('Ativo');
-  const [usrTipoVinculo, setUsrTipoVinculo] = useState<'regional' | 'orgao_central'>('regional');
-  const [usrEquipeCentral, setUsrEquipeCentral] = useState('Planejamento');
+  const [usrPerfil, setUsrPerfil] = useState<PerfilUsuario>('tecnico_infra');
   const [usrRegionais, setUsrRegionais] = useState<string[]>(['SRE Metropolitana A']);
 
   // FILTROS DA TABELA DE USUÁRIOS
@@ -253,8 +279,7 @@ export default function App() {
     setUsrCreaSituacao('Ativo');
     setUsrDataIngresso('');
     setUsrSituacaoFuncional('Ativo');
-    setUsrTipoVinculo('regional');
-    setUsrEquipeCentral('Planejamento');
+    setUsrPerfil('tecnico_infra');
     setUsrRegionais(['SRE Metropolitana A']);
     setUsrIdEmEdicao(null);
     setShowCadastroUsuarioModal(false);
@@ -270,8 +295,7 @@ export default function App() {
     setUsrCreaSituacao(u.creaSituacao || 'Ativo');
     setUsrDataIngresso(u.dataIngresso || '');
     setUsrSituacaoFuncional(u.situacaoFuncional || 'Ativo');
-    setUsrTipoVinculo(u.tipoVinculo || 'regional');
-    setUsrEquipeCentral(u.equipeCentral || 'Planejamento');
+    setUsrPerfil((u.perfil as PerfilUsuario) || 'tecnico_infra');
     setUsrRegionais(u.tipoVinculo === 'regional'
       ? (u.regionais?.length ? u.regionais : (u.departamento ? [u.departamento] : ['SRE Metropolitana A']))
       : ['SRE Metropolitana A']);
@@ -282,10 +306,12 @@ export default function App() {
     const perfilLabel = (perfil: string) => {
       switch (perfil) {
         case 'tecnico_infra': return 'Técnico de Infraestrutura (SRE)';
+        case 'coordenador_regional': return 'Coordenador Regional (SRE)';
         case 'gestor_dore': return 'Gestor Atendimento (DORE)';
         case 'analista_dore': return 'Analista de Engenharia (DORE)';
         case 'gestor_paf': return 'Subsecretário de Administração';
         case 'administrativo_dore': return 'Administrativo DORE';
+        case 'diretor_dore': return 'Diretor DORE';
         case 'admin': return 'Administrador do Sistema';
         default: return perfil;
       }
@@ -334,32 +360,34 @@ export default function App() {
       alert('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
+    if (!usrDataIngresso) {
+      alert('Por favor, informe a Data de Ingresso.');
+      return;
+    }
+    if (FORMACOES_EXIGEM_REGISTRO.includes(usrFormacao) && (!usrCreaNum.trim() || !usrCreaSituacao)) {
+      alert('Nº de Registro e Situação do Registro (CREA/CAU) são obrigatórios para esta formação.');
+      return;
+    }
 
-    const perfil: PerfilUsuario = usrTipoVinculo === 'regional'
-      ? 'tecnico_infra'
-      : usrEquipeCentral === 'Planejamento' ? 'analista_dore'
-      : usrEquipeCentral === 'Administrativo' ? 'administrativo_dore'
-      : 'gestor_dore';
-
-    const departamento = usrTipoVinculo === 'regional'
+    const isRegional = usrPerfil === 'tecnico_infra' || usrPerfil === 'coordenador_regional';
+    const departamento = isRegional
       ? (usrRegionais[0] || '')
-      : `DORE - ${usrEquipeCentral}`;
+      : (DEPARTAMENTO_POR_PERFIL_CENTRAL[usrPerfil] || '');
 
     const dadosAtualizados = {
       nome: usrNome,
       email: usrEmail,
-      perfil,
+      perfil: usrPerfil,
       departamento,
-      regionais: usrTipoVinculo === 'regional' ? usrRegionais : undefined,
+      regionais: isRegional ? usrRegionais : undefined,
       cargo: usrCargo,
       formacao: usrFormacao,
       creaNum: usrCreaNum || undefined,
       creaSituacao: usrCreaSituacao,
-      dataIngresso: usrDataIngresso || undefined,
+      dataIngresso: usrDataIngresso,
       situacaoFuncional: usrSituacaoFuncional,
       dataUltimaAtualizacao: new Date().toISOString().split('T')[0],
-      tipoVinculo: usrTipoVinculo,
-      equipeCentral: usrTipoVinculo === 'orgao_central' ? usrEquipeCentral : undefined
+      tipoVinculo: isRegional ? 'regional' as const : 'orgao_central' as const
     };
 
     if (usrIdEmEdicao) {
@@ -484,10 +512,10 @@ export default function App() {
     setEmpNome(''); setEmpCnpj(''); setEmpResp(''); setEmpSit('Regular'); setEmpTel(''); setEmpMail('');
   };
 
-  // Controle de acesso regional: tecnico_infra só vê dados das suas SREs
-  const regionaisDoTecnico: string[] = perfilUsuario === 'tecnico_infra'
+  // Controle de acesso regional: tecnico_infra e coordenador_regional só veem dados das suas SREs
+  const regionaisDoTecnico: string[] = (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional')
     ? (() => {
-        const u = usuariosSeguranca.find(u => u.perfil === 'tecnico_infra');
+        const u = usuariosSeguranca.find(u => u.perfil === perfilUsuario);
         if (!u) return [];
         return u.regionais?.length ? u.regionais : (u.departamento ? [u.departamento] : []);
       })()
@@ -498,6 +526,11 @@ export default function App() {
   // Nome do técnico logado (para permitir acesso a obras onde é fiscal, mesmo fora da sua SRE)
   const nomeTecnicoLogado = perfilUsuario === 'tecnico_infra'
     ? (usuariosSeguranca.find(u => u.perfil === 'tecnico_infra')?.nome || '')
+    : '';
+
+  // Nome do coordenador regional logado (usado para registrar quem aprovou/reprovou o atendimento)
+  const nomeCoordenadorLogado = perfilUsuario === 'coordenador_regional'
+    ? (usuariosSeguranca.find(u => u.perfil === 'coordenador_regional')?.nome || '')
     : '';
 
   const solicitacoesVisiveis = regionaisDoTecnico.length
@@ -1400,7 +1433,7 @@ export default function App() {
     <div className="h-screen bg-slate-50 flex flex-col font-sans overflow-hidden">
       
       {/* CABEÇALHO OFICIAL DO GESTO - PROFISSIONAL POLISH THEME */}
-      <header className="h-16 bg-[#13264d] flex items-center justify-between px-8 shrink-0 shadow-sm border-none">
+      <header className="h-16 bg-[#13264d] flex items-center justify-between px-8 shrink-0 shadow-sm border-none print:hidden">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-sm">SGO</span>
@@ -1510,7 +1543,7 @@ export default function App() {
                     )}
                   </div>
 
-                  {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') && (
+                  {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
                     <div className="px-3 pt-2 pb-0.5 border-t border-slate-100 flex justify-center">
                       <button
                         onClick={() => {
@@ -1539,10 +1572,12 @@ export default function App() {
                 <p className="text-slate-500 text-[10px] mt-0.5 uppercase tracking-wider font-semibold">
                   {perfilUsuario === 'admin' && 'Administrador do Sistema'}
                   {perfilUsuario === 'tecnico_infra' && 'Técnico de Infraestrutura (SRE)'}
+                  {perfilUsuario === 'coordenador_regional' && 'Coordenador Regional (SRE)'}
                   {perfilUsuario === 'gestor_dore' && 'Gestor Atendimento (DORE)'}
                   {perfilUsuario === 'analista_dore' && 'Analista de Engenharia (DORE)'}
                   {perfilUsuario === 'gestor_paf' && 'Subsecretário de Administração'}
                   {perfilUsuario === 'administrativo_dore' && 'Administrativo DORE'}
+                  {perfilUsuario === 'diretor_dore' && 'Diretor DORE'}
                 </p>
               </div>
             </div>
@@ -1564,7 +1599,7 @@ export default function App() {
       <div className="flex-1 flex flex-row overflow-hidden">
         
         {/* SIDEBAR DE CONTROLADORES DE MODULOS - PRIMARY (SLIM) */}
-        <aside className="w-16 sm:w-20 bg-[#13264d] flex flex-col items-center py-6 gap-6 shrink-0 z-10 select-none border-none">
+        <aside className="w-16 sm:w-20 bg-[#13264d] flex flex-col items-center py-6 gap-6 shrink-0 z-10 select-none border-none print:hidden">
           <div className="text-[10px] font-bold text-slate-200 uppercase tracking-wider scale-90 mb-1">
             Módulos
           </div>
@@ -1588,9 +1623,9 @@ export default function App() {
             <span className="text-[8px] font-bold tracking-tight">Obras</span>
           </button>
 
-          {/* 2. SEGURANÇA */}
+          {/* 2. SEGURANÇA — acesso restrito: só Diretor DORE, Administrativo DORE e Admin */}
           {(() => {
-            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
+            const bloqueado = !(perfilUsuario === 'diretor_dore' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'admin');
             return (
               <button
                 type="button"
@@ -1612,12 +1647,12 @@ export default function App() {
 
           {/* 3. ORÇAMENTO */}
           {(() => {
-            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
+            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 type="button"
                 title={bloqueado ? 'Acesso restrito para este perfil' : 'Orçamentos'}
-                onClick={bloqueado ? undefined : () => { setActiveModule('orcamento'); setActiveSubTask('blank'); setIdSolicitacaoSelecionada(null); }}
+                onClick={bloqueado ? undefined : () => { setActiveModule('orcamento'); setActiveSubTask('orca_budgets'); setIdSolicitacaoSelecionada(null); }}
                 className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 relative border ${
                   bloqueado
                     ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
@@ -1634,7 +1669,7 @@ export default function App() {
 
           {/* 4. IMÓVEIS */}
           {(() => {
-            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
+            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 type="button"
@@ -1656,7 +1691,7 @@ export default function App() {
 
           {/* 5. ABERTURA DE CHAMADOS */}
           {(() => {
-            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
+            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 type="button"
@@ -1678,7 +1713,7 @@ export default function App() {
 
           {/* 6. LOG DO SISTEMA — somente gestores */}
           {(() => {
-            const bloqueado = !(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin');
+            const bloqueado = !(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'));
             return (
               <button
                 type="button"
@@ -1702,13 +1737,10 @@ export default function App() {
             );
           })()}
 
-          <div className="mt-auto border-t border-slate-550/35 pt-4 w-10 flex flex-col items-center">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="SGO Online" />
-          </div>
         </aside>
 
         {/* SIDEBAR DE SUBDIVISÕES - SECONDARY (COLLAPSIBLE / ADAPTIVE) */}
-        <aside className="w-60 bg-white border-r border-slate-200 flex flex-col p-4 shrink-0 text-left overflow-y-auto max-h-[calc(100vh-4rem)]">
+        <aside className="w-60 bg-white border-r border-slate-200 flex flex-col p-4 shrink-0 text-left overflow-y-auto max-h-[calc(100vh-4rem)] print:hidden">
           {activeModule === 'gestao_obras' && (
             <div className="space-y-4">
               <div className="border-b border-slate-105 pb-3 mb-2">
@@ -1759,11 +1791,14 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
                       {[
                         { id: 'cadastro', label: 'Lista de atendimentos', icon: ClipboardList },
-                        { id: 'novo_atendimento', label: 'Atendimento Inicial', icon: Plus }
+                        { id: 'novo_atendimento', label: 'Atendimento Inicial', icon: Plus },
+                        { id: 'aprovacao_regional', label: 'Aprovação Regional', icon: CheckCircle }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = (perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && item.id === 'novo_atendimento';
+                        const bloqueado =
+                          ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && item.id === 'novo_atendimento') ||
+                          (item.id === 'aprovacao_regional' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'admin');
                         return (
                           <button
                             key={item.id}
@@ -1792,13 +1827,13 @@ export default function App() {
                 </div>
 
                 {/* 2. ANÁLISE TÉCNICA */}
-                <div className={`space-y-1 ${perfilUsuario === 'tecnico_infra' ? 'opacity-50' : ''}`}>
+                <div className={`space-y-1 ${(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional') ? 'opacity-50' : ''}`}>
                   <button
                     type="button"
-                    onClick={() => perfilUsuario !== 'tecnico_infra' && toggleCategory('analise')}
-                    disabled={perfilUsuario === 'tecnico_infra'}
+                    onClick={() => perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && toggleCategory('analise')}
+                    disabled={perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional'}
                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left text-[10px] font-black uppercase tracking-wider font-sans group ${
-                      perfilUsuario === 'tecnico_infra'
+                      (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional')
                         ? 'text-slate-400 cursor-not-allowed'
                         : 'hover:bg-slate-50 text-slate-500 cursor-pointer'
                     }`}
@@ -1807,7 +1842,7 @@ export default function App() {
                       <FileText className="w-3.5 h-3.5 shrink-0" />
                       Análise Técnica
                     </span>
-                    {perfilUsuario === 'tecnico_infra'
+                    {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional')
                       ? <Lock className="w-3 h-3 text-slate-400" />
                       : <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsedCategories.analise ? '-rotate-90' : ''}`} />
                     }
@@ -1821,7 +1856,7 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'tecnico_infra' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && item.id === 'analise');
+                        const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && item.id === 'analise');
                         return (
                           <button
                             key={item.id}
@@ -1850,13 +1885,13 @@ export default function App() {
                 </div>
 
                 {/* 3. PAF / CONTRATAÇÕES */}
-                <div className={`space-y-1 ${perfilUsuario === 'tecnico_infra' ? 'opacity-50' : ''}`}>
+                <div className={`space-y-1 ${(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional') ? 'opacity-50' : ''}`}>
                   <button
                     type="button"
-                    onClick={() => perfilUsuario !== 'tecnico_infra' && toggleCategory('paf')}
-                    disabled={perfilUsuario === 'tecnico_infra'}
+                    onClick={() => perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && toggleCategory('paf')}
+                    disabled={perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional'}
                     className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left text-[10px] font-black uppercase tracking-wider font-sans group ${
-                      perfilUsuario === 'tecnico_infra'
+                      (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional')
                         ? 'text-slate-400 cursor-not-allowed'
                         : 'hover:bg-slate-50 text-slate-500 cursor-pointer'
                     }`}
@@ -1865,7 +1900,7 @@ export default function App() {
                       <Coins className="w-3.5 h-3.5 shrink-0" />
                       PAF / Contratações
                     </span>
-                    {perfilUsuario === 'tecnico_infra'
+                    {(perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional')
                       ? <Lock className="w-3 h-3 text-slate-400" />
                       : <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${collapsedCategories.paf ? '-rotate-90' : ''}`} />
                     }
@@ -1880,7 +1915,7 @@ export default function App() {
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'administrativo_dore' && item.id === 'paf_autorizacao');
+                        const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore') && item.id === 'paf_autorizacao');
                         return (
                           <button
                             key={item.id}
@@ -1999,56 +2034,11 @@ export default function App() {
                   )}
                 </div>
 
-                {/* 7. RELATÓRIOS */}
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => toggleCategory('relatorios')}
-                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-50 rounded-md text-left text-[10px] font-black text-slate-500 uppercase tracking-wider font-sans cursor-pointer group"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      Relatórios
-                    </span>
-                    <ChevronDown className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-transform ${collapsedCategories.relatorios ? '-rotate-90' : ''}`} />
-                  </button>
-
-                  {!collapsedCategories.relatorios && (
-                    <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
-                      {[
-                        { id: 'relat_gerencial', label: 'Relatórios gerenciais' },
-                        { id: 'relat_financeiro', label: 'Relatórios financeiros' },
-                        { id: 'relat_regional', label: 'Relatórios por regional' },
-                        { id: 'relat_escola', label: 'Relatórios por escola' },
-                        { id: 'relat_medicoes', label: 'Relatórios de medições' }
-                      ].map(item => {
-                        const isActive = activeSubTask === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => {
-                              setActiveSubTask(item.id);
-                              setIdSolicitacaoSelecionada(null);
-                            }}
-                            className={`w-full flex items-center px-2 py-1 text-left transition-all duration-150 cursor-pointer text-xs rounded-md ${
-                              isActive
-                                ? 'bg-blue-50 text-blue-855 font-bold border-l-2 border-blue-500 pl-1.5'
-                                : 'hover:bg-slate-50/70 text-slate-600 pl-1.5'
-                            }`}
-                          >
-                            <span className="font-sans">{item.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
               </div>
             </div>
           )}
 
-          {activeModule === 'seguranca' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+          {activeModule === 'seguranca' && (perfilUsuario === 'diretor_dore' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'admin') && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-rose-600 uppercase tracking-widest block font-sans">
@@ -2094,7 +2084,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+          {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-amber-600 uppercase tracking-widest block font-sans">Módulo Ativo</span>
@@ -2182,7 +2172,8 @@ export default function App() {
                   {!collapsedCategories.orca_analises && (
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-1 mt-1">
                       {[
-                        { id: 'orca_reports', label: 'Relatórios', func: 'curva ABC e Pareto', icon: BarChart2 },
+                        { id: 'orca_reports_abc', label: 'Curva ABC', func: 'curva ABC e Pareto', icon: BarChart2 },
+                        { id: 'orca_reports_composicoes', label: 'Banco de Composições', func: 'validação e auditoria', icon: Layers },
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
@@ -2205,7 +2196,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+          {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-teal-600 uppercase tracking-widest block font-sans">
@@ -2254,7 +2245,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+          {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-purple-600 uppercase tracking-widest block font-sans">
@@ -2600,7 +2591,7 @@ export default function App() {
 
                                   {/* Botões de Ação */}
                                   <td className="py-4 px-4 text-center">
-                                    {(perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') ? (
+                                    {(perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) ? (
                                       <div className="flex items-center justify-center gap-1.5">
                                         <button
                                           onClick={() => setConfirmingSolId(sol.id)}
@@ -3437,6 +3428,13 @@ export default function App() {
                       atendimentoEmEdicaoDirect={atendimentoEmEdicaoDirect}
                       onLimparEdicaoDirect={() => setAtendimentoEmEdicaoDirect(null)}
                     />
+                  ) : activeSubTask === 'aprovacao_regional' ? (
+                    <AprovacaoRegionalPanel
+                      solicitacoes={solicitacoesVisiveis}
+                      onUpdateSolicitacao={handleUpdateSolicitacao}
+                      regionaisDoCoordenador={regionaisDoTecnico}
+                      nomeCoordenador={nomeCoordenadorLogado}
+                    />
                   ) : activeSubTask === 'analise_atribuicao' ? (() => {
                     const filaAtivaCount = solicitacoesVisiveis.filter(s => s.etapaAtual === 'analise' || s.etapaAtual === 'correcao').length;
                     const historicoAtribuicaoCount = solicitacoesVisiveis.filter(s =>
@@ -3595,11 +3593,6 @@ export default function App() {
                       usuariosSeguranca={usuariosSeguranca}
                       setActiveSubTask={setActiveSubTask}
                     />
-                  ) : activeSubTask.startsWith('relat_') ? (
-                    <RelatoriosPanel
-                      activeReportType={activeSubTask}
-                      solicitacoes={solicitacoesVisiveis}
-                    />
                   ) : activeSubTask === 'visao_geral' ? (
                     <VisaoGeralDashboard
                       solicitacoes={solicitacoesVisiveis}
@@ -3683,7 +3676,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'seguranca' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+              {activeModule === 'seguranca' && (perfilUsuario === 'diretor_dore' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'admin') && (
                 <div className="w-full flex-1 flex flex-col space-y-6 text-left">
                   
                   {/* SUBTASK CADASTRO DE USUÁRIO */}
@@ -3815,10 +3808,12 @@ export default function App() {
                                       usr.situacaoFuncional === 'Desligado' ? 'bg-rose-100 text-rose-700' :
                                       'bg-slate-100 text-slate-600';
                                     const perfilColor = u.perfil === 'tecnico_infra' ? 'bg-amber-100 text-amber-800' :
+                                      u.perfil === 'coordenador_regional' ? 'bg-orange-100 text-orange-800' :
                                       u.perfil === 'gestor_dore' ? 'bg-indigo-100 text-indigo-800' :
                                       u.perfil === 'analista_dore' ? 'bg-blue-100 text-blue-800' :
                                       u.perfil === 'gestor_paf' ? 'bg-cyan-100 text-cyan-800' :
                                       u.perfil === 'administrativo_dore' ? 'bg-purple-100 text-purple-800' :
+                                      u.perfil === 'diretor_dore' ? 'bg-rose-100 text-rose-800' :
                                       'bg-slate-100 text-slate-700';
                                     const creaSituacaoColor = usr.creaSituacao === 'Ativo' ? 'text-emerald-600' : usr.creaSituacao === 'Inativo' ? 'text-rose-600' : 'text-slate-400';
 
@@ -3858,10 +3853,12 @@ export default function App() {
                                         <td className="py-2.5 px-3 whitespace-nowrap">
                                           <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold ${perfilColor}`}>
                                             {u.perfil === 'tecnico_infra' ? 'TÉC. INFRA' :
+                                             u.perfil === 'coordenador_regional' ? 'COORD. REGIONAL' :
                                              u.perfil === 'gestor_dore' ? 'GESTOR DORE' :
                                              u.perfil === 'analista_dore' ? 'ANALISTA' :
                                              u.perfil === 'gestor_paf' ? 'SUBSEC. ADM' :
                                              u.perfil === 'administrativo_dore' ? 'ADMIN DORE' :
+                                             u.perfil === 'diretor_dore' ? 'DIRETOR DORE' :
                                              u.perfil.toUpperCase()}
                                           </span>
                                         </td>
@@ -4100,7 +4097,7 @@ export default function App() {
                 </div>
               )}
 
-              {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+              {activeModule === 'orcamento' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
                 <OrcamentoModule
                   activeSubTask={activeSubTask}
                   setActiveSubTask={setActiveSubTask}
@@ -4109,18 +4106,18 @@ export default function App() {
                 />
               )}
 
-              {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+              {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
                 <div className="w-full p-6">
                   <PatrimonioModule
                     activeSubTask={activeSubTask}
                     perfilUsuario={perfilUsuario}
-                    somenteLeitura={perfilUsuario === 'administrativo_dore'}
+                    somenteLeitura={false}
                     regionaisDoTecnico={regionaisDoTecnico}
                   />
                 </div>
               )}
 
-              {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+              {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
                 <div className="flex-1 flex flex-col items-center justify-center py-12 text-center select-none animate-in fade-in duration-200">
                   <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center border border-purple-100 mb-4 animate-bounce">
                     <Wrench className="w-8 h-8 text-purple-600" />
@@ -4177,7 +4174,7 @@ export default function App() {
               )}
 
               {activeModule === 'central_logs' && (
-                (perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin') ? (
+                (perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) ? (
                   <CentralNotificacoesLogs
                     logs={logs}
                     perfilUsuario={perfilUsuario}
@@ -4448,21 +4445,35 @@ export default function App() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Nº Registro CREA/CAU</label>
-                    <input type="text" value={usrCreaNum} onChange={(e) => setUsrCreaNum(e.target.value)} placeholder="Ex: CREA 142.532/D" className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden" />
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Nº Registro CREA/CAU {FORMACOES_EXIGEM_REGISTRO.includes(usrFormacao) && '*'}
+                    </label>
+                    <input
+                      type="text"
+                      required={FORMACOES_EXIGEM_REGISTRO.includes(usrFormacao)}
+                      value={usrCreaNum}
+                      onChange={(e) => setUsrCreaNum(e.target.value)}
+                      placeholder="Ex: CREA 142.532/D"
+                      className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden"
+                    />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Situação do Registro</label>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Situação do Registro {FORMACOES_EXIGEM_REGISTRO.includes(usrFormacao) && '*'}
+                    </label>
                     <select value={usrCreaSituacao} onChange={(e) => setUsrCreaSituacao(e.target.value as 'Ativo' | 'Inativo')} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
                       <option>Ativo</option>
                       <option>Inativo</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Data de Ingresso</label>
-                    <input type="date" value={usrDataIngresso} onChange={(e) => setUsrDataIngresso(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden font-mono" />
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Data de Ingresso *</label>
+                    <input type="date" required value={usrDataIngresso} onChange={(e) => setUsrDataIngresso(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden font-mono" />
                   </div>
                 </div>
+                {FORMACOES_EXIGEM_REGISTRO.includes(usrFormacao) && (
+                  <p className="text-[9px] text-rose-500 -mt-1">Registro profissional obrigatório para esta formação.</p>
+                )}
 
                 <div className="max-w-xs">
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Situação do Colaborador *</label>
@@ -4480,16 +4491,21 @@ export default function App() {
               <div className="space-y-3">
                 <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-1.5">Perfil de Atribuição (Role) *</h4>
 
-                <div className="flex gap-4">
-                  {(['regional', 'orgao_central'] as const).map(tipo => (
-                    <label key={tipo} className={`flex-1 flex items-center gap-2.5 p-3 border rounded-xl cursor-pointer transition-all text-xs font-semibold ${usrTipoVinculo === tipo ? 'bg-rose-50 border-rose-400 text-rose-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
-                      <input type="radio" name="tipoVinculo" value={tipo} checked={usrTipoVinculo === tipo} onChange={() => setUsrTipoVinculo(tipo)} className="accent-rose-600" />
-                      {tipo === 'regional' ? '🏫 Regional (SRE)' : '🏛️ Órgão Central'}
-                    </label>
-                  ))}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Perfil do Usuário *</label>
+                  <select
+                    required
+                    value={usrPerfil}
+                    onChange={(e) => setUsrPerfil(e.target.value as PerfilUsuario)}
+                    className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer"
+                  >
+                    {PERFIS_SELECIONAVEIS.map(p => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
                 </div>
 
-                {usrTipoVinculo === 'regional' && (
+                {PERFIS_SELECIONAVEIS.find(p => p.value === usrPerfil)?.regional && (
                   <div className="animate-in slide-in-from-top-1 duration-200 space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
@@ -4513,17 +4529,6 @@ export default function App() {
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {usrTipoVinculo === 'orgao_central' && (
-                  <div className="animate-in slide-in-from-top-1 duration-200">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Equipe / Setor *</label>
-                    <select value={usrEquipeCentral} onChange={(e) => setUsrEquipeCentral(e.target.value)} className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer">
-                      <option value="Planejamento">Equipe de Planejamento</option>
-                      <option value="Ajuste">Equipe de Ajuste</option>
-                      <option value="Administrativo">Equipe Administrativa</option>
-                    </select>
                   </div>
                 )}
               </div>

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-interface Supply {
+export interface Supply {
   id: string;
   code: string;
   description: string;
@@ -28,14 +28,20 @@ interface Supply {
   category: string;
 }
 
-const MOCK_SUPPLIES: Supply[] = [
+export const MOCK_SUPPLIES: Supply[] = [
   { id: '1', code: '11145', description: 'Concreto usinado fck=25MPa', unit: 'm3', value: 336.30, database: 'SINAPI', category: 'Material' },
   { id: '2', code: '88309', description: 'Pedreiro com encargos complementares', unit: 'h', value: 25.30, database: 'SINAPI', category: 'Mão de Obra' },
   { id: '3', code: '88316', description: 'Servente com encargos complementares', unit: 'h', value: 18.90, database: 'SINAPI', category: 'Mão de Obra' },
   { id: '4', code: '616', description: 'Madeira compensada plastificada 10mm', unit: 'm2', value: 35.00, database: 'SINAPI', category: 'Material' },
 ];
 
-export default function SuppliesManager() {
+interface Props {
+  perfilUsuario?: string;
+}
+
+export default function SuppliesManager({ perfilUsuario }: Props) {
+  // Importar base de dados é restrito a Diretor DORE e Admin.
+  const podeGerenciar = perfilUsuario === 'diretor_dore' || perfilUsuario === 'admin';
   const [searchTerm, setSearchTerm] = useState('');
   const [supplies] = useState<Supply[]>(MOCK_SUPPLIES);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -106,8 +112,10 @@ export default function SuppliesManager() {
         </div>
         <div className="flex gap-3">
           <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="px-5 py-2.5 bg-white border border-gray-200 text-slate-900 text-xs font-bold uppercase tracking-widest hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2"
+            onClick={() => { if (podeGerenciar) setIsImportModalOpen(true); }}
+            disabled={!podeGerenciar}
+            title={podeGerenciar ? undefined : 'Somente Diretor DORE e Administrador podem importar bases'}
+            className="px-5 py-2.5 bg-white border border-gray-200 text-slate-900 text-xs font-bold uppercase tracking-widest hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white"
           >
             <Import className="h-4 w-4 text-red-600" /> Importar Base
           </button>

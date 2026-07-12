@@ -30,10 +30,15 @@ export default function OrcamentoModule({ activeSubTask, setActiveSubTask, sreDo
     localStorage.setItem(STORAGE_KEY, JSON.stringify(budgets));
   }, [budgets]);
 
+  // Sub-abas com sua própria tela (qualquer outro activeSubTask, incluindo valores não mapeados
+  // como o 'blank' inicial ao entrar no módulo, cai na aba de orçamentos — mesmo fallback do switch abaixo).
+  const OUTRAS_ABAS = ['orca_compositions', 'orca_supplies', 'orca_reports_abc', 'orca_reports_composicoes'];
+  const isAbaOrcamentos = !OUTRAS_ABAS.includes(activeSubTask);
+
   // When navigating away from budgets tab, clear selection
   useEffect(() => {
-    if (activeSubTask !== 'orca_budgets') setSelectedBudgetId(null);
-  }, [activeSubTask]);
+    if (!isAbaOrcamentos) setSelectedBudgetId(null);
+  }, [isAbaOrcamentos]);
 
   const handleCreate = (budget: Budget) => setBudgets(prev => [budget, ...prev]);
   const handleUpdate = (id: string, data: Partial<Budget>) => setBudgets(prev => prev.map(b => b.id === id ? { ...b, ...data } : b));
@@ -43,7 +48,7 @@ export default function OrcamentoModule({ activeSubTask, setActiveSubTask, sreDo
   const selectedBudget = budgets.find(b => b.id === selectedBudgetId) || null;
 
   // BudgetDetail takes over when a budget is selected in the budgets tab
-  if (activeSubTask === 'orca_budgets' && selectedBudget) {
+  if (isAbaOrcamentos && selectedBudget) {
     return (
       <BudgetDetail
         budget={selectedBudget}
@@ -57,11 +62,13 @@ export default function OrcamentoModule({ activeSubTask, setActiveSubTask, sreDo
     case 'orca_budgets':
       return <BudgetList budgets={budgets} onSelect={setSelectedBudgetId} onCreate={handleCreate} onUpdate={handleUpdate} onDelete={handleDelete} sreDoTecnico={sreDoTecnico} perfilUsuario={perfilUsuario} />;
     case 'orca_compositions':
-      return <CompositionsManager budgets={budgets} />;
+      return <CompositionsManager budgets={budgets} perfilUsuario={perfilUsuario} />;
     case 'orca_supplies':
-      return <SuppliesManager />;
-    case 'orca_reports':
-      return <Reports budgets={budgets} />;
+      return <SuppliesManager perfilUsuario={perfilUsuario} />;
+    case 'orca_reports_abc':
+      return <Reports budgets={budgets} reportType="abc" />;
+    case 'orca_reports_composicoes':
+      return <Reports budgets={budgets} reportType="composicoes" />;
     default:
       return <BudgetList budgets={budgets} onSelect={setSelectedBudgetId} onCreate={handleCreate} onUpdate={handleUpdate} onDelete={handleDelete} sreDoTecnico={sreDoTecnico} perfilUsuario={perfilUsuario} />;
   }

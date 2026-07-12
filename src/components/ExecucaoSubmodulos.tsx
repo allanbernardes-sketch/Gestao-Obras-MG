@@ -421,6 +421,7 @@ export default function ExecucaoSubmodulos({
           setActiveSubTask={setActiveSubTask}
           usuariosSeguranca={usuariosSeguranca}
           somenteLeitura={somenteLeitura}
+          perfilUsuario={perfilUsuario}
         />
       )}
 
@@ -488,6 +489,7 @@ export default function ExecucaoSubmodulos({
           solicitacoes={solicitacoes}
           usuariosSeguranca={usuariosSeguranca}
           somenteLeitura={somenteLeitura}
+          perfilUsuario={perfilUsuario}
         />
       )}
 
@@ -552,7 +554,7 @@ export function getFiscalPoints(fiscalName: string, allSolicitacoes: Solicitacao
 }
 
 // --- 1. SUB CADASTRO DE OBRAS ---
-function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, onSelect, setFocoObra, setActiveSubTask, usuariosSeguranca = [], somenteLeitura = false }: {
+function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, onSelect, setFocoObra, setActiveSubTask, usuariosSeguranca = [], somenteLeitura = false, perfilUsuario }: {
   solicitacoes: Solicitacao[];
   todasSolicitacoes: Solicitacao[];
   currentSol: Solicitacao | null;
@@ -562,7 +564,11 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
   setActiveSubTask?: (subTask: string) => void;
   usuariosSeguranca?: UsuarioSistema[];
   somenteLeitura?: boolean;
+  perfilUsuario?: PerfilUsuario;
 }) {
+  // Só o coordenador regional (ou gestor_paf/admin) pode atribuir/reatribuir o fiscal de obra — o técnico não pode mais se autoatribuir.
+  const podeAtribuirFiscal = perfilUsuario === 'coordenador_regional' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore');
+
   const [showNovoForm, setShowNovoForm] = useState(false);
   
   // Estados para Filtros de Pesquisa Avançados
@@ -894,7 +900,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                 <select
                   value={novoFiscalSelecionado}
                   onChange={(e) => setNovoFiscalSelecionado(e.target.value)}
-                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer"
+                  disabled={!podeAtribuirFiscal}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
                   {usuariosSeguranca
                     .filter(u => u.perfil === 'tecnico_infra')
@@ -918,11 +925,12 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                 <button
                   type="button"
                   onClick={() => {
-                    if (!targetSol || !novoFiscalSelecionado) return;
+                    if (!podeAtribuirFiscal || !targetSol || !novoFiscalSelecionado) return;
                     onUpdate({ ...targetSol, fiscalObraAtribuido: novoFiscalSelecionado });
                     setReatribuirFiscalSolId(null);
                   }}
-                  className="px-5 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer transition shadow-xs flex items-center gap-1.5"
+                  disabled={!podeAtribuirFiscal}
+                  className="px-5 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl cursor-pointer transition shadow-xs flex items-center gap-1.5 disabled:bg-slate-300 disabled:cursor-not-allowed"
                 >
                   <CheckCircle className="w-3.5 h-3.5" /> Confirmar Reatribuição
                 </button>
@@ -1216,7 +1224,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                     id="select-fiscal-obra"
                     value={fiscalObraAtribuido}
                     onChange={(e) => setFiscalObraAtribuido(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden"
+                    disabled={!podeAtribuirFiscal}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                   >
                     <option value="">Selecione o fiscal...</option>
                     {usuariosSeguranca
@@ -1562,16 +1571,18 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                             >
                               Focalizar
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setReatribuirFiscalSolId(sol.id);
-                                setNovoFiscalSelecionado(sol.fiscalObraAtribuido || 'Eng. Roberto Mendes');
-                              }}
-                              className="px-2 py-1 text-[9.5px] font-extrabold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg cursor-pointer transition"
-                            >
-                              Reatribuir Fiscal
-                            </button>
+                            {podeAtribuirFiscal && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReatribuirFiscalSolId(sol.id);
+                                  setNovoFiscalSelecionado(sol.fiscalObraAtribuido || 'Eng. Roberto Mendes');
+                                }}
+                                className="px-2 py-1 text-[9.5px] font-extrabold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg cursor-pointer transition"
+                              >
+                                Reatribuir Fiscal
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
@@ -1794,6 +1805,10 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
   const _valorExecAtual = _medEmpresaAtual.reduce((s, m) => s + m.valor, 0);
   const _valorExecAnteriores = (currentSol.empresasAnteriores || []).reduce((s, e) => s + (e.valorExecutado ?? 0), 0);
   const sumMedicoes = _valorExecAnteriores + _valorExecAtual;
+  // Valor efetivamente repassado à empresa nos pagamentos liberados pela Secretaria (Administrativo DORE),
+  // registrados na Autorização do PAF — distinto de sumMedicoes, que é o avanço físico homologado (nem
+  // sempre já pago).
+  const sumPagamentosLiberados = (currentSol.parcelasPAF || []).reduce((s, p) => s + (p.valor || 0), 0);
   // Orçamento fixo da obra (PAF) — não soma contratos, pois cada nova empresa contrata pelo saldo restante
   const originalBudget = currentSol.valorPlanilha || currentSol.valorHomologado
     || (currentSol.empresasAnteriores?.[0]?.contratoValorInicial ?? 0)
@@ -2300,22 +2315,16 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
               </h3>
 
               <div className="space-y-3.5 text-xs">
-                <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200/50">
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/50">
                   <div className="space-y-0.5">
                     <span className="text-[9px] font-bold text-slate-400 uppercase">Planilha Base de Referência</span>
                     <strong className="text-slate-800 font-mono block">
                       R$ {(currentSol.valorPlanilha || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </strong>
                   </div>
-                  <div className="text-right space-y-0.5">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase">Homologado PAF</span>
-                    <strong className="text-indigo-600 font-mono block">
-                      R$ {(currentSol.valorHomologado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </strong>
-                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="bg-blue-50/50 p-2.5 rounded-xl border border-blue-200/40 text-left">
                     <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Valor Contratado Inicial</span>
                     <strong className="text-blue-800 font-mono text-[13px]">
@@ -2328,6 +2337,16 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                     <strong className="text-emerald-700 font-mono text-[13px]">
                       R$ {sumMedicoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </strong>
+                  </div>
+
+                  <div className="bg-purple-50/40 p-2.5 rounded-xl border border-purple-200/40 text-left">
+                    <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Repassado pela Secretaria</span>
+                    <strong className="text-purple-700 font-mono text-[13px]">
+                      R$ {sumPagamentosLiberados.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </strong>
+                    <span className="text-[8px] text-slate-400 block mt-0.5">
+                      {(currentSol.parcelasPAF || []).length} pagamento{(currentSol.parcelasPAF || []).length !== 1 ? 's' : ''} liberado{(currentSol.parcelasPAF || []).length !== 1 ? 's' : ''}
+                    </span>
                   </div>
                 </div>
 
@@ -7001,14 +7020,18 @@ function SubFiscalizacao({
   onUpdate,
   solicitacoes = [],
   usuariosSeguranca = [],
-  somenteLeitura = false
+  somenteLeitura = false,
+  perfilUsuario
 }: {
   currentSol: Solicitacao | null;
   onUpdate: (sol: Solicitacao) => void;
   solicitacoes?: Solicitacao[];
   usuariosSeguranca?: UsuarioSistema[];
   somenteLeitura?: boolean;
+  perfilUsuario?: PerfilUsuario;
 }) {
+  // Só o coordenador regional (ou gestor_paf/admin) pode atribuir/reatribuir o fiscal de obra — o técnico não pode mais se autoatribuir.
+  const podeAtribuirFiscal = perfilUsuario === 'coordenador_regional' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore');
   const [fiscalInput, setFiscalInput] = useState(() => currentSol?.fiscalObraAtribuido || '');
   const [diarioTexto, setDiarioTexto] = useState('');
   const [historicoDiarios, setHistoricoDiarios] = useState<string[]>([
@@ -7069,7 +7092,8 @@ function SubFiscalizacao({
               id="fiscal-obra-input"
               value={fiscalInput}
               onChange={(e) => setFiscalInput(e.target.value)}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer"
+              disabled={!podeAtribuirFiscal}
+              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
             >
               <option value="">-- Atribuir Fiscal de Engenharia --</option>
               {usuariosSeguranca

@@ -69,7 +69,7 @@ export interface Aditivo {
 export interface AjustePlanilha {
   id: string;
   numero: number;
-  tipoAjuste: 'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto';
+  tipoAjuste: 'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto' | 'ajuste_sem_meta_com_projeto';
   valorAjuste: number;
   responsavelPlanilha: string;
   registroProfissional: string; // CREA/CAU/CFT
@@ -114,7 +114,16 @@ export interface Solicitacao {
   dataCriacao: string;
   etapaAtual: EtapaProcesso;
   historicoEtapas: { etapa: EtapaProcesso; data: string; responsavel: string }[];
-  
+
+  // Aprovação do Coordenador Regional — gate leve sobre o estágio 'cadastro', não altera EtapaProcesso.
+  // undefined = rascunho (ainda não enviado); 'pendente' = enviado, aguardando o coordenador da SRE;
+  // 'reprovado' = coordenador devolveu para o técnico corrigir (ver justificativaReprovacaoRegional);
+  // 'aprovado' = liberado para análise (marca histórica; a partir daí etapaAtual já é 'analise').
+  statusAprovacaoRegional?: 'pendente' | 'aprovado' | 'reprovado';
+  coordenadorAprovador?: string;
+  dataAprovacaoRegional?: string;
+  justificativaReprovacaoRegional?: string;
+
   // Checklist de documentos
   documentos: DocumentoChecklist[];
 
@@ -366,7 +375,7 @@ export interface SaldoComplementarItem {
   documentos: { item: string; obrigatorio: boolean; checked: boolean; fileName?: string }[];
 }
 
-export type PerfilUsuario = 'tecnico_infra' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'admin';
+export type PerfilUsuario = 'tecnico_infra' | 'coordenador_regional' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'diretor_dore' | 'admin';
 
 export interface UsuarioSistema {
   id: string;

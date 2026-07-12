@@ -5,14 +5,14 @@ export const CHECKLIST_PADRAO: DocumentoChecklist[] = [
     id: 'doc_1',
     nome: 'Planilha Orçamentária',
     obrigatorio: true,
-    desc: 'Anexar nos formatos .pdf e .xlsx.',
+    desc: 'Anexar apenas no formato .xlsx.',
     status: 'pendente'
   },
   {
     id: 'doc_2',
     nome: 'Registro do imóvel',
     obrigatorio: true,
-    desc: 'Título de propriedade ou certidão de registro correspondente.',
+    desc: 'Título de propriedade ou certidão de registro correspondente. Anexar apenas no formato .pdf.',
     status: 'pendente'
   },
   {
@@ -33,28 +33,28 @@ export const CHECKLIST_PADRAO: DocumentoChecklist[] = [
     id: 'doc_4',
     nome: 'Parecer técnico',
     obrigatorio: true,
-    desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada.',
+    desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada. Anexar apenas no formato .pdf.',
     status: 'pendente'
   },
   {
     id: 'doc_ata',
     nome: 'Ata do Colegiado',
     obrigatorio: true,
-    desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.',
+    desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção. Anexar apenas no formato .pdf.',
     status: 'pendente'
   },
   {
     id: 'doc_foto',
     nome: 'Relatório fotográfico',
     obrigatorio: true,
-    desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.',
+    desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas. Anexar apenas no formato .pdf.',
     status: 'pendente'
   },
   {
     id: 'doc_5',
     nome: 'Imposto ISS',
     obrigatorio: false,
-    desc: 'Guia ou comprovante de recolhimento tributário aplicável.',
+    desc: 'Guia ou comprovante de recolhimento tributário aplicável. Anexar apenas no formato .pdf.',
     status: 'pendente'
   }
 ];
