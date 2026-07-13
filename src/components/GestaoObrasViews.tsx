@@ -14,8 +14,7 @@ import {
   Building, 
   Download, 
   Search, 
-  AlertCircle, 
-  Percent, 
+  AlertCircle,
   MapPin,
   X,
   Database,
@@ -34,6 +33,30 @@ import { calcularPrioridade, calcularEstrelas, getInfoEtiqueta, compararPorPrior
 import { calcularIEE, CLASSE_IEE_INFO, getPontosIEEDisponiveis } from '../utils/iee';
 import { getStatusSecao, getStatusSecoes, tecnicoCorrigiuSecao } from '../utils/validacaoTecnica';
 import { useEscolas, type EnderecoEscola } from '../hooks/useEscolas';
+
+// Extensões aceitas para anexos do checklist (documentos técnicos, plantas e comprovantes escaneados)
+const EXTENSOES_ANEXO_ACEITAS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.dwg', '.dxf', '.jpg', '.jpeg', '.png'];
+
+// Exigência específica de formato por item do checklist padrão (documentos não listados aqui aceitam a lista geral acima)
+const EXTENSOES_POR_DOCUMENTO: Record<string, string[]> = {
+  doc_1: ['.xlsx'],          // Planilha Orçamentária
+  doc_2: ['.pdf'],           // Registro do imóvel
+  doc_3_pdf: ['.pdf'],       // Projeto de Engenharia (PDF)
+  doc_3_dwg: ['.dwg'],       // Projeto de Engenharia (DWG)
+  doc_4: ['.pdf'],           // Parecer técnico
+  doc_ata: ['.pdf'],         // Ata do Colegiado
+  doc_foto: ['.pdf'],        // Relatório fotográfico
+  doc_5: ['.pdf'],           // Imposto ISS
+};
+
+function extensoesAceitasParaDoc(docId: string): string[] {
+  return EXTENSOES_POR_DOCUMENTO[docId] || EXTENSOES_ANEXO_ACEITAS;
+}
+
+function extensaoAceita(fileName: string, extensoesPermitidas: string[] = EXTENSOES_ANEXO_ACEITAS): boolean {
+  const nomeNormalizado = fileName.toLowerCase();
+  return extensoesPermitidas.some(ext => nomeNormalizado.endsWith(ext));
+}
 
 // Códigos de endereço únicos por edificação (CODESC pode se repetir para principal + anexos)
 export const enderecosDados = [
@@ -100,12 +123,17 @@ export function NovoAtendimentoPanel({
   atendimentoEmEdicaoDirect,
   onLimparEdicaoDirect
 }: NovoAtendimentoPanelProps) {
-  const { escolas, buscarEnderecos, carregando: carregandoEscolas } = useEscolas();
+  const { escolas, enderecos, buscarEnderecos, carregando: carregandoEscolas } = useEscolas();
 
   // Filtra o banco de escolas pela SRE do técnico (se aplicável)
   const baseDadosFiltrados = sreDoTecnico
     ? escolas.filter(item => item.sre.toLowerCase() === sreDoTecnico.toLowerCase())
     : escolas;
+
+  // Endereços restritos às escolas visíveis para o técnico (mesma regra de SRE acima)
+  const enderecosFiltrados = sreDoTecnico
+    ? enderecos.filter(e => baseDadosFiltrados.some(item => item.codesc === e.codesc))
+    : enderecos;
 
   // Pré-preenche a SRE ao montar o componente para tecnico_infra
   useEffect(() => {
@@ -121,7 +149,6 @@ export function NovoAtendimentoPanel({
   const [municipio, setMunicipio] = useState('');
   const [sre, setSre] = useState('');
   const [codigoEndereco, setCodigoEndereco] = useState('');
-  const [enderecosCreate, setEnderecosCreate] = useState<EnderecoEscola[]>([]);
   const [enderecosEdit, setEnderecosEdit] = useState<EnderecoEscola[]>([]);
   const [formaOcupacao, setFormaOcupacao] = useState('PRÓPRIO');
   const [outraFormaOcupacao, setOutraFormaOcupacao] = useState('');
@@ -153,7 +180,6 @@ export function NovoAtendimentoPanel({
   const [numeroPafAnteriorCancelado, setNumeroPafAnteriorCancelado] = useState('');
   const [valorSaldoPafAnterior, setValorSaldoPafAnterior] = useState('');
   // Validação visual de campos obrigatórios
-  const [codescTouched, setCodescTouched] = useState(false);
   const [tentouFinalizar, setTentouFinalizar] = useState(false);
   // Modal de confirmação de envio à DORE
   const [mostrarModalEnviado, setMostrarModalEnviado] = useState(false);
@@ -194,19 +220,6 @@ export function NovoAtendimentoPanel({
     }
   }, [atendimentoEmEdicaoDirect]);
 
-  // Busca endereços do CODESC informado no formulário de criação
-  React.useEffect(() => {
-    let ativo = true;
-    if (!codesc.trim()) {
-      setEnderecosCreate([]);
-      return;
-    }
-    buscarEnderecos(codesc.trim()).then(res => {
-      if (ativo) setEnderecosCreate(res);
-    });
-    return () => { ativo = false; };
-  }, [codesc, buscarEnderecos]);
-
   // Busca endereços do CODESC do atendimento em edição/correção
   React.useEffect(() => {
     let ativo = true;
@@ -233,7 +246,7 @@ export function NovoAtendimentoPanel({
     if (selectedAtendimentoForEdit) {
       const syncedDocs = syncChecklistDocs(
         selectedAtendimentoForEdit.documentos || [],
-        selectedAtendimentoForEdit.notificacao,
+        selectedAtendimentoForEdit.origemDemanda,
         selectedAtendimentoForEdit.formaAtendimento
       );
       const lengthChanged = syncedDocs.length !== (selectedAtendimentoForEdit.documentos || []).length;
@@ -245,7 +258,7 @@ export function NovoAtendimentoPanel({
         });
       }
     }
-  }, [selectedAtendimentoForEdit?.notificacao, selectedAtendimentoForEdit?.formaAtendimento]);
+  }, [selectedAtendimentoForEdit?.origemDemanda, selectedAtendimentoForEdit?.formaAtendimento]);
   
   // Format BRL string helpers
   const formatBRL = (value: string): string => {
@@ -279,50 +292,95 @@ export function NovoAtendimentoPanel({
     ? Math.max(0, (parseBRLToFloat(valorPlanilha) ?? 0) - (parseBRLToFloat(valorSaldoPafAnterior) ?? 0))
     : 0;
 
-  const handleCodescChange = (val: string) => {
+  // Preenche município/SRE a partir de uma escola já resolvida (mantém a regra de SRE fixa para o técnico de infra)
+  const aplicarEscola = (match: typeof escolas[0] | undefined) => {
+    setMunicipio(match?.municipio || '');
+    if (perfilUsuario !== 'tecnico_infra') setSre(match?.sre || '');
+  };
+
+  // Busca por CODESC: preenche escola, município e SRE
+  // Busca dentro de escolasNoFiltro (já restrita à SRE/Município escolhidos) para não
+  // pegar por engano outra escola de mesmo CODESC/nome fora do filtro atual.
+  const selecionarPorCodesc = (val: string) => {
     setCodesc(val);
     setCodigoEndereco('');
-    const match = baseDadosFiltrados.find(item => item.codesc === val.trim());
-    if (match) {
-      setNomeEscola(match.nome);
-      setMunicipio(match.municipio);
-      if (perfilUsuario !== 'tecnico_infra') setSre(match.sre);
-    } else {
-      setNomeEscola('');
-      setMunicipio('');
-      if (perfilUsuario !== 'tecnico_infra') setSre('');
+    const match = escolasNoFiltro.find(item => item.codesc === val) || baseDadosFiltrados.find(item => item.codesc === val);
+    setNomeEscola(match?.nome || '');
+    aplicarEscola(match);
+  };
+
+  // Busca por Nome da Escola: preenche CODESC, município e SRE
+  // Nomes de escola podem se repetir entre municípios diferentes — priorizar o match
+  // dentro do filtro de SRE/Município já escolhido evita pegar a escola errada.
+  const selecionarPorNomeEscola = (val: string) => {
+    setNomeEscola(val);
+    setCodigoEndereco('');
+    const match = escolasNoFiltro.find(item => item.nome === val) || baseDadosFiltrados.find(item => item.nome === val);
+    setCodesc(match?.codesc || '');
+    aplicarEscola(match);
+  };
+
+  // Busca por Código do Endereço: resolve a escola dona do prédio e preenche CODESC, nome, município e SRE
+  const selecionarPorCodigoEndereco = (val: string) => {
+    setCodigoEndereco(val);
+    const enderecoMatch = enderecosFiltrados.find(e => e.codigoEndereco === val);
+    const escolaMatch = enderecoMatch ? baseDadosFiltrados.find(item => item.codesc === enderecoMatch.codesc) : undefined;
+    setCodesc(enderecoMatch?.codesc || '');
+    setNomeEscola(escolaMatch?.nome || '');
+    aplicarEscola(escolaMatch);
+  };
+
+  // Busca por Superintendência (SRE): filtro de topo da hierarquia — limpa os níveis abaixo (município, escola, endereço)
+  const selecionarPorSre = (val: string) => {
+    setSre(val);
+    setMunicipio('');
+    setCodesc('');
+    setNomeEscola('');
+    setCodigoEndereco('');
+  };
+
+  // Busca por Município: filtra escola/endereço abaixo e resolve a SRE dona do município acima (município pertence a uma única SRE)
+  const selecionarPorMunicipio = (val: string) => {
+    setMunicipio(val);
+    setCodesc('');
+    setNomeEscola('');
+    setCodigoEndereco('');
+    if (perfilUsuario !== 'tecnico_infra') {
+      const match = baseDadosFiltrados.find(item => item.municipio === val);
+      setSre(match?.sre || '');
     }
   };
 
-  const codescNaoEncontrado = codescTouched && codesc.trim() !== '' && !baseDadosFiltrados.some(item => item.codesc === codesc.trim());
+  // Opções de SRE e Município disponíveis, respeitando o nível já escolhido acima na hierarquia (SRE > Município > Escola > Endereço)
+  const sresDisponiveis = [...new Set(baseDadosFiltrados.map(item => item.sre))].sort();
+  const municipiosDisponiveis = [...new Set(
+    (sre ? baseDadosFiltrados.filter(item => item.sre === sre) : baseDadosFiltrados).map(item => item.municipio)
+  )].sort();
 
-  const preencherDados = (item: typeof escolas[0]) => {
-    setCodesc(item.codesc);
-    setNomeEscola(item.nome);
-    setMunicipio(item.municipio);
-    setSre(item.sre);
-    setErro('');
-  };
+  // Escolas visíveis nos seletores de CODESC/Nome, restritas à SRE e ao Município já escolhidos
+  const escolasNoFiltro = baseDadosFiltrados.filter(item =>
+    (!sre || item.sre === sre) && (!municipio || item.municipio === municipio)
+  );
+
+  // Lista de endereços disponível: restrita ao CODESC já escolhido (cascata), ou às escolas do filtro de SRE/Município (com o nome da escola dona do prédio) para permitir a busca pelo próprio endereço
+  const enderecosParaSelecao = (codesc
+    ? enderecosFiltrados.filter(e => e.codesc === codesc)
+    : enderecosFiltrados.filter(e => escolasNoFiltro.some(item => item.codesc === e.codesc))
+  ).map(e => ({ ...e, nomeEscola: baseDadosFiltrados.find(item => item.codesc === e.codesc)?.nome }));
 
   // Step 1: Navigates to Step 2 Checklist
   const handleProsseguirParaChecklist = (e: React.FormEvent) => {
     e.preventDefault();
-    setCodescTouched(true);
     if (
       !nomeEscola.trim() ||
       !codesc.trim() ||
-      codescNaoEncontrado ||
       !municipio.trim() ||
       !sre.trim() ||
       !descricaoFolhaRosto.trim() ||
       (formaOcupacao === 'OUTRO' && !outraFormaOcupacao.trim()) ||
       (tipoAtendimento === 'EMENDA' && (!numPaf.trim() || !anoEmenda.trim()))
     ) {
-      setErro(
-        codescNaoEncontrado
-          ? 'Escola não encontrada para o CODESC informado. Verifique o código antes de continuar.'
-          : 'Por favor, preencha todos os campos obrigatórios do formulário.'
-      );
+      setErro('Por favor, preencha todos os campos obrigatórios do formulário.');
       return;
     }
     setErro('');
@@ -333,6 +391,12 @@ export function NovoAtendimentoPanel({
   const handleRealUploadChecklist = (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const extensoesPermitidas = extensoesAceitasParaDoc(docId);
+    if (!extensaoAceita(file.name, extensoesPermitidas)) {
+      alert(`Formato de arquivo não permitido para este documento. Extensões aceitas: ${extensoesPermitidas.join(', ')}`);
+      e.target.value = '';
+      return;
+    }
     const fileSize = file.size > 1024 * 1024
       ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
       : `${(file.size / 1024).toFixed(0)} KB`;
@@ -423,6 +487,11 @@ export function NovoAtendimentoPanel({
   const handleRealUploadCustomDocStep2 = (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!extensaoAceita(file.name)) {
+      alert(`Formato de arquivo não permitido. Extensões aceitas: ${EXTENSOES_ANEXO_ACEITAS.join(', ')}`);
+      e.target.value = '';
+      return;
+    }
     const fileSize = file.size > 1024 * 1024
       ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
       : `${(file.size / 1024).toFixed(0)} KB`;
@@ -453,7 +522,8 @@ export function NovoAtendimentoPanel({
 
   // Save either as 'cadastro' (draft) or 'analise' (finalize)
   const handleFinalizarEGravar = (isDraft: boolean) => {
-    const etapaAtual = isDraft ? 'cadastro' : 'analise';
+    // Envio (não-rascunho) não vai mais direto para 'analise' — fica em 'cadastro' aguardando
+    // aprovação do coordenador regional (statusAprovacaoRegional), que é quem libera para a DORE.
     const novaId = `SOL-2026-${Math.floor(100 + Math.random() * 900)}`;
     const nova: Solicitacao = {
       id: novaId,
@@ -463,10 +533,11 @@ export function NovoAtendimentoPanel({
       municipio,
       sre,
       dataCriacao: new Date().toISOString().split('T')[0],
-      etapaAtual: etapaAtual,
+      etapaAtual: 'cadastro',
+      statusAprovacaoRegional: !isDraft ? 'pendente' : undefined,
       historicoEtapas: [
         { etapa: 'cadastro' as EtapaProcesso, data: new Date().toISOString().split('T')[0], responsavel: responsavel || 'Téc. de Infraestrutura' },
-        ...(!isDraft ? [{ etapa: 'analise' as EtapaProcesso, data: new Date().toISOString().split('T')[0], responsavel: responsavel || 'Téc. de Infraestrutura' }] : [])
+        ...(!isDraft ? [{ etapa: 'cadastro' as EtapaProcesso, data: new Date().toISOString().split('T')[0], responsavel: `${responsavel || 'Téc. de Infraestrutura'} (enviado para aprovação do coordenador regional)` }] : [])
       ],
       documentos: documentosChecklist,
       outrosDocumentos: outrosDocumentosChecklist,
@@ -512,7 +583,7 @@ export function NovoAtendimentoPanel({
     setSearchQuery('');
     setErro('');
     if (!isDraft) {
-      setModalEnviadoTexto('O atendimento foi registrado e encaminhado à DORE com sucesso. Aguarde a atribuição de um analista.');
+      setModalEnviadoTexto('O atendimento foi registrado e encaminhado para aprovação do coordenador regional. Após aprovado, seguirá para a DORE.');
       setMostrarModalEnviado(true);
     } else {
       setCurrentView('intermediaria');
@@ -544,7 +615,6 @@ export function NovoAtendimentoPanel({
     setUsaSaldoPafAnterior('Não');
     setNumeroPafAnteriorCancelado('');
     setValorSaldoPafAnterior('');
-    setCodescTouched(false);
     setTentouFinalizar(false);
     setSelectedAtendimentoForEdit(null);
     setOutrosDocumentosChecklist([]);
@@ -667,92 +737,15 @@ export function NovoAtendimentoPanel({
                   1. Identificação Escolar
                 </h4>
                 <div className="text-[10px] text-slate-400 font-sans">
-                  {carregandoEscolas ? 'Carregando escolas...' : 'Selecione o CODESC ou a escola para preencher automaticamente'}
+                  {carregandoEscolas ? 'Carregando escolas...' : 'Filtre por SRE, Município, CODESC, escola ou endereço — cada campo preenche/restringe os demais'}
                 </div>
               </div>
 
-              {/* Passo 1: CODESC + Código do Endereço lado a lado */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Código CODESC *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Digite o código CODESC..."
-                    value={codesc}
-                    onChange={(e) => handleCodescChange(e.target.value)}
-                    onBlur={() => setCodescTouched(true)}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 transition-all font-sans font-bold bg-white text-slate-800 ${
-                      codescNaoEncontrado
-                        ? 'border-red-400 focus:ring-red-500/10 focus:border-red-500'
-                        : 'border-slate-200 focus:ring-blue-500/10 focus:border-blue-600'
-                    }`}
-                  />
-                  {codescNaoEncontrado && (
-                    <p className="text-[10px] text-red-600 font-bold mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      Escola não encontrada para este código. Verifique o CODESC informado.
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Código do Endereço *
-                    {!codesc && <span className="text-slate-300 font-normal normal-case ml-1">(informe o CODESC primeiro)</span>}
-                  </label>
-                  <select
-                    required
-                    disabled={!codesc || codescNaoEncontrado}
-                    value={codigoEndereco}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCodigoEndereco(val);
-                      // Preenche escola, município e SRE ao selecionar o endereço
-                      const match = baseDadosFiltrados.find(item => item.codesc === codesc);
-                      if (match) {
-                        setNomeEscola(match.nome);
-                        setMunicipio(match.municipio);
-                        if (perfilUsuario !== 'tecnico_infra') setSre(match.sre);
-                      }
-                    }}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white font-mono text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
-                  >
-                    <option value="">Selecione o endereço...</option>
-                    {enderecosCreate.map(e => (
-                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
-                        {e.codigoEndereco} — {e.descricao}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Passo 2: dados preenchidos automaticamente */}
+              {/* Passo 1: filtro hierárquico — SRE > Município. Restringe as opções de escola/endereço abaixo */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-3">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Nome da Escola Estadual
-                  </label>
-                  <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${nomeEscola ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                    {nomeEscola || 'Preenchido automaticamente ao selecionar o endereço'}
-                  </div>
-                </div>
-
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Município
-                  </label>
-                  <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${municipio ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                    {municipio || '—'}
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Superintendência Regional (SRE)
+                    Superintendência Regional (SRE) *
                   </label>
                   {perfilUsuario === 'tecnico_infra' ? (
                     <div className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-slate-100 text-slate-700 font-semibold flex items-center gap-2">
@@ -760,12 +753,94 @@ export function NovoAtendimentoPanel({
                       {sre}
                     </div>
                   ) : (
-                    <div className={`w-full px-3 py-2 text-sm border rounded-lg font-semibold ${sre ? 'border-emerald-200 bg-emerald-50/30 text-slate-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                      {sre || '—'}
-                    </div>
+                    <select
+                      required
+                      value={sre}
+                      onChange={(e) => selecionarPorSre(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white font-semibold text-slate-800 cursor-pointer"
+                    >
+                      <option value="">Selecione a SRE...</option>
+                      {sresDisponiveis.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
                   )}
                 </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Município *
+                  </label>
+                  <select
+                    required
+                    value={municipio}
+                    onChange={(e) => selecionarPorMunicipio(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white font-semibold text-slate-800 cursor-pointer"
+                  >
+                    <option value="">Selecione o município...</option>
+                    {municipiosDisponiveis.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
+
+              {/* Passo 2: busca bidirecional — CODESC, Nome da Escola ou Código do Endereço, restrita à SRE/Município do Passo 1. Qualquer um dos três preenche os demais automaticamente */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Código CODESC *
+                  </label>
+                  <select
+                    required
+                    value={codesc}
+                    onChange={(e) => selecionarPorCodesc(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white font-mono font-bold text-slate-800 cursor-pointer"
+                  >
+                    <option value="">Selecione o CODESC...</option>
+                    {escolasNoFiltro.map(item => (
+                      <option key={item.codesc} value={item.codesc}>{item.codesc}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Nome da Escola Estadual *
+                  </label>
+                  <select
+                    required
+                    value={nomeEscola}
+                    onChange={(e) => selecionarPorNomeEscola(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white font-semibold text-slate-800 cursor-pointer"
+                  >
+                    <option value="">Selecione a escola...</option>
+                    {escolasNoFiltro.map(item => (
+                      <option key={item.codesc} value={item.nome}>{item.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Código do Endereço
+                  </label>
+                  <select
+                    value={codigoEndereco}
+                    onChange={(e) => selecionarPorCodigoEndereco(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white font-mono text-slate-800 cursor-pointer"
+                  >
+                    <option value="">Selecione o endereço...</option>
+                    {enderecosParaSelecao.map(e => (
+                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                        {e.codigoEndereco} — {e.descricao}{!codesc && e.nomeEscola ? ` · ${e.nomeEscola}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[9px] text-slate-400 mt-0.5">Identifica unicamente cada edificação (principal ou anexo)</p>
+                </div>
+              </div>
+
             </div>
 
             {/* SEÇÃO 2: Classificação Patrimonial do Imóvel */}
@@ -1170,7 +1245,7 @@ export function NovoAtendimentoPanel({
                   required
                   placeholder="Ex: 5%"
                   value={iss}
-                  onChange={(e) => setIss(e.target.value)}
+                  onChange={(e) => setIss(e.target.value.replace(/-/g, ''))}
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 text-slate-800"
                 />
               </div>
@@ -1308,9 +1383,10 @@ export function NovoAtendimentoPanel({
 
                         {/* Right side controls */}
                         <div className="flex justify-end items-center gap-2 shrink-0">
-                          <input 
-                            type="file" 
+                          <input
+                            type="file"
                             id={`file-input-checklist-${doc.id}`}
+                            accept={extensoesAceitasParaDoc(doc.id).join(',')}
                             className="hidden"
                             onChange={(e) => handleRealUploadChecklist(doc.id, e)}
                           />
@@ -1388,9 +1464,10 @@ export function NovoAtendimentoPanel({
 
                         {/* Right side controls */}
                         <div className="flex justify-end items-center gap-2 shrink-0">
-                          <input 
-                            type="file" 
+                          <input
+                            type="file"
                             id={`file-input-checklist-${doc.id}`}
+                            accept={extensoesAceitasParaDoc(doc.id).join(',')}
                             className="hidden"
                             onChange={(e) => handleRealUploadChecklist(doc.id, e)}
                           />
@@ -1494,9 +1571,10 @@ export function NovoAtendimentoPanel({
 
                           {/* Right side controls */}
                           <div className="flex justify-end items-center gap-2 shrink-0">
-                            <input 
-                              type="file" 
+                            <input
+                              type="file"
                               id={`file-input-checklist-${doc.id}`}
+                              accept={EXTENSOES_ANEXO_ACEITAS.join(',')}
                               className="hidden"
                               onChange={(e) => handleRealUploadCustomDocStep2(doc.id, e)}
                             />
@@ -1625,6 +1703,17 @@ export function NovoAtendimentoPanel({
             </button>
           </div>
 
+          {/* Aviso de reprovação do Coordenador Regional */}
+          {!isCorrecao && sol.statusAprovacaoRegional === 'reprovado' && (
+            <div className="mb-6 bg-red-50 border border-red-200 rounded-xl p-4 space-y-1.5">
+              <h4 className="text-[10px] font-black uppercase tracking-wider text-red-800 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4" /> Reprovado pelo Coordenador Regional
+              </h4>
+              <p className="text-xs text-red-700">{sol.justificativaReprovacaoRegional || 'Nenhuma justificativa informada.'}</p>
+              <p className="text-[10px] text-red-500">Corrija o necessário e clique em "Finalizar e Encaminhar para Aprovação Regional" para reenviar.</p>
+            </div>
+          )}
+
           {/* Painel histórico de devoluções */}
           {isCorrecao && historicoCorrecoes.length > 0 && (
             <div className="mb-6 bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-4">
@@ -1702,7 +1791,7 @@ export function NovoAtendimentoPanel({
                   onChange={(e) => {
                     const val = e.target.value;
                     const match = baseDadosFiltrados.find(item => item.codesc === val);
-                    setSelectedAtendimentoForEdit({ ...sol, codesc: val, ...(match ? { nomeEscola: match.nome, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('identificacao_escolar') });
+                    setSelectedAtendimentoForEdit({ ...sol, codesc: val, codigoEndereco: '', ...(match ? { nomeEscola: match.nome, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('identificacao_escolar') });
                   }}
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
@@ -1721,7 +1810,7 @@ export function NovoAtendimentoPanel({
                   onChange={(e) => {
                     const val = e.target.value;
                     const match = baseDadosFiltrados.find(item => item.nome === val);
-                    setSelectedAtendimentoForEdit({ ...sol, nomeEscola: val, ...(match ? { codesc: match.codesc, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('identificacao_escolar') });
+                    setSelectedAtendimentoForEdit({ ...sol, nomeEscola: val, codigoEndereco: '', ...(match ? { codesc: match.codesc, municipio: match.municipio, sre: match.sre } : {}), ...markEditado('identificacao_escolar') });
                   }}
                   className="w-full px-2 py-1.5 text-xs border border-slate-250 rounded bg-white text-slate-800 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
@@ -2116,7 +2205,9 @@ export function NovoAtendimentoPanel({
                     if (!sol) return;
                     const updated = {
                       ...sol,
-                      etapaAtual: isCorrecao ? 'correcao' as const : 'cadastro' as const
+                      etapaAtual: isCorrecao ? 'correcao' as const : 'cadastro' as const,
+                      statusAprovacaoRegional: isCorrecao ? sol.statusAprovacaoRegional : undefined,
+                      justificativaReprovacaoRegional: isCorrecao ? sol.justificativaReprovacaoRegional : undefined
                     };
                     onUpdateSolicitacao(updated);
                     setSelectedAtendimentoForEdit(null);
@@ -2138,32 +2229,50 @@ export function NovoAtendimentoPanel({
                       return;
                     }
 
-                    const updated = {
-                      ...sol,
-                      etapaAtual: 'analise' as const,
-                      analistaAtribuido: isCorrecao ? sol.analistaAtribuido : undefined,
-                      historicoEtapas: [
-                        ...sol.historicoEtapas,
-                        {
-                          etapa: 'analise' as const,
-                          data: new Date().toISOString().split('T')[0],
-                          responsavel: sol.responsavel || 'Téc. de Infraestrutura'
+                    // Reenvio pós-correção da DORE (isCorrecao) vai direto para 'analise', como já era.
+                    // Primeira submissão (ou reenvio após reprovação do coordenador) fica em 'cadastro'
+                    // aguardando aprovação do coordenador regional antes de seguir para a DORE.
+                    const updated = isCorrecao
+                      ? {
+                          ...sol,
+                          etapaAtual: 'analise' as const,
+                          analistaAtribuido: sol.analistaAtribuido,
+                          historicoEtapas: [
+                            ...sol.historicoEtapas,
+                            {
+                              etapa: 'analise' as const,
+                              data: new Date().toISOString().split('T')[0],
+                              responsavel: sol.responsavel || 'Téc. de Infraestrutura'
+                            }
+                          ]
                         }
-                      ]
-                    };
+                      : {
+                          ...sol,
+                          etapaAtual: 'cadastro' as const,
+                          statusAprovacaoRegional: 'pendente' as const,
+                          justificativaReprovacaoRegional: undefined,
+                          historicoEtapas: [
+                            ...sol.historicoEtapas,
+                            {
+                              etapa: 'cadastro' as const,
+                              data: new Date().toISOString().split('T')[0],
+                              responsavel: `${sol.responsavel || 'Téc. de Infraestrutura'} (enviado para aprovação do coordenador regional)`
+                            }
+                          ]
+                        };
                     onUpdateSolicitacao(updated);
                     setSelectedAtendimentoForEdit(null);
                     setTentouFinalizar(false);
                     if (onLimparEdicaoDirect) onLimparEdicaoDirect();
                     setModalEnviadoTexto(isCorrecao
                       ? 'As correções foram enviadas para revalidação pela DORE com sucesso.'
-                      : 'O atendimento foi encaminhado à DORE com sucesso. Aguarde a atribuição de um analista.');
+                      : 'O atendimento foi encaminhado para aprovação do coordenador regional. Após aprovado, seguirá para a DORE.');
                     setMostrarModalEnviado(true);
                   }}
                   className={`px-5 py-2 font-extrabold text-xs rounded-lg shadow-md hover:shadow-lg transition flex items-center gap-1.5 cursor-pointer text-white ${isCorrecao ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'}`}
                 >
                   <CheckCircle className="w-4 h-4" />
-                  <span>{isCorrecao ? 'Enviar Correções para Revalidação DORE' : 'Finalizar e Encaminhar para DORE'}</span>
+                  <span>{isCorrecao ? 'Enviar Correções para Revalidação DORE' : 'Finalizar e Encaminhar para Aprovação Regional'}</span>
                 </button>
               </div>
             </div>
@@ -2297,9 +2406,21 @@ export function NovoAtendimentoPanel({
                       return (sol.tipoObra || sol.tipo || 'REFORMA').toUpperCase();
                     };
 
-                    const getEtapaVisuals = (etapa: string) => {
+                    const getEtapaVisuals = (etapa: string, statusAprovacaoRegional?: string) => {
                       switch (etapa) {
                         case 'cadastro':
+                          if (statusAprovacaoRegional === 'pendente') {
+                            return {
+                              label: 'Aguardando Aprovação Regional',
+                              className: 'border border-orange-300 text-orange-700 bg-orange-50/20 text-[10px] font-bold uppercase tracking-wide rounded px-2.5 py-1 whitespace-nowrap'
+                            };
+                          }
+                          if (statusAprovacaoRegional === 'reprovado') {
+                            return {
+                              label: 'Reprovado pelo Coordenador',
+                              className: 'border border-red-300 text-red-700 bg-red-50/20 text-[10px] font-bold uppercase tracking-wide rounded px-2.5 py-1 whitespace-nowrap'
+                            };
+                          }
                           return {
                             label: 'Atendimento Inicial',
                             className: 'border border-amber-300 text-amber-700 bg-amber-50/20 text-[10px] font-bold uppercase tracking-wide rounded px-2.5 py-1 whitespace-nowrap'
@@ -2323,7 +2444,7 @@ export function NovoAtendimentoPanel({
                     };
 
                     const idParts = (item.id || '').split('-');
-                    const etapaVisual = getEtapaVisuals(item.etapaAtual);
+                    const etapaVisual = getEtapaVisuals(item.etapaAtual, item.statusAprovacaoRegional);
 
                     return (
                       <tr
@@ -2428,7 +2549,10 @@ export function NovoAtendimentoPanel({
 
                         {/* 11. ETAPA ATUAL */}
                         <td className="py-4 px-4 text-center whitespace-nowrap">
-                          <span className={etapaVisual.className}>
+                          <span
+                            className={etapaVisual.className}
+                            title={item.statusAprovacaoRegional === 'reprovado' ? (item.justificativaReprovacaoRegional || 'Sem justificativa informada.') : undefined}
+                          >
                             {etapaVisual.label}
                           </span>
                         </td>
@@ -2520,9 +2644,14 @@ export function AtribuicaoPanel({
   const [filtroDataFim, setFiltroDataFim] = useState('');
   const [filtroAtribuicao, setFiltroAtribuicao] = useState<'todos' | 'minhas'>('todos');
 
+  // Validação de processos é atribuível apenas a analistas do órgão central (Equipe de Planejamento) — técnicos regionais da SRE não entram nessa lista
   const analistasSgo = usuariosSeguranca.filter(
-    u => u.perfil === 'analista_dore' || u.perfil === 'tecnico_infra'
+    u => u.perfil === 'analista_dore'
   );
+
+  // Um analista só pode se autoatribuir um processo — não pode trocar a atribuição para outro analista
+  const isAnalista = perfilUsuario === 'analista_dore';
+  const meuNomeAnalista = isAnalista ? (usuariosSeguranca.find(u => u.perfil === perfilUsuario)?.nome || '') : '';
 
   // Valores Únicos para os selects
   const idsUnicos = Array.from(new Set(solicitacoes.map(s => s.id).filter(Boolean))).sort();
@@ -2581,11 +2710,11 @@ export function AtribuicaoPanel({
     if (filtroDataFim && sol.dataCriacao && sol.dataCriacao > filtroDataFim) return false;
 
     // 8. Atribuição focada
-    if ((perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && filtroAtribuicao === 'minhas') {
+    if ((perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && filtroAtribuicao === 'minhas') {
       const myNome = usuariosSeguranca?.find((u: any) => u.perfil === perfilUsuario)?.nome || '';
       const isMyAssign = !!sol.analistaAtribuido && (myNome ? sol.analistaAtribuido === myNome : !!sol.analistaAtribuido);
       if (!isMyAssign) return false;
-    } else if ((perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && filtroAtribuicao === 'minhas') {
+    } else if ((perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && filtroAtribuicao === 'minhas') {
       const noAssign = !sol.analistaAtribuido;
       if (!noAssign) return false;
     }
@@ -2629,7 +2758,7 @@ export function AtribuicaoPanel({
       const pontosDisponiveis = getPontosIEEDisponiveis(selectedUser.nome, solicitacoes.filter(s => s.id !== sol.id));
       let forcada = false;
       if (pontosObra > pontosDisponiveis) {
-        const podeForcar = perfilUsuario === 'admin' || perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf';
+        const podeForcar = (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') || perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf';
         const mensagem = `Analista sem capacidade disponível para esta obra (${pontosDisponiveis} pontos disponíveis, obra requer ${pontosObra} pontos).`;
         if (!podeForcar) {
           alert(mensagem);
@@ -2858,7 +2987,7 @@ export function AtribuicaoPanel({
           <Layers className="w-4 h-4 text-blue-600 shrink-0" />
           <span className="font-extrabold text-slate-700 font-sans text-xs uppercase tracking-wide">Visão focada por atribuição de analistas:</span>
         </span>
-        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+        {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
           <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 select-none shrink-0">
             <button
               type="button"
@@ -2885,7 +3014,7 @@ export function AtribuicaoPanel({
           </div>
         )}
 
-        {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && (
+        {(perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
           <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 select-none shrink-0">
             <button
               type="button"
@@ -3131,30 +3260,39 @@ export function AtribuicaoPanel({
                   {/* 9. ANALISTA DESIGNADO */}
                   <td className="py-4 px-4 whitespace-nowrap">
                     <div className="flex flex-col gap-1 max-w-[220px]">
-                      <select
-                        value={currentAssignId}
-                        onChange={(e) => !somenteLeitura && handleAssignAnalyst(sol, e.target.value)}
-                        disabled={somenteLeitura}
-                        className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold transition-all duration-150 w-full min-w-[210px] ${somenteLeitura ? 'cursor-default opacity-60' : 'cursor-pointer'} ${
-                          sol.analistaAtribuido
-                            ? 'border-blue-500 text-blue-700 shadow-3xs'
-                            : 'border-slate-300 text-slate-500 font-medium'
-                        }`}
-                      >
-                        <option value="" className="text-slate-500 font-bold bg-white text-center py-2">
-                          -- Não Atribuído --
-                        </option>
-                        {analistasSgo.map(usr => {
-                          const formattedLabel = usr.perfil === 'tecnico_infra' 
-                            ? `${usr.nome} (Fiscal)` 
-                            : `${usr.nome} (DORE)`;
-                          return (
-                            <option key={usr.id} value={usr.id} className="text-slate-800 bg-white font-bold py-2">
-                              {formattedLabel}
+                      {(() => {
+                        // Analista só pode se autoatribuir — não pode trocar a atribuição para outro analista nem mexer em processo já atribuído a colega
+                        const atribuidoOutroAnalista = isAnalista && !!sol.analistaAtribuido && sol.analistaAtribuido !== meuNomeAnalista;
+                        const opcoesAnalistas = isAnalista
+                          ? analistasSgo.filter(usr => usr.nome === meuNomeAnalista)
+                          : analistasSgo;
+                        return (
+                          <select
+                            value={currentAssignId}
+                            onChange={(e) => !somenteLeitura && !atribuidoOutroAnalista && handleAssignAnalyst(sol, e.target.value)}
+                            disabled={somenteLeitura || atribuidoOutroAnalista}
+                            className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold transition-all duration-150 w-full min-w-[210px] ${(somenteLeitura || atribuidoOutroAnalista) ? 'cursor-default opacity-60' : 'cursor-pointer'} ${
+                              sol.analistaAtribuido
+                                ? 'border-blue-500 text-blue-700 shadow-3xs'
+                                : 'border-slate-300 text-slate-500 font-medium'
+                            }`}
+                          >
+                            <option value="" className="text-slate-500 font-bold bg-white text-center py-2">
+                              -- Não Atribuído --
                             </option>
-                          );
-                        })}
-                      </select>
+                            {opcoesAnalistas.map(usr => {
+                              const formattedLabel = usr.perfil === 'tecnico_infra'
+                                ? `${usr.nome} (Fiscal)`
+                                : `${usr.nome} (DORE)`;
+                              return (
+                                <option key={usr.id} value={usr.id} className="text-slate-800 bg-white font-bold py-2">
+                                  {formattedLabel}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        );
+                      })()}
 
                       {feedbackMsg[sol.id] && (
                         <span className="text-[9px] font-bold text-blue-600 block animate-pulse text-center">
@@ -3205,6 +3343,137 @@ export function AtribuicaoPanel({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 1B. PAINEL DE APROVAÇÃO REGIONAL (Coordenador Regional)
+// ==========================================
+// Gate leve sobre o estágio 'cadastro' (statusAprovacaoRegional) — o atendimento só segue
+// para 'analise' (fila da DORE) depois que o coordenador da SRE aprova.
+interface AprovacaoRegionalPanelProps {
+  solicitacoes: Solicitacao[];
+  onUpdateSolicitacao: (updated: Solicitacao) => void;
+  regionaisDoCoordenador?: string[];
+  nomeCoordenador?: string;
+}
+
+export function AprovacaoRegionalPanel({
+  solicitacoes,
+  onUpdateSolicitacao,
+  regionaisDoCoordenador = [],
+  nomeCoordenador = 'Coordenador Regional'
+}: AprovacaoRegionalPanelProps) {
+  const [justificativas, setJustificativas] = useState<{ [id: string]: string }>({});
+  const [erro, setErro] = useState<{ [id: string]: string }>({});
+
+  const pendentes = solicitacoes
+    .filter(s => s.etapaAtual === 'cadastro' && s.statusAprovacaoRegional === 'pendente')
+    .filter(s => !regionaisDoCoordenador.length || regionaisDoCoordenador.some(sre => (s.sre || '').toLowerCase() === sre.toLowerCase()))
+    .sort(compararPorPrioridade);
+
+  const handleAprovar = (sol: Solicitacao) => {
+    const hoje = new Date().toISOString().split('T')[0];
+    onUpdateSolicitacao({
+      ...sol,
+      etapaAtual: 'analise',
+      statusAprovacaoRegional: 'aprovado',
+      coordenadorAprovador: nomeCoordenador,
+      dataAprovacaoRegional: hoje,
+      historicoEtapas: [
+        ...sol.historicoEtapas,
+        { etapa: 'analise', data: hoje, responsavel: `${nomeCoordenador} (Aprovação Regional)` }
+      ]
+    });
+  };
+
+  const handleReprovar = (sol: Solicitacao) => {
+    const justificativa = (justificativas[sol.id] || '').trim();
+    if (!justificativa) {
+      setErro(prev => ({ ...prev, [sol.id]: 'Informe a justificativa da reprovação.' }));
+      return;
+    }
+    const hoje = new Date().toISOString().split('T')[0];
+    onUpdateSolicitacao({
+      ...sol,
+      statusAprovacaoRegional: 'reprovado',
+      justificativaReprovacaoRegional: justificativa,
+      historicoEtapas: [
+        ...sol.historicoEtapas,
+        { etapa: 'cadastro', data: hoje, responsavel: `${nomeCoordenador} (Reprovação Regional)` }
+      ]
+    });
+    setJustificativas(prev => ({ ...prev, [sol.id]: '' }));
+    setErro(prev => ({ ...prev, [sol.id]: '' }));
+  };
+
+  return (
+    <div className="space-y-4 max-w-5xl mx-auto w-full animate-in fade-in duration-200">
+      <div className="border-b border-slate-100 pb-3">
+        <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2 font-sans">
+          <CheckCircle className="w-5 h-5 text-blue-600" />
+          Aprovação Regional de Atendimentos
+        </h2>
+        <p className="text-xs text-slate-500 mt-1">
+          Atendimentos iniciais enviados pelos técnicos da sua regional, aguardando aprovação antes de seguir para análise da DORE.
+        </p>
+      </div>
+
+      {pendentes.length === 0 ? (
+        <div className="bg-slate-50 border border-dashed border-slate-250 rounded-xl py-14 text-center">
+          <CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+          <h5 className="font-bold text-slate-700 text-xs">Nenhum atendimento aguardando aprovação</h5>
+          <p className="text-[11px] text-slate-500 mt-1">Assim que um técnico da sua regional enviar um atendimento, ele aparecerá aqui.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {pendentes.map(sol => (
+            <div key={sol.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-3xs">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                <div>
+                  <span className="text-[10px] font-mono text-slate-400 font-bold">{sol.id}</span>
+                  <h4 className="text-sm font-extrabold text-slate-800">{sol.nomeEscola}</h4>
+                  <p className="text-xs text-slate-500">{sol.municipio} · {sol.sre}</p>
+                  <p className="text-xs text-slate-600 mt-1">{sol.tipoObra || sol.tipo} — {sol.descricaoFolhaRosto}</p>
+                </div>
+                <div className="text-right text-[10px] text-slate-400 font-mono shrink-0">
+                  Enviado em {sol.dataCriacao}
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row md:items-center gap-2 pt-2 border-t border-slate-100">
+                <input
+                  type="text"
+                  value={justificativas[sol.id] || ''}
+                  onChange={(e) => setJustificativas(prev => ({ ...prev, [sol.id]: e.target.value }))}
+                  placeholder="Justificativa (obrigatória apenas para reprovar)"
+                  className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 bg-white text-slate-800"
+                />
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleReprovar(sol)}
+                    className="px-3.5 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    Reprovar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAprovar(sol)}
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    Aprovar
+                  </button>
+                </div>
+              </div>
+              {erro[sol.id] && (
+                <p className="text-[10px] text-red-600 font-bold">{erro[sol.id]}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -3490,322 +3759,3 @@ export function AtribuicaoHistoricoPanel({ solicitacoes, onAbrirPreview }: Atrib
   );
 }
 
-// ==========================================
-// 3. PAINEL DE RELATÓRIOS MULTI-CONTEXTOS
-// ==========================================
-interface RelatoriosPanelProps {
-  activeReportType: string;
-  solicitacoes: Solicitacao[];
-}
-
-export function RelatoriosPanel({ activeReportType, solicitacoes }: RelatoriosPanelProps) {
-  // Aggregate data for reports
-  const totalValores = solicitacoes.reduce((sum, s) => sum + (s.valorPlanilha || 0), 0);
-  const totalObras = solicitacoes.length;
-  const listMedicoes = solicitacoes.flatMap(s => s.medicoes || []);
-  const totalMedido = listMedicoes.reduce((sum, m) => sum + m.valor, 0);
-  const percentMedidoTotal = totalValores > 0 ? (totalMedido / totalValores) * 100 : 0;
-
-  // Regional breakdown
-  const regionalData = solicitacoes.reduce((acc: { [key: string]: { count: number; val: number; medido: number } }, s) => {
-    const r = s.sre || 'SRE Geral';
-    if (!acc[r]) acc[r] = { count: 0, val: 0, medido: 0 };
-    acc[r].count += 1;
-    acc[r].val += s.valorPlanilha || 0;
-    acc[r].medido += (s.medicoes || []).reduce((sm, m) => sm + m.valor, 0);
-    return acc;
-  }, {});
-
-  // PDF Export visual triggers
-  const [downloading, setDownloading] = useState(false);
-  const handleSimulateExport = () => {
-    setDownloading(true);
-    setTimeout(() => {
-      setDownloading(false);
-      alert('Seu arquivo foi gerado e o download em formato PDF/Excel foi iniciado!');
-    }, 1000);
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-3xs text-left animate-in fade-in duration-200">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-4">
-        <div>
-          <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2 font-sans">
-            <TrendingUp className="w-5 h-5 text-blue-600" />
-            {activeReportType === 'relat_gerencial' && 'Relatório Geral & KPIs Gerenciais de Obras'}
-            {activeReportType === 'relat_financeiro' && 'Relatório de Consolidação e Indicadores Financeiros'}
-            {activeReportType === 'relat_regional' && 'Detalhamento Técnico por Jurisdição (Regional SRE)'}
-            {activeReportType === 'relat_escola' && 'Dossiê Cronológico e Painel por Unidade de Ensino'}
-            {activeReportType === 'relat_medicoes' && 'Histórico e Auditoria de Medições Físico-Financeiras'}
-          </h2>
-          <p className="text-xs text-slate-500 mt-1 font-sans">
-            SGO Inteligente • Dados agregados atualizados em tempo real de acordo com as transições de etapas da rede de ensino estadual de Minas Gerais.
-          </p>
-        </div>
-
-        <button
-          onClick={handleSimulateExport}
-          disabled={downloading}
-          className="flex items-center gap-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-150 text-xs font-bold leading-none cursor-pointer transition-colors"
-        >
-          <Download className="w-3.5 h-3.5" />
-          {downloading ? 'Gerando Planilha...' : 'Exportar Relatório'}
-        </button>
-      </div>
-
-      {/* KPI METRICS BLOCK */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-          <span className="text-[10px] font-bold uppercase text-slate-400 font-sans">Demandas Ativas</span>
-          <p className="text-xl font-black text-slate-800 mt-1 font-mono">{totalObras}</p>
-          <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">Processos em trâmite</span>
-        </div>
-
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-          <span className="text-[10px] font-bold uppercase text-slate-400 font-sans">Investimento Estimado</span>
-          <p className="text-xl font-black text-blue-600 mt-1 font-mono">
-            R$ {totalValores.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </p>
-          <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">Dotação planejada SGO</span>
-        </div>
-
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-          <span className="text-[10px] font-bold uppercase text-slate-400 font-sans">Montante Medido</span>
-          <p className="text-xl font-black text-emerald-600 mt-1 font-mono">
-            R$ {totalMedido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </p>
-          <span className="text-[10px] text-slate-400 block mt-0.5 font-sans">Executado fisicamente</span>
-        </div>
-
-        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-          <span className="text-[10px] font-bold uppercase text-slate-400 font-sans">Aproveitamento Total</span>
-          <p className="text-xl font-black text-slate-800 mt-1 font-mono">{percentMedidoTotal.toFixed(1)}%</p>
-          <div className="w-full bg-slate-200 h-1 rounded-full mt-2 overflow-hidden">
-            <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(percentMedidoTotal, 100)}%` }} />
-          </div>
-        </div>
-      </div>
-
-      {/* REPORT TYPE SPECIFIC CONTENT */}
-      {activeReportType === 'relat_gerencial' && (
-        <div className="space-y-6">
-          <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
-            <h3 className="text-xs font-bold text-slate-800 mb-2 font-sans flex items-center gap-1.5">
-              <AlertCircle className="w-4 h-4 text-blue-600" />
-              Resumo e Distribuição por Estágios do Processo
-            </h3>
-            <p className="text-xs text-slate-600 font-sans leading-relaxed">
-              Atualmente, as obras distribuem-se estrategicamente pelas fases legais do GESTO. A maior concentração financeira encontra-se nas fases iniciais de captação de dotação do PAF regional.
-            </p>
-          </div>
-
-          {/* VISUAL CHART GENERATOR (PURE CSS & SVG BAR CHART) */}
-          <div className="bg-slate-50 p-5 rounded-xl border border-slate-200/80">
-            <span className="text-[10px] font-bold uppercase text-slate-500 font-sans block mb-4">Volume e Dimensionamento Financeiro das Etapas</span>
-            
-            <div className="space-y-4">
-              {[
-                { label: 'Checklist e Atendimentos Iniciais', count: solicitacoes.filter(s=>s.etapaAtual==='cadastro'||s.etapaAtual==='correcao').length, total: solicitacoes.filter(s=>s.etapaAtual==='cadastro'||s.etapaAtual==='correcao').reduce((sm,x)=>sm+(x.valorPlanilha||0),0), color: 'bg-blue-500' },
-                { label: 'Análise de Engenharia & laudos', count: solicitacoes.filter(s=>s.etapaAtual==='analise').length, total: solicitacoes.filter(s=>s.etapaAtual==='analise').reduce((sm,x)=>sm+(x.valorPlanilha||0),0), color: 'bg-amber-500' },
-                { label: 'Autorização Financiamento', count: solicitacoes.filter(s=>s.etapaAtual==='paf_autorizacao').length, total: solicitacoes.filter(s=>s.etapaAtual==='paf_autorizacao').reduce((sm,x)=>sm+(x.valorPlanilha||0),0), color: 'bg-pink-500' },
-                { label: 'Aprovados & Geração de PAF', count: solicitacoes.filter(s=>s.etapaAtual==='paf').length, total: solicitacoes.filter(s=>s.etapaAtual==='paf').reduce((sm,x)=>sm+(x.valorPlanilha||0),0), color: 'bg-purple-500' },
-                { label: 'Em Execução / Medições', count: solicitacoes.filter(s=>s.etapaAtual==='execucao'||s.etapaAtual==='ordem_inicio').length, total: solicitacoes.filter(s=>s.etapaAtual==='execucao'||s.etapaAtual==='ordem_inicio').reduce((sm,x)=>sm+(x.valorPlanilha||0),0), color: 'bg-emerald-500' },
-              ].map((group, idx) => {
-                const percentBar = totalValores > 0 ? (group.total / totalValores) * 100 : 0;
-                return (
-                  <div key={idx} className="space-y-1 text-xs">
-                    <div className="flex justify-between items-center text-slate-700">
-                      <span className="font-semibold font-sans">{group.label} ({group.count})</span>
-                      <span className="font-mono font-bold">R$ {group.total.toLocaleString('pt-BR')} ({percentBar.toFixed(1)}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                      <div className={`${group.color} h-full rounded-full transition-all duration-500`} style={{ width: `${percentBar}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeReportType === 'relat_financeiro' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 text-left">
-              <span className="text-[10px] font-black uppercase text-slate-400 block font-sans">Saldo Restante de Planilha</span>
-              <p className="text-xl font-bold text-slate-800 mt-1 font-mono">
-                R$ {(totalValores - totalMedido).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-              <span className="text-[10px] text-slate-400 mt-1 block">A liquidar contra medições subsequentes</span>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-150 text-left">
-              <span className="text-[10px] font-black uppercase text-slate-400 block font-sans">Aditivações Totais Registradas</span>
-              <p className="text-xl font-bold text-amber-600 mt-1 font-mono">
-                R$ {solicitacoes.flatMap(s => s.aditivos || []).filter(a => a.status === 'Aprovado').reduce((sum, a) => sum + (a.valorExtra || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-              <span className="text-[10px] text-slate-400 mt-1 block">Acréscimos aditivados aprovados em contrato</span>
-            </div>
-          </div>
-
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <div className="bg-slate-50 p-3.5 border-b border-slate-200 font-sans font-bold text-slate-700">
-              Checklist de Faturamento Financeiro SGO
-            </div>
-            <div className="divide-y divide-slate-100 text-xs">
-              {solicitacoes.map(sol => {
-                const totalM = (sol.medicoes || []).reduce((sm, m) => sm + m.valor, 0);
-                return (
-                  <div key={sol.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
-                    <div>
-                      <span className="font-bold text-slate-800 block font-sans">{sol.nomeEscola}</span>
-                      <span className="text-[10px] text-slate-500 font-mono">Vigência PAF: {sol.dataVigenciaPAF || 'Aguardando publicação'}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-bold font-mono text-slate-800 block">R$ {totalM.toLocaleString('pt-BR')} medidos</span>
-                      <span className="text-[10px] text-slate-400 block">De R$ {(sol.valorPlanilha || 0).toLocaleString('pt-BR')} dotação</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeReportType === 'relat_regional' && (
-        <div className="space-y-4">
-          <span className="text-xs text-slate-500 font-sans block mb-1">
-            Consolidação de volume de obras, orçamentos planeados de planilha e andamentos físicos médios agrupados por Superintendência Regional de Ensino (SRE):
-          </span>
-
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-bold uppercase text-[9px] tracking-wider">
-                  <th className="py-3 px-4 font-sans">Jurisdição SRE</th>
-                  <th className="py-3 px-4 font-sans">Escolas Atendidas</th>
-                  <th className="py-3 px-4 font-sans">Orçamentos SGO</th>
-                  <th className="py-3 px-4 font-sans">Liquidado Financeiramente</th>
-                  <th className="py-3 px-4 font-sans">Progresso Médio (%)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {Object.keys(regionalData).map(region => {
-                  const data = regionalData[region];
-                  const averageProgress = data.val > 0 ? (data.medido / data.val) * 100 : 0;
-                  return (
-                    <tr key={region} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-4 font-bold text-slate-800 font-sans">{region}</td>
-                      <td className="py-3 px-4 font-mono font-medium text-slate-500">{data.count}</td>
-                      <td className="py-3 px-4 font-mono text-slate-700">R$ {data.val.toLocaleString('pt-BR')}</td>
-                      <td className="py-3 px-4 font-mono text-slate-700">R$ {data.medido.toLocaleString('pt-BR')}</td>
-                      <td className="py-3 px-4 font-bold font-mono">
-                        <div className="flex items-center gap-1.5 text-blue-800">
-                          <Percent className="w-3.5 h-3.5 text-slate-400" />
-                          {averageProgress.toFixed(1)}%
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {activeReportType === 'relat_escola' && (
-        <div className="space-y-4">
-          <span className="text-xs text-slate-500 font-sans block mb-1">
-            Dossiê completo, de busca rápida, de todas as escolas cadastradas e seus respectivos escopos e andamentos contratuais:
-          </span>
-
-          <div className="divide-y divide-slate-150 border border-slate-200 rounded-xl bg-white overflow-hidden text-xs">
-            {solicitacoes.map(sol => (
-              <div key={sol.id} className="p-4 hover:bg-slate-50 transition-colors flex flex-col md:flex-row justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-extrabold text-xs text-slate-800 font-sans">{sol.nomeEscola}</span>
-                    <span className="font-mono text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{sol.id}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-500 space-y-0.5 font-sans">
-                    <p>SRE: {sol.sre} | Município: {sol.municipio}</p>
-                    <p>Tipo de Obra: {sol.tipoObra || 'N/A'}</p>
-                    {sol.analistaAtribuido && <p className="text-slate-600 text-blue-600 font-medium">Responsável Técnico: {sol.analistaAtribuido}</p>}
-                  </div>
-                </div>
-
-                <div className="flex flex-row md:flex-col items-end justify-between md:justify-center gap-1.5 text-right font-mono text-slate-700 shrink-0">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-sans block">Previsão Contratual</span>
-                    <span className="font-bold text-slate-800">R$ {(sol.valorPlanilha || 0).toLocaleString('pt-BR')}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-sans block">Situação Geral</span>
-                    <span className="font-bold text-blue-600 font-sans text-[11px] uppercase">{sol.etapaAtual === 'cadastro' ? 'Instrucão' : sol.etapaAtual}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeReportType === 'relat_medicoes' && (
-        <div className="space-y-4">
-          <span className="text-xs text-slate-500 font-sans block mb-1">
-            Histórico auditado e detalhado de todas as medições físico-financeiras de engenharia enviadas e homologadas na dotação das obras ativas:
-          </span>
-
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-bold uppercase text-[9px] tracking-wider">
-                  <th className="py-3 px-4 font-sans">Referência da Escola</th>
-                  <th className="py-3 px-4 font-sans">Data da Medição</th>
-                  <th className="py-3 px-4 font-sans">Percentual Individual</th>
-                  <th className="py-3 px-4 font-sans">Rendimento Financeiro</th>
-                  <th className="py-3 px-4 font-sans">Justificativa / Descrição Técnica</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {solicitacoes.filter(s => s.medicoes && s.medicoes.length > 0).flatMap((s) => 
-                  s.medicoes.map((med, idx) => (
-                    <tr key={`${s.id}-med-${idx}`} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-3.5 px-4 font-sans">
-                        <span className="font-bold text-slate-800 block">{s.nomeEscola}</span>
-                        <span className="text-[10px] text-slate-500 font-mono block mt-0.5">{s.id}</span>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-slate-600">{med.data}</td>
-                      <td className="py-3.5 px-4 font-bold text-slate-800">
-                        <div className="flex items-center gap-1 font-mono text-blue-600 text-blue-700">
-                          <Percent className="w-3.5 h-3.5 text-slate-400" />
-                          {med.porcentagem}%
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-emerald-600">R$ {med.valor.toLocaleString('pt-BR')}</td>
-                      <td className="py-3.5 px-4 text-xs font-sans text-slate-500 max-w-sm shrink truncate" title={med.descricao}>
-                        {med.descricao}
-                      </td>
-                    </tr>
-                  ))
-                )}
-
-                {solicitacoes.every(s => !s.medicoes || s.medicoes.length === 0) && (
-                  <tr>
-                    <td colSpan={5} className="py-6 text-center text-slate-400 italic font-sans bg-slate-50/50">
-                      Nenhuma medição físico-financeira enviada para as obras ativas no momento.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-}

@@ -74,6 +74,7 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [newBudgetData, setNewBudgetData] = useState({
+    name: '',
     sre: sreDoTecnico || '',
     municipality: '',
     school: '',
@@ -115,12 +116,9 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
     }
 
     const now = new Date().toISOString();
-    const autoName = newBudgetData.school
-      ? `${newBudgetData.school} — ${now.split('T')[0]}`
-      : `Orçamento SGO — ${now.split('T')[0]}`;
     const newBudget: Budget = {
       id: Math.random().toString(36).substr(2, 9),
-      name: autoName,
+      name: newBudgetData.name.trim(),
       sre: newBudgetData.sre,
       municipality: newBudgetData.municipality,
       school: newBudgetData.school,
@@ -136,7 +134,7 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
 
     onCreate(newBudget);
     setIsModalOpen(false);
-    setNewBudgetData({ sre: sreDoTecnico || '', municipality: '', school: '', codesc: '', templateId: '' });
+    setNewBudgetData({ name: '', sre: sreDoTecnico || '', municipality: '', school: '', codesc: '', templateId: '' });
   };
 
   const handleUpdateBudget = (e: FormEvent) => {
@@ -326,11 +324,12 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
         </div>
       </div>
 
-      <div className="bg-white border-t-4 border-blue-700 shadow-sm overflow-hidden text-xs">
+      <div className="bg-white border-t-4 border-blue-700 shadow-sm text-xs">
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-blue-700 text-white uppercase tracking-widest text-[10px] font-bold">
-              <th className="text-left px-6 py-4">Projeto / Escola</th>
+              <th className="text-left px-6 py-4">Nome do Orçamento</th>
+              <th className="text-left px-6 py-4">Escola</th>
               <th className="text-left px-6 py-4">SRE</th>
               <th className="text-left px-6 py-4">Município</th>
               <th className="text-left px-6 py-4">Data</th>
@@ -342,7 +341,7 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
           <tbody className="divide-y divide-gray-100">
             {filteredBudgets.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-20 text-center">
+                <td colSpan={8} className="px-6 py-20 text-center">
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-tight">
                     Nenhum orçamento encontrado.
                   </p>
@@ -365,9 +364,9 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
               >
                 <td className="px-6 py-4">
                   <div className="font-bold text-slate-900 uppercase tracking-tight">{budget.name}</div>
-                  <div className="text-[10px] text-red-600 mt-0.5 font-bold uppercase">{budget.school}</div>
                   <div className="text-[9px] text-gray-400 font-medium">GRP: {budget.id.padStart(6, '0')}</div>
                 </td>
+                <td className="px-6 py-4 text-red-600 font-bold uppercase text-[10px] tracking-tight">{budget.school}</td>
                 <td className="px-6 py-4 text-gray-600 font-bold uppercase text-[10px] tracking-tight">{budget.sre}</td>
                 <td className="px-6 py-4 text-gray-600 font-medium">{budget.municipality}</td>
                 <td className="px-6 py-4 text-gray-500 font-bold uppercase tracking-tight">
@@ -462,7 +461,10 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
                                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded shadow-xl z-[100] py-2 overflow-hidden"
+                                className={cn(
+                                  'absolute right-0 w-48 bg-white border border-gray-200 rounded shadow-xl z-[100] py-2 overflow-hidden',
+                                  i === filteredBudgets.length - 1 ? 'bottom-full mb-2' : 'top-full mt-2'
+                                )}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <button
@@ -616,6 +618,21 @@ export default function BudgetList({ budgets, onSelect, onCreate, onUpdate, onDe
 
               <form onSubmit={handleCreateBudget} className="p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                  {/* Nome do Orçamento */}
+                  <div className="md:col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-500 font-sans mb-2">
+                      Nome do Orçamento *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newBudgetData.name}
+                      onChange={(e) => setNewBudgetData({ ...newBudgetData, name: e.target.value })}
+                      placeholder="Ex: Reforma do Telhado — Bloco A"
+                      className="w-full px-4 py-3 bg-slate-50 border border-gray-200 rounded font-bold text-sm focus:ring-2 focus:ring-red-600/20 focus:border-red-600 outline-none transition-all"
+                    />
+                  </div>
 
                   {/* Template base (opcional) */}
                   <div className="md:col-span-2">

@@ -13,7 +13,6 @@ import {
   Package,
   Pencil,
   Trash2,
-  Download,
   X,
   History,
   Percent,
@@ -335,7 +334,7 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
     setExpanded(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  const renderNode = (node: EAPNode, level: number = 0) => {
+  const renderNode = (node: EAPNode, level: number = 0, isLast: boolean = false) => {
     const isExpanded = expanded.includes(node.id);
     const hasChildren = node.children && node.children.length > 0;
     const isHovered = hoveredId === node.id;
@@ -377,10 +376,13 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
             <AnimatePresence>
               {isHovered && (
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: isLast ? -10 : 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  className="absolute left-0 top-full mt-1 flex items-center gap-0.5 z-50 shadow-xl"
+                  exit={{ opacity: 0, y: isLast ? -10 : 10 }}
+                  className={cn(
+                    'absolute left-0 flex items-center gap-0.5 z-50 shadow-xl',
+                    isLast ? 'bottom-full mb-1' : 'top-full mt-1'
+                  )}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
@@ -438,7 +440,7 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden bg-white"
             >
-              {node.children.map(child => renderNode(child, level + 1))}
+              {node.children.map((child, idx) => renderNode(child, level + 1, idx === node.children!.length - 1))}
             </motion.div>
           )}
         </AnimatePresence>
@@ -454,7 +456,7 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
       <div className="bg-white border-b border-gray-200 shadow-sm z-20">
         <div className="px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded text-slate-900">
+            <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded text-slate-900 print:hidden">
               <ArrowLeft className="h-5 w-5" />
             </button>
             <div>
@@ -462,7 +464,7 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Estrutura Analítica de Projeto (EAP)</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 print:hidden">
             <button
               onClick={() => setIsVersionsModalOpen(true)}
               className="flex items-center gap-2 px-4 py-1.5 border border-gray-200 rounded text-[10px] font-black uppercase tracking-wider font-sans hover:bg-gray-50 bg-white"
@@ -475,16 +477,13 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
             >
               <Percent className="h-3.5 w-3.5 text-red-600" /> BDI (TCU 2622)
             </button>
-            <button className="flex items-center gap-2 px-4 py-1.5 border border-gray-200 rounded text-[10px] font-black uppercase tracking-wider font-sans hover:bg-gray-50 bg-white">
-              <Download className="h-3.5 w-3.5" /> Importar p/ Orçamento
-            </button>
           </div>
         </div>
 
         <div className="border-t-2 border-red-600 mx-8"></div>
 
         <div className="px-8 py-6 flex items-center justify-between">
-          <div className="flex gap-4">
+          <div className="flex gap-4 print:hidden">
             <button
               onClick={() => { setModalType('ETAPA'); setIsModalOpen(true); }}
               className="w-24 h-24 flex flex-col items-center justify-center gap-2 bg-[#4299E1] text-white rounded shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
@@ -509,7 +508,7 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
           </div>
 
           <div className="text-right">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Passe o mouse sobre uma linha para ver ações</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4 print:hidden">Passe o mouse sobre uma linha para ver ações</p>
             <div className="flex items-center gap-10">
               <div className="text-right">
                 <p className="text-[10px] text-gray-400 uppercase font-black tracking-wider mb-1">Custo Direto</p>
@@ -529,7 +528,10 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: BRL }).format(totalWithBDI)}
                 </p>
               </div>
-              <button className="px-8 py-3 bg-blue-700 text-white rounded shadow-lg shadow-blue-700/20 font-black text-[10px] uppercase tracking-wider hover:bg-blue-800 transition-all ml-4">
+              <button
+                onClick={() => window.print()}
+                className="px-8 py-3 bg-blue-700 text-white rounded shadow-lg shadow-blue-700/20 font-black text-[10px] uppercase tracking-wider hover:bg-blue-800 transition-all ml-4 print:hidden cursor-pointer"
+              >
                 GERAR RELATÓRIO PDF
               </button>
             </div>
@@ -537,9 +539,9 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-white m-8 border border-gray-200 shadow-sm border-t-4 border-blue-700 pb-32">
-        <div className="min-w-[1000px]">
-          <div className="flex items-center gap-2 py-4 px-6 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider sticky top-0 z-30">
+      <div className="flex-1 overflow-auto bg-white m-8 border border-gray-200 shadow-sm border-t-4 border-blue-700 pb-32 print:m-0 print:border-0 print:shadow-none print:overflow-visible print:pb-0">
+        <div className="min-w-[1000px] print:min-w-0">
+          <div className="flex items-center gap-2 py-4 px-6 bg-slate-900 text-white text-[10px] font-black uppercase tracking-wider sticky top-0 z-30 print:static">
             <div className="w-[120px] shrink-0">ITEM</div>
             <div className="flex-1">COMPOSIÇÃO / SERVIÇO</div>
             <div className="w-20 text-center">UND</div>
@@ -548,7 +550,7 @@ export default function BudgetDetail({ budget, onBack, onUpdate }: Props) {
             <div className="w-40 text-right">Total (R$)</div>
             <div className="w-10"></div>
           </div>
-          {eapData.map(node => renderNode(node))}
+          {eapData.map((node, idx) => renderNode(node, 0, idx === eapData.length - 1))}
         </div>
       </div>
 

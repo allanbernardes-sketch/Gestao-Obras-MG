@@ -177,7 +177,7 @@ export default function SolicitacaoDetalhes({
   // somenteLeitura sempre vence — usado pela consulta histórica somente-leitura (Atribuição) para
   // garantir que nenhum botão de validação/aprovação fique habilitado, independente de quem está logado.
   const isMyAssignment = !somenteLeitura &&
-    (perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') &&
+    (perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) &&
     !!solicitacao.analistaAtribuido &&
     (currentUserNome ? solicitacao.analistaAtribuido === currentUserNome : true);
 
@@ -1476,7 +1476,7 @@ ${totalPendencias > 0
           {/* Ações administrativas — Retorno de Etapa (admin) e Cancelamento (admin/técnico) */}
           {!somenteLeitura && (
           <div className="flex items-center gap-2 mt-2 flex-wrap justify-end">
-            {perfilUsuario === 'admin' && processoAindaModificavel(solicitacao) && etapasAnterioresDisponiveis.length > 0 && (
+            {(perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') && processoAindaModificavel(solicitacao) && etapasAnterioresDisponiveis.length > 0 && (
               <button
                 type="button"
                 onClick={handleAbrirRetornoEtapa}
@@ -1486,7 +1486,7 @@ ${totalPendencias > 0
                 <Undo2 className="w-3 h-3" /> Retornar Etapa
               </button>
             )}
-            {perfilUsuario === 'admin' && processoAindaModificavel(solicitacao) && solicitacao.etapaAtual !== 'cancelado' && (
+            {(perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') && processoAindaModificavel(solicitacao) && solicitacao.etapaAtual !== 'cancelado' && (
               <button
                 type="button"
                 onClick={handleAbrirCancelarProcesso}
@@ -1585,7 +1585,7 @@ ${totalPendencias > 0
       )}
 
       {/* ATRIBUIÇÃO DE ANALISTA DA DORE (Apenas para Gestor Atendimento DORE) */}
-      {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && solicitacao.etapaAtual === 'analise' && (
+      {(perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && solicitacao.etapaAtual === 'analise' && (
         <div className="bg-indigo-50/70 border border-indigo-200/85 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 shrink-0">
@@ -1970,7 +1970,7 @@ ${totalPendencias > 0
               {/* Action buttons corresponding to Role Permissions */}
               <div className="flex items-center gap-2">
                 {/* Simulated Quick Action block for Engineer to approve/evaluate quickly */}
-                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
+                {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
                   <>
                     <button
                       onClick={reviewAllWithIA}
@@ -2007,7 +2007,7 @@ ${totalPendencias > 0
             </div>
 
             {/* BANNER DE ATRIBUIÇÃO PARA O ANALISTA DORE */}
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
               <div className="mb-6 p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-3 font-sans bg-white shadow-xs border-slate-200">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 shrink-0 border border-slate-200/50">
@@ -2211,7 +2211,7 @@ ${totalPendencias > 0
                         )}
 
                         {/* 2. OPEN TEXT AREA FOR ACTIVE ANALYST REVIEW - CAMPO DE TEXTO ABERTO DE ANÁLISE EM TEMPO REAL */}
-                        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
+                        {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && isMyAssignment && solicitacao.etapaAtual === 'analise' && (
                           <div className="mt-4 space-y-2 p-3.5 border border-slate-200 rounded-xl bg-slate-50 shadow-inner">
                             <div className="flex items-center justify-between">
                               <label htmlFor={`analise-doc-${doc.id}`} className="text-[11px] font-bold text-slate-755 flex items-center gap-1.5 font-sans">
@@ -2284,7 +2284,7 @@ ${totalPendencias > 0
                         )}
 
                         {/* 2. ENGENHEIRO DORE ACTIONS */}
-                        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && (
+                        {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && isMyAssignment && (
                           <div className="flex flex-col items-end gap-2">
                             {solicitacao.etapaAtual === 'analise' ? (
                               <div className="space-y-2">
@@ -2414,7 +2414,7 @@ ${totalPendencias > 0
                 )}
 
                 {/* 2. Engenheiro DORE finalizando análise */}
-                {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && solicitacao.etapaAtual === 'analise' && !hideTransitionButtons && (
+                {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && isMyAssignment && solicitacao.etapaAtual === 'analise' && !hideTransitionButtons && (
                   <div className="text-right">
                     {solicitacao.documentos.some(d => d.status === 'pendente' && d.fileName) && (
                       <span className="text-xs text-amber-600 font-semibold block mb-2">
@@ -2828,451 +2828,6 @@ ${totalPendencias > 0
           </div>
         )}
 
-        {/* CONTEÚDO DA ABA: ORDEM DE INÍCIO */}
-        {activeTab === 'ordem_inicio_obsoleto_integrado_na_execucao_da_obra' && (
-          <div className="p-6">
-            <div className="pb-4 border-b border-neutral-100 mb-6 font-sans">
-              <h2 className="font-display text-lg font-bold text-neutral-800 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-neutral-600" />
-                Ordem de Início
-              </h2>
-              <p className="text-xs text-neutral-500 mt-0.5">
-                Preencha os dados cadastrais da vigência contratual do início das obras e anexe o cronograma físico-financeiro oficial.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans items-start">
-              <div className="lg:col-span-2 space-y-6">
-                <form onSubmit={salvarOrdemInicio} className="space-y-4">
-                  <div className="bg-slate-50/50 p-5 rounded-xl border border-slate-100 space-y-4">
-                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Dados Contratuais de Iniciação</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className={`block text-xs font-semibold mb-1 uppercase tracking-wider ${ordemInicioInvalida ? 'text-rose-600' : 'text-neutral-600'}`}>
-                          INÍCIO OBRA (DATA DA ORDEM DE INÍCIO) *
-                        </label>
-                        <input
-                          type="date"
-                          value={dataOrdemInicioInput}
-                          onChange={(e) => setDataOrdemInicioInput(e.target.value)}
-                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
-                          required
-                          min={solicitacao.contratoDataAssinatura || undefined}
-                          className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-hidden focus:ring-2 bg-white font-mono ${ordemInicioInvalida ? 'border-rose-400 bg-rose-50/30 text-rose-800 focus:ring-rose-500' : 'border-neutral-300 text-neutral-700 focus:ring-blue-500'}`}
-                        />
-                        {ordemInicioInvalida && (
-                          <p className="text-[10px] text-rose-600 font-bold mt-1">
-                            ⚠ Data anterior à assinatura do contrato ({new Date(solicitacao.contratoDataAssinatura! + 'T12:00:00').toLocaleDateString('pt-BR')}).
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
-                          PREVISÃO DE TÉRMINO DA OBRA *
-                          <span className="block text-[10px] text-neutral-400 normal-case font-normal mt-0.5 leading-tight">
-                            (VIGÊNCIA DOS MESES CONTRATUAIS)
-                          </span>
-                        </label>
-                        <input
-                          type="date"
-                          value={previsaoTerminoInput}
-                          onChange={(e) => setPrevisaoTerminoInput(e.target.value)}
-                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
-                          required
-                          className="w-full px-3 py-1.5 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
-                          VALOR HOMOLOGADO NA CONTRATAÇÃO *
-                        </label>
-                        <div className="relative rounded-lg shadow-sm">
-                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                            <span className="text-neutral-500 text-sm">R$</span>
-                          </div>
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="0,00"
-                            value={valorHomologadoContratacaoInput}
-                            onChange={(e) => setValorHomologadoContratacaoInput(e.target.value)}
-                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
-                            required
-                            className="w-full pl-9 pr-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-700"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
-                          TIPO DE OBRA PONDERADO *
-                        </label>
-                        <select
-                          value={tipoObraInput}
-                          onChange={(e) => setTipoObraInput(e.target.value)}
-                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
-                          required
-                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700 font-sans"
-                        >
-                          <option value="Construção">Construção (Classe IV - Peso 5)</option>
-                          <option value="Ampliação / Quadra">Ampliação / Quadra (Classe III - Peso 4)</option>
-                          <option value="Reforma">Reforma (Classe II/III - Peso 3)</option>
-                          <option value="Acessibilidade">Acessibilidade (Classe I/II - Peso 2)</option>
-                          <option value="Projeto">Projeto (Classe I - Peso 1)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-600 mb-1 uppercase tracking-wider">
-                          Fiscal de Obra Atribuído *
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Digite o nome do engenheiro fiscal responsável pela obra"
-                          value={fiscalObraAtribuidoInput}
-                          onChange={(e) => setFiscalObraAtribuidoInput(e.target.value)}
-                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
-                          required
-                          className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700"
-                        />
-                        <p className="text-[10px] text-neutral-400 mt-1">Este profissional acompanhará a execução em campo e assinará as medições.</p>
-                      </div>
-                    </div>
-
-                    {/* PAINEL DO CÁLCULO DA COMPLEXIDADE EM TEMPO REAL */}
-                    <div className="mt-4 p-5 bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-xl space-y-4 font-sans">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-3 gap-2">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                            <Layers className="w-4 h-4 text-blue-600" />
-                            Calculador do Enquadramento da Complexidade
-                          </h4>
-                          <p className="text-[10px] text-slate-500 mt-0.5">Definida pelo Valor Contratual, Tipo de Obra e Duração</p>
-                        </div>
-                        <div className={`px-3 py-1.5 rounded-lg border text-xs font-black flex items-center gap-2 self-start sm:self-auto ${complexidadeCalculada.colorClass}`}>
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
-                          </span>
-                          <span>CLASSE {complexidadeCalculada.classe}</span>
-                          <span className="text-[10px] font-normal opacity-60">•</span>
-                          <span className="text-[10px] tracking-wider uppercase font-extrabold">{complexidadeCalculada.classificacao}</span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="bg-white p-3.5 rounded-lg border border-slate-200 relative overflow-hidden shadow-xs hover:border-blue-200 transition-colors">
-                          <div className="absolute top-0 right-0 py-0.5 px-1.5 bg-slate-100 text-[8px] text-slate-500 font-bold rounded-bl uppercase">Peso: 75%</div>
-                          <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Valor Contrato</span>
-                          <span className="text-xs font-bold text-slate-705 block mt-0.5 truncate" title={complexidadeCalculada.vInfo.label}>
-                            {complexidadeCalculada.vInfo.label}
-                          </span>
-                          <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100">
-                            <span className="text-[10px] text-slate-400 font-semibold text-neutral-500">Ponto ponderado:</span>
-                            <span className="text-xs font-extrabold font-mono text-slate-700">{(complexidadeCalculada.vInfo.score * 0.75).toFixed(2)}</span>
-                          </div>
-                        </div>
-
-                        <div className="bg-white p-3.5 rounded-lg border border-slate-200 relative overflow-hidden shadow-xs hover:border-blue-200 transition-colors">
-                          <div className="absolute top-0 right-0 py-0.5 px-1.5 bg-slate-100 text-[8px] text-slate-500 font-bold rounded-bl uppercase">Peso: 15%</div>
-                          <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Tipo da Obra</span>
-                          <span className="text-xs font-bold text-slate-705 block mt-0.5 truncate" title={complexidadeCalculada.tInfo.label}>
-                            {complexidadeCalculada.tInfo.label}
-                          </span>
-                          <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100">
-                            <span className="text-[10px] text-slate-400 font-semibold text-neutral-500">Ponto ponderado:</span>
-                            <span className="text-xs font-extrabold font-mono text-slate-700">{(complexidadeCalculada.tInfo.score * 0.15).toFixed(2)}</span>
-                          </div>
-                        </div>
-
-                        <div className="bg-white p-3.5 rounded-lg border border-slate-200 relative overflow-hidden shadow-xs hover:border-blue-200 transition-colors">
-                          <div className="absolute top-0 right-0 py-0.5 px-1.5 bg-slate-100 text-[8px] text-slate-500 font-bold rounded-bl uppercase">Peso: 10%</div>
-                          <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Duração (Meses)</span>
-                          <span className="text-xs font-bold text-slate-705 block mt-0.5 truncate">
-                            {parsedMeses} meses
-                          </span>
-                          <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100">
-                            <span className="text-[10px] text-slate-400 font-semibold text-neutral-500">Ponto ponderado:</span>
-                            <span className="text-xs font-extrabold font-mono text-slate-700">{(complexidadeCalculada.dInfo.score * 0.10).toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-200/50 p-3 rounded-lg flex flex-col md:flex-row md:items-center justify-between text-[11px] font-semibold text-slate-700 gap-2">
-                        <span className="font-mono text-[10px] text-slate-500">Fórmula: (Valor * 0.75) + (Tipo * 0.15) + (Duração * 0.10)</span>
-                        <div className="flex items-center gap-1.5 self-end md:self-auto">
-                          <span className="text-slate-500 font-normal">Soma Ponderada:</span>
-                          <span className="text-xs font-bold font-mono text-blue-700 bg-blue-50 px-2 py-0.5 border border-blue-100 rounded">{complexidadeCalculada.pontuacao} / 5.00</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CRONOGRAMA FÍSICO-FINANCEIRO UPLOADER */}
-                  <div className="bg-slate-50/50 p-5 rounded-xl border border-slate-100 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Cronograma Físico-Financeiro *</h3>
-                      <span className="text-[10px] font-semibold text-rose-500 bg-rose-50 px-2 py-0.5 border border-rose-100 rounded">Obrigatório</span>
-                    </div>
-
-                    {solicitacao.cronogramaFisicoFinanceiroFileName ? (
-                      <div className="p-4 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 bg-green-50 rounded-lg text-green-600 border border-green-200">
-                            <FileText className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <span className="block text-xs font-bold text-neutral-800 break-all">{solicitacao.cronogramaFisicoFinanceiroFileName}</span>
-                            <span className="text-[10px] text-neutral-400 font-mono italic block mt-0.5">
-                              Tamanho: {solicitacao.cronogramaFisicoFinanceiroFileSize} • Enviado em: {solicitacao.cronogramaFisicoFinanceiroUploadedAt}
-                            </span>
-                          </div>
-                        </div>
-
-                        {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
-                          <button
-                            type="button"
-                            onClick={removerCronograma}
-                            className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            title="Remover arquivo"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div 
-                        onClick={() => {
-                          if (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) {
-                            cronogramaInputRef.current?.click();
-                          }
-                        }}
-                        className={`border-2 border-dashed rounded-xl p-6 text-center transition-all ${
-                          perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')
-                            ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/55 cursor-pointer'
-                            : 'border-neutral-200 bg-neutral-50/20 cursor-not-allowed'
-                        }`}
-                      >
-                        <UploadCloud className="w-8 h-8 text-neutral-400 mx-auto mb-2" />
-                        <span className="block text-xs font-bold text-neutral-700">Anexar cronograma físico-financeiro</span>
-                        <span className="text-[10px] text-neutral-400 block mt-1">Formatos suportados: .pdf, .xls, .xlsx (Máx: 10MB)</span>
-                        <input
-                          ref={cronogramaInputRef}
-                          type="file"
-                          accept=".pdf,.xls,.xlsx"
-                          onChange={handleCronogramaUpload}
-                          className="hidden"
-                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* SAVE ACTION */}
-                  {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
-                    <div className="pt-2 flex justify-end">
-                      <button
-                        type="submit"
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all shadow-sm cursor-pointer"
-                      >
-                        Salvar Informações Cadastrais
-                      </button>
-                    </div>
-                  )}
-                </form>
-              </div>
-
-              {/* SIDEBAR DA ORDEM DE INÍCIO */}
-              <div className="space-y-4">
-                <div className="p-5 bg-white border border-neutral-200 rounded-xl space-y-4">
-                  <h4 className="font-display font-medium text-xs text-neutral-400 uppercase tracking-widest">Informações Cadastradas</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Início da Obra (O.I)</span>
-                      <span className="text-xs font-bold font-mono text-neutral-800 block mt-0.5">
-                        {solicitacao.dataOrdemInicio ? `${new Date(solicitacao.dataOrdemInicio + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Não informado'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Previsão de Término</span>
-                      <span className="text-xs font-bold font-mono text-neutral-805 block mt-0.5">
-                        {solicitacao.previsaoTerminoObra ? `${new Date(solicitacao.previsaoTerminoObra + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Não informado'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Valor de Contratação</span>
-                      <span className="text-xs font-bold font-mono text-emerald-600 block mt-0.5">
-                        {solicitacao.valorHomologadoContratacao ? `R$ ${solicitacao.valorHomologadoContratacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Tipo da Obra</span>
-                      <span className="text-xs font-bold text-neutral-800 block mt-0.5">
-                        {solicitacao.tipoObra || 'Não informado'}
-                      </span>
-                    </div>
-
-                    {solicitacao.classeObra && (
-                      <div className="pt-2 border-t border-slate-100">
-                        <span className="block text-[10px] text-neutral-500 font-semibold uppercase mb-1">Classe de Complexidade</span>
-                        <div className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col gap-1 ${
-                          solicitacao.classeObra === 'IV' 
-                            ? 'bg-rose-50 text-rose-800 border-rose-200' 
-                            : solicitacao.classeObra === 'III'
-                              ? 'bg-orange-50 text-orange-800 border-orange-200'
-                              : solicitacao.classeObra === 'II'
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : 'bg-green-50 text-green-800 border-green-200'
-                        }`}>
-                          <div className="flex items-center justify-between">
-                            <span className="font-extrabold">CLASSE {solicitacao.classeObra}</span>
-                            <span className="font-mono text-[10px] opacity-80">Score: {solicitacao.pontuacaoComplexidade?.toFixed(2)}</span>
-                          </div>
-                          <span className="text-[9px] font-normal uppercase opacity-95 block pt-0.5">
-                            {solicitacao.duracaoObraMeses ? `${solicitacao.duracaoObraMeses} meses • ` : ''} 
-                            {solicitacao.classeObra === 'IV' ? 'Muito Alta Complexidade' : solicitacao.classeObra === 'III' ? 'Alta Complexidade' : solicitacao.classeObra === 'II' ? 'Média Complexidade' : 'Baixa Complexidade'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    <div>
-                      <span className="block text-[10px] text-neutral-500 font-semibold uppercase">Cronograma Físico-Financeiro</span>
-                      <span className="text-xs font-bold text-neutral-600 truncate block mt-0.5 max-w-full">
-                        {solicitacao.cronogramaFisicoFinanceiroFileName || 'Falta anexar'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {solicitacao.empresasAnteriores && solicitacao.empresasAnteriores.length > 0 && (
-                  <div className="p-5 bg-neutral-50 border border-neutral-200 rounded-xl space-y-4 font-sans">
-                    <h4 className="font-display font-bold text-xs text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
-                      <History className="w-4 h-4 text-neutral-400" />
-                      O.I. das Construtoras Anteriores
-                    </h4>
-                    <div className="space-y-4 divide-y divide-neutral-200 max-h-96 overflow-y-auto pr-1">
-                      {solicitacao.empresasAnteriores.map((emp, idx) => (
-                        <div key={emp.id || idx} className="pt-4 first:pt-0 space-y-2">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="text-xs font-bold text-neutral-800 block leading-tight">{emp.nome}</span>
-                              <span className="text-[10px] text-neutral-400 block font-mono mt-0.5">CNPJ: {emp.cnpj}</span>
-                            </div>
-                            <span className="px-2 py-0.5 text-[9px] font-bold rounded-md bg-red-50 text-red-800 border border-red-200">
-                              Distratada
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px] font-sans">
-                            <div>
-                              <span className="text-neutral-400 block uppercase text-[8px] font-bold">Início Obra</span>
-                              <span className="font-semibold text-neutral-700 font-mono">
-                                {emp.dataOrdemInicio ? `${new Date(emp.dataOrdemInicio + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Não informado'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-400 block uppercase text-[8px] font-bold">Previsão Término</span>
-                              <span className="font-semibold text-neutral-700 font-mono">
-                                {emp.previsaoTerminoObra ? `${new Date(emp.previsaoTerminoObra + 'T00:00:00').toLocaleDateString('pt-BR')}` : 'Não informado'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-400 block uppercase text-[8px] font-bold">Valor Contratual</span>
-                              <span className="font-bold text-emerald-600 font-mono">
-                                {emp.valorHomologadoContratacao ? `R$ ${emp.valorHomologadoContratacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Não informado'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-neutral-400 block uppercase text-[8px] font-bold">Fiscal Obra</span>
-                              <span className="font-semibold text-neutral-700 truncate block" title={emp.fiscalObraAtribuido}>
-                                {emp.fiscalObraAtribuido || 'Não informado'}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="pt-1.5">
-                            <span className="text-[9px] text-neutral-400 font-semibold uppercase block">Doc. Cronograma Antigo</span>
-                            <span className="text-[10px] text-neutral-600 font-mono flex items-center gap-1 bg-white p-1 rounded border border-neutral-200 mt-0.5 truncate" title={emp.cronogramaFisicoFinanceiroFileName}>
-                              <FileText className="w-3 h-3 text-blue-500 shrink-0" />
-                              {emp.cronogramaFisicoFinanceiroFileName || 'Não anexado'}
-                            </span>
-                          </div>
-
-                          {(emp.justificativaDistrato || emp.dataDistrato) && (
-                            <div className="p-2.5 bg-red-50/50 border border-red-100 rounded-lg text-[10px] space-y-1">
-                              <span className="font-bold text-red-800 block text-[9px] uppercase tracking-wider">Histórico do Distrato:</span>
-                              {emp.dataDistrato && (
-                                <div className="flex justify-between">
-                                  <span className="text-neutral-500">Data do distrato:</span>
-                                  <span className="font-semibold text-neutral-700 font-mono">{new Date(emp.dataDistrato + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
-                                </div>
-                              )}
-                              {emp.justificativaDistrato && (
-                                <div>
-                                  <span className="text-neutral-500 block mb-0.5">Motivo / Justificativa:</span>
-                                  <p className="font-medium text-neutral-700 italic border-l-2 border-red-200 pl-1.5 leading-snug">{emp.justificativaDistrato}</p>
-                                </div>
-                              )}
-                              {emp.documentoDistratoFileName && (
-                                <div className="flex items-center gap-1 mt-1 text-[9px] text-neutral-650 font-bold bg-white p-1 rounded border border-neutral-150 truncate">
-                                  <FileText className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                                  <span className="truncate">{emp.documentoDistratoFileName}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {perfilUsuario !== 'tecnico_infra' && (
-                  <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl text-[11px] text-orange-800 leading-relaxed">
-                    <span className="font-bold block text-xs mb-1 text-orange-900">Acesso Restrito:</span>
-                    Essas informações são protegidas e devem ser inseridas pelo perfil de <strong>Fiscal de Obra</strong>. Atualmente, os formulários estão abertos apenas para leitura.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* BOTÕES DE TRANSIÇÃO DA ORDEM DE INÍCIO */}
-            {!hideTransitionButtons && (
-              <div className="border-t border-neutral-100 pt-6 mt-6 flex justify-end font-sans">
-                {solicitacao.etapaAtual === 'ordem_inicio' ? (
-                  <button
-                    type="button"
-                    onClick={emitirOrdemEIniciarObra}
-                    className={`px-5 py-2.5 rounded-lg text-sm font-semibold shadow-sm transition-all flex items-center gap-2 ${
-                      solicitacao.dataOrdemInicio && solicitacao.previsaoTerminoObra && solicitacao.valorHomologadoContratacao && solicitacao.cronogramaFisicoFinanceiroFileName
-                        ? 'bg-emerald-605 hover:bg-emerald-700 text-white cursor-pointer'
-                        : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                    }`}
-                    disabled={!solicitacao.dataOrdemInicio || !solicitacao.previsaoTerminoObra || !solicitacao.valorHomologadoContratacao || !solicitacao.cronogramaFisicoFinanceiroFileName}
-                  >
-                    <Building className="w-4 h-4 text-white" />
-                    Emitir Ordem de Início e Liberar Obra
-                  </button>
-                ) : (
-                  <span className="text-xs text-emerald-600 border border-emerald-200 bg-emerald-50 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5">
-                    <CheckCircle className="w-4 h-4" /> Ordem de Início emitida! Processo em fase de Execução e Medições regulares.
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* CONTEÚDO DA ABA 3: EXECUÇÃO DA OBRA */}
         {activeTab === 'execucao' && (
           <div className="p-6">
@@ -3396,7 +2951,7 @@ ${totalPendencias > 0
                           placeholder="Digite o nome do engenheiro fiscal responsável pela obra"
                           value={fiscalObraAtribuidoInput}
                           onChange={(e) => setFiscalObraAtribuidoInput(e.target.value)}
-                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
+                          disabled={perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'gestor_paf'}
                           required
                           className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-neutral-700"
                         />
@@ -3454,7 +3009,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                               <button
                                 type="button"
                                 onClick={removerCronograma}
@@ -3468,12 +3023,12 @@ ${totalPendencias > 0
                       ) : (
                         <div 
                           onClick={() => {
-                            if (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) {
+                            if (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) {
                               cronogramaInputRef.current?.click();
                             }
                           }}
                           className={`border-2 border-dashed rounded-xl p-4 text-center transition-all ${
-                            perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')
+                            perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))
                               ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/50 cursor-pointer'
                               : 'border-neutral-200 bg-neutral-50/25 cursor-not-allowed'
                           }`}
@@ -3494,7 +3049,7 @@ ${totalPendencias > 0
                     </div>
 
                     <div className="pt-2 flex justify-end gap-2.5">
-                      {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                      {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                         <button
                           type="submit"
                           className="px-3.5 py-1.5 border border-blue-600 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-extrabold cursor-pointer transition-colors"
@@ -3503,7 +3058,7 @@ ${totalPendencias > 0
                         </button>
                       )}
 
-                      {solicitacao.etapaAtual === 'ordem_inicio' && (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                      {solicitacao.etapaAtual === 'ordem_inicio' && (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                         <button
                           type="button"
                           onClick={emitirOrdemEIniciarObra}
@@ -3591,7 +3146,7 @@ ${totalPendencias > 0
                       </label>
                       <select
                         value={statusObraInput}
-                        onChange={(e) => setStatusObraInput(e.target.value)}
+                        onChange={(e) => setStatusObraInput(e.target.value as any)}
                         disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
                         className="w-full px-3 py-2 text-sm border border-neutral-300 rounded-lg focus:outline-hidden bg-white font-sans text-neutral-700"
                       >
@@ -3668,7 +3223,7 @@ ${totalPendencias > 0
                                 </span>
                               </div>
                             </div>
-                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -3872,7 +3427,7 @@ ${totalPendencias > 0
                     </div>
                   )}
 
-                  {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                  {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                     <div className="flex justify-end pt-1">
                       <button
                         onClick={salvarDadosGeraisObra}
@@ -4333,7 +3888,7 @@ ${totalPendencias > 0
                       <div className="pt-3.5 border-t border-slate-200/80 space-y-3">
                         
                         {/* 1. GESTOR DORE: ATRIBUIR QUALQUER TÉCNICO DESEJADO */}
-                        {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'admin') && (
+                        {(perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
                           <div className="bg-white border border-slate-200 p-3.5 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
                             <div className="flex items-center gap-2.5">
                               <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
@@ -5087,7 +4642,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5167,7 +4722,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5247,7 +4802,7 @@ ${totalPendencias > 0
                               <Download className="w-3.5 h-3.5" />
                               Baixar
                             </button>
-                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5295,7 +4850,7 @@ ${totalPendencias > 0
                     </div>
                   </div>
 
-                  {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin')) && (
+                  {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                     <div className="flex flex-col gap-2 pt-3 border-t border-neutral-100">
                       {!todosItensOk && (
                         <p className="text-[10.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-medium text-right">

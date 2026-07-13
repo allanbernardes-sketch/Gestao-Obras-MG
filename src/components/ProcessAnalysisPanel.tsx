@@ -895,7 +895,7 @@ export default function ProcessAnalysisPanel({
             </div>
 
             {/* Ícones de Validação do Auditor */}
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
               <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
                 <span className="text-xs font-bold text-slate-600">
                   Validação Geral da Escola Estadual:
@@ -938,7 +938,7 @@ export default function ProcessAnalysisPanel({
               </div>
             )}
 
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && getStatusSecao(solicitacao, 'identificacao_escolar').status === 'nao_validado' && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && getStatusSecao(solicitacao, 'identificacao_escolar').status === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
@@ -1082,7 +1082,7 @@ export default function ProcessAnalysisPanel({
               </div>
             </div>
 
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
               <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
                 <span className="text-xs font-bold text-slate-600">
                   Validação Geral da Classificação Patrimonial:
@@ -1125,7 +1125,7 @@ export default function ProcessAnalysisPanel({
               </div>
             )}
 
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'nao_validado' && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && getStatusSecao(solicitacao, 'classificacao_patrimonial').status === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação Patrimonial *</label>
                 <textarea
@@ -1246,7 +1246,7 @@ export default function ProcessAnalysisPanel({
             </div>
 
             {/* Ícones de Validação do Auditor */}
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
               <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
                 <span className="text-xs font-bold text-slate-600">
                   Avaliação do Detalhamento Técnico:
@@ -1289,7 +1289,7 @@ export default function ProcessAnalysisPanel({
               </div>
             )}
 
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'nao_validado' && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && getStatusSecao(solicitacao, 'detalhamento_tecnico').status === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
@@ -1378,7 +1378,7 @@ export default function ProcessAnalysisPanel({
             </div>
 
             {/* Ícones de Validação do Auditor */}
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
               <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center gap-4">
                 <span className="text-xs font-bold text-slate-600">
                   Avaliação da Dotação Orçamentária SGO:
@@ -1421,7 +1421,7 @@ export default function ProcessAnalysisPanel({
               </div>
             )}
 
-            {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && getStatusSecao(solicitacao, 'referencia_dotacao').status === 'nao_validado' && (
+            {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && getStatusSecao(solicitacao, 'referencia_dotacao').status === 'nao_validado' && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg space-y-1 animate-in slide-in-from-top-1 mt-2">
                 <label className="block text-[10px] font-bold text-red-700 uppercase">Motivo detalhado da Não-Validação *</label>
                 <textarea
@@ -1461,7 +1461,7 @@ export default function ProcessAnalysisPanel({
         <div className="space-y-6 animate-in fade-in duration-200 text-left">
           
           {/* PARECER RÁPIDO COM IA SE ATRIBUIDO */}
-          {(perfilUsuario === 'analista_dore' || perfilUsuario === 'admin') && isMyAssignment && (
+          {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && isMyAssignment && (
             <div className="flex items-center justify-between p-3.5 bg-indigo-50/70 border border-indigo-150 rounded-xl mb-4 font-sans text-xs">
               <div className="flex items-start gap-2.5">
                 <Sparkles className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5 animate-pulse" />
@@ -1659,19 +1659,18 @@ export default function ProcessAnalysisPanel({
                         )}
                       </div>
 
-                      {/* Right: Validation Controls */}
+                      {/* Right: Validation Controls — documento opcional: pode ser validado mesmo sem anexo, já que não é imprescindível */}
                       {isMyAssignment && (
                         <div className="flex flex-col items-end gap-2 shrink-0">
                           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
                             <button
                               type="button"
                               onClick={() => handleSetDocValidation(doc.id, 'aprovado')}
-                              disabled={!isUploaded}
                               className={`px-3 py-1.5 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer ${
                                 doc.status === 'aprovado'
                                   ? 'bg-emerald-600 text-white shadow-3xs'
                                   : 'text-slate-600 hover:bg-slate-200'
-                              } ${!isUploaded ? 'opacity-40 cursor-not-allowed' : ''}`}
+                              }`}
                             >
                               <CheckCircle className="w-3.5 h-3.5" />
                               Validado

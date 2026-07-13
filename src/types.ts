@@ -69,7 +69,7 @@ export interface Aditivo {
 export interface AjustePlanilha {
   id: string;
   numero: number;
-  tipoAjuste: 'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto';
+  tipoAjuste: 'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto' | 'ajuste_sem_meta_com_projeto';
   valorAjuste: number;
   responsavelPlanilha: string;
   registroProfissional: string; // CREA/CAU/CFT
@@ -375,7 +375,7 @@ export interface SaldoComplementarItem {
   documentos: { item: string; obrigatorio: boolean; checked: boolean; fileName?: string }[];
 }
 
-export type PerfilUsuario = 'tecnico_infra' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'admin';
+export type PerfilUsuario = 'tecnico_infra' | 'coordenador_regional' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'diretor_dore' | 'admin';
 
 export interface UsuarioSistema {
   id: string;
