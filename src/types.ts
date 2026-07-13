@@ -114,7 +114,16 @@ export interface Solicitacao {
   dataCriacao: string;
   etapaAtual: EtapaProcesso;
   historicoEtapas: { etapa: EtapaProcesso; data: string; responsavel: string }[];
-  
+
+  // Aprovação do Coordenador Regional — gate leve sobre o estágio 'cadastro', não altera EtapaProcesso.
+  // undefined = rascunho (ainda não enviado); 'pendente' = enviado, aguardando o coordenador da SRE;
+  // 'reprovado' = coordenador devolveu para o técnico corrigir (ver justificativaReprovacaoRegional);
+  // 'aprovado' = liberado para análise (marca histórica; a partir daí etapaAtual já é 'analise').
+  statusAprovacaoRegional?: 'pendente' | 'aprovado' | 'reprovado';
+  coordenadorAprovador?: string;
+  dataAprovacaoRegional?: string;
+  justificativaReprovacaoRegional?: string;
+
   // Checklist de documentos
   documentos: DocumentoChecklist[];
 
