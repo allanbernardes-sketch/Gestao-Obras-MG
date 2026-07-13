@@ -832,7 +832,7 @@ export function NovoAtendimentoPanel({
                   >
                     <option value="">Selecione o endereço...</option>
                     {enderecosParaSelecao.map(e => (
-                      <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                      <option key={`${e.codesc}-${e.codigoEndereco}`} value={e.codigoEndereco}>
                         {e.codigoEndereco} — {e.descricao}{!codesc && e.nomeEscola ? ` · ${e.nomeEscola}` : ''}
                       </option>
                     ))}
@@ -1864,7 +1864,7 @@ export function NovoAtendimentoPanel({
                 >
                   <option value="">Selecione o endereço...</option>
                   {enderecosEdit.map(e => (
-                    <option key={e.codigoEndereco} value={e.codigoEndereco}>
+                    <option key={`${e.codesc}-${e.codigoEndereco}`} value={e.codigoEndereco}>
                       {e.codigoEndereco} — {e.descricao}
                     </option>
                   ))}
