@@ -2644,9 +2644,10 @@ export function AtribuicaoPanel({
   const [filtroDataFim, setFiltroDataFim] = useState('');
   const [filtroAtribuicao, setFiltroAtribuicao] = useState<'todos' | 'minhas'>('todos');
 
-  // Validação de processos é atribuível apenas a analistas do órgão central (Equipe de Planejamento) — técnicos regionais da SRE não entram nessa lista
+  // Validação de processos é atribuível a analistas do órgão central, além de admin/diretor_dore
+  // (que também podem validar qualquer solicitação) — técnicos regionais da SRE não entram nessa lista
   const analistasSgo = usuariosSeguranca.filter(
-    u => u.perfil === 'analista_dore'
+    u => u.perfil === 'analista_dore' || u.perfil === 'admin' || u.perfil === 'diretor_dore'
   );
 
   // Um analista só pode se autoatribuir um processo — não pode trocar a atribuição para outro analista

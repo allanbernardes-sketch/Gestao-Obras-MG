@@ -150,7 +150,7 @@ export default function SolicitacaoDetalhes({
   usuariosSeguranca = [],
   somenteLeitura = false
 }: SolicitacaoDetalhesProps) {
-  const analistas = usuariosSeguranca.filter(u => u.perfil === 'analista_dore');
+  const analistas = usuariosSeguranca.filter(u => u.perfil === 'analista_dore' || u.perfil === 'admin' || u.perfil === 'diretor_dore');
   const fiscais = usuariosSeguranca.filter(u => u.perfil === 'tecnico_infra' || u.perfil === 'tecnico_infra');
   const currentUserNome = usuariosSeguranca.find(u => u.perfil === perfilUsuario)?.nome || '';
   // Navigation internal view
@@ -176,10 +176,12 @@ export default function SolicitacaoDetalhes({
   }, [forcedTab, solicitacao.id]);
   // somenteLeitura sempre vence — usado pela consulta histórica somente-leitura (Atribuição) para
   // garantir que nenhum botão de validação/aprovação fique habilitado, independente de quem está logado.
-  const isMyAssignment = !somenteLeitura &&
-    (perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) &&
-    !!solicitacao.analistaAtribuido &&
-    (currentUserNome ? solicitacao.analistaAtribuido === currentUserNome : true);
+  const isMyAssignment = !somenteLeitura && (
+    perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore' ||
+    (perfilUsuario === 'analista_dore' &&
+      !!solicitacao.analistaAtribuido &&
+      (currentUserNome ? solicitacao.analistaAtribuido === currentUserNome : true))
+  );
 
   // RETORNO DE ETAPA (somente Administrador) — utils/etapas.ts define o limite e as etapas elegíveis.
   const etapasAnterioresDisponiveis = getEtapasAnteriores(solicitacao.etapaAtual);
