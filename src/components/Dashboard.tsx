@@ -462,9 +462,9 @@ export default function Dashboard({
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
+          <div className="overflow-auto max-h-[65vh]">
             <table className="w-full text-left border-collapse font-sans text-xs">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 font-bold uppercase tracking-wider text-[10px] h-11">
                   <th className="py-3 px-4 w-28">OBRA ID</th>
                   <th className="py-3 px-4">ESCOLA / LOCALIZAÇÃO</th>
