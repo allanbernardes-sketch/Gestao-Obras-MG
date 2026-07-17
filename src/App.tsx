@@ -1376,6 +1376,17 @@ export default function App() {
     atualizarEGuardarSolicitacoes(novas);
   };
 
+  // Lápis de edição em listas/kanban: rascunho do próprio técnico volta ao Atendimento Inicial
+  // (fluxo guiado completo); demais casos abrem o modal de edição rápida.
+  const handleEditarAtendimento = (sol: Solicitacao) => {
+    if (perfilUsuario === 'tecnico_infra' && sol.etapaAtual === 'cadastro') {
+      setAtendimentoEmEdicaoDirect(sol);
+      setActiveSubTask('novo_atendimento');
+    } else {
+      setSolicitacaoEmEdicao(sol);
+    }
+  };
+
   const handleSelectSolicitacao = (sol: Solicitacao) => {
     let targetSubTask = 'cadastro';
     const etapa = sol.etapaAtual;
@@ -3572,7 +3583,7 @@ export default function App() {
                             somenteLeitura={somenteLeitura}
                             onUpdate={handleUpdateSolicitacao}
                             onDelete={handleDeleteSolicitacao}
-                            onEdit={setSolicitacaoEmEdicao}
+                            onEdit={handleEditarAtendimento}
                             mode={viewMode === 'kanban_analista' ? 'usuario' : 'status'}
                             viewMode={viewMode}
                             onMudarViewMode={(mode) => setViewMode(mode)}
@@ -3634,14 +3645,7 @@ export default function App() {
                       somenteLeitura={somenteLeitura}
                       onDelete={handleDeleteSolicitacao}
                       onUpdate={handleUpdateSolicitacao}
-                      onEdit={(sol) => {
-                        if (perfilUsuario === 'tecnico_infra' && sol.etapaAtual === 'cadastro') {
-                          setAtendimentoEmEdicaoDirect(sol);
-                          setActiveSubTask('novo_atendimento');
-                        } else {
-                          setSolicitacaoEmEdicao(sol);
-                        }
-                      }}
+                      onEdit={handleEditarAtendimento}
                       viewMode={viewMode}
                       onMudarViewMode={(mode) => setViewMode(mode)}
                       activeSubTask={activeSubTask}
@@ -3674,7 +3678,7 @@ export default function App() {
                       somenteLeitura={somenteLeitura}
                       onUpdate={handleUpdateSolicitacao}
                       onDelete={handleDeleteSolicitacao}
-                      onEdit={setSolicitacaoEmEdicao}
+                      onEdit={handleEditarAtendimento}
                       mode="status"
                       viewMode={viewMode}
                       onMudarViewMode={(mode) => setViewMode(mode)}
