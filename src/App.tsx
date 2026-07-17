@@ -1376,10 +1376,11 @@ export default function App() {
     atualizarEGuardarSolicitacoes(novas);
   };
 
-  // Lápis de edição em listas/kanban: rascunho do próprio técnico volta ao Atendimento Inicial
-  // (fluxo guiado completo); demais casos abrem o modal de edição rápida.
+  // Lápis de edição em listas/kanban: rascunho (etapaAtual === 'cadastro') sempre volta ao
+  // Atendimento Inicial (fluxo guiado completo, com todos os campos e documentos), independente
+  // do perfil de quem clicou. O modal de edição rápida só é usado para outras etapas do processo.
   const handleEditarAtendimento = (sol: Solicitacao) => {
-    if (perfilUsuario === 'tecnico_infra' && sol.etapaAtual === 'cadastro') {
+    if (sol.etapaAtual === 'cadastro') {
       setAtendimentoEmEdicaoDirect(sol);
       setActiveSubTask('novo_atendimento');
     } else {
