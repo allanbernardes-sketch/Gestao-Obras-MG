@@ -211,12 +211,84 @@ export function NovoAtendimentoPanel({
   const [selectedAtendimentoForEdit, setSelectedAtendimentoForEdit] = useState<Solicitacao | null>(null);
   const [recentCreatedId, setRecentCreatedId] = useState<string | null>(null);
 
+  // Rascunho (etapaAtual === 'cadastro') aberto pelo lápis/linha da lista: continua no MESMO
+  // wizard de 2 passos usado para criar um atendimento novo (não o formulário resumido de
+  // correção). Guarda o registro original para preservar campos não editáveis no wizard
+  // (id, dataCriacao, historicoEtapas etc.) na hora de salvar.
+  const [solicitacaoBaseEdicao, setSolicitacaoBaseEdicao] = useState<Solicitacao | null>(null);
+
   // Synchronize with direct editing requested from the parent dashboard
   React.useEffect(() => {
-    if (atendimentoEmEdicaoDirect) {
-      setSelectedAtendimentoForEdit(atendimentoEmEdicaoDirect);
-    } else {
+    if (!atendimentoEmEdicaoDirect) {
       setSelectedAtendimentoForEdit(null);
+      setSolicitacaoBaseEdicao(null);
+      return;
+    }
+
+    if (atendimentoEmEdicaoDirect.etapaAtual === 'cadastro') {
+      // Rascunho: reabre o wizard completo de criação, pré-preenchido com os dados salvos.
+      const sol = atendimentoEmEdicaoDirect;
+      setSelectedAtendimentoForEdit(null);
+      setSolicitacaoBaseEdicao(sol);
+
+      setCodesc(sol.codesc || '');
+      setNomeEscola(sol.nomeEscola || '');
+      setMunicipio(sol.municipio || '');
+      setSre(sol.sre || '');
+      setCodigoEndereco(sol.codigoEndereco || '');
+
+      const outroMatch = /^OUTRO \((.*)\)$/.exec(sol.formaOcupacao || '');
+      setFormaOcupacao(outroMatch ? 'OUTRO' : (sol.formaOcupacao || 'PRÓPRIO'));
+      setOutraFormaOcupacao(outroMatch ? outroMatch[1] : '');
+      setSeiMinutaOcupacao(sol.seiMinutaOcupacao || '');
+
+      setPredio(sol.predio || 'PRINCIPAL');
+      setTombado(sol.tombado || 'NÃO É TOMBADO');
+      setOrgaoTombador(sol.orgaoTombador || '');
+      setCoabitado(sol.coabitado || 'NÃO');
+      setTipoCoabitado(sol.tipoCoabitado || '');
+      setTipoObra(sol.tipoObra || sol.tipo || 'REFORMA');
+      setTipoAtendimento(sol.tipoAtendimento || 'NORMAL');
+      setNumPaf(sol.numPaf || '');
+      setAnoEmenda(sol.anoEmenda || '');
+      setEmendaImpositiva(sol.emendaImpositiva || 'Não');
+      setFormaAtendimento(sol.formaAtendimento || 'VIA CAIXA ESCOLAR');
+      setOrigemDemanda(sol.origemDemanda || '');
+      setOrgaoEmissorNotificacao(sol.orgaoEmissorNotificacao || '');
+      setNumeroNotificacao(sol.numeroNotificacao || '');
+      setDataNotificacao(sol.dataNotificacao || '');
+      setPrazoAtendimentoNotificacao(sol.prazoAtendimentoNotificacao || '');
+      setGrauPrioridade(sol.grauPrioridade || '');
+      setDescricaoFolhaRosto(sol.descricaoFolhaRosto || '');
+      setValorPlanilha(sol.valorPlanilha ? sol.valorPlanilha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
+      setPrazoEstimadoMeses(sol.prazoEstimadoMeses ? String(sol.prazoEstimadoMeses) : '');
+      setIss(sol.iss || '');
+      setObservacoesFicha(sol.observacoesFicha || '');
+      setUsaSaldoPafAnterior(sol.usaSaldoPafAnterior || 'Não');
+      setNumeroPafAnteriorCancelado(sol.numeroPafAnteriorCancelado || '');
+      setValorSaldoPafAnterior(sol.valorSaldoPafAnterior ? sol.valorSaldoPafAnterior.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '');
+
+      setDocumentosChecklist(sol.documentos && sol.documentos.length > 0
+        ? sol.documentos
+        : CHECKLIST_PADRAO.map((doc, idx) => ({
+            ...doc,
+            id: `doc_${idx + 1}_${Math.floor(100 + Math.random() * 900)}`,
+            status: 'pendente',
+            fileName: undefined,
+            fileSize: undefined,
+            uploadedAt: undefined,
+            justificativa: undefined
+          })));
+      setOutrosDocumentosChecklist(sol.outrosDocumentos || []);
+
+      setTentouFinalizar(false);
+      setErro('');
+      setCurrentView('form');
+    } else {
+      // Correção (etapaAtual === 'correcao'): mantém o formulário resumido existente,
+      // com o histórico de devoluções e campos bloqueados pela validação do analista.
+      setSolicitacaoBaseEdicao(null);
+      setSelectedAtendimentoForEdit(atendimentoEmEdicaoDirect);
     }
   }, [atendimentoEmEdicaoDirect]);
 
@@ -521,7 +593,76 @@ export function NovoAtendimentoPanel({
   };
 
   // Save either as 'cadastro' (draft) or 'analise' (finalize)
+  // Campos do wizard comuns a criação e atualização (Extended fields + documentos)
+  const construirCamposFormulario = () => ({
+    codigoEndereco: codigoEndereco.trim() || undefined,
+    formaOcupacao: formaOcupacao === 'OUTRO' ? `OUTRO (${outraFormaOcupacao.trim().toUpperCase()})` : formaOcupacao,
+    seiMinutaOcupacao: formaOcupacao === 'OUTRO' ? seiMinutaOcupacao.trim() || undefined : undefined,
+    predio: predio.toUpperCase(),
+    tipoObra,
+    tipoAtendimento,
+    numPaf: tipoAtendimento === 'EMENDA' ? numPaf.trim().toUpperCase() : undefined,
+    anoEmenda: tipoAtendimento === 'EMENDA' ? anoEmenda.trim() : undefined,
+    emendaImpositiva: tipoAtendimento === 'EMENDA' ? emendaImpositiva : undefined,
+    formaAtendimento,
+    origemDemanda: origemDemanda || undefined,
+    orgaoEmissorNotificacao: origemDemanda === 'Notificação' ? orgaoEmissorNotificacao || undefined : undefined,
+    numeroNotificacao: origemDemanda === 'Notificação' ? numeroNotificacao || undefined : undefined,
+    dataNotificacao: origemDemanda === 'Notificação' ? dataNotificacao || undefined : undefined,
+    prazoAtendimentoNotificacao: origemDemanda === 'Notificação' ? prazoAtendimentoNotificacao || undefined : undefined,
+    grauPrioridade: grauPrioridade as any || undefined,
+    descricaoFolhaRosto,
+    valorPlanilha: valorPlanilha ? parseBRLToFloat(valorPlanilha) : 0,
+    prazoEstimadoMeses: prazoEstimadoMeses ? parseInt(prazoEstimadoMeses, 10) : undefined,
+    iss: iss ? (iss.includes('%') ? iss : `${iss}%`) : '5%',
+    responsavel,
+    tombado: tombado.toUpperCase(),
+    orgaoTombador: tombado !== 'NÃO É TOMBADO' ? (orgaoTombador.toUpperCase() || 'MUNICIPAL') : undefined,
+    coabitado: coabitado.toUpperCase(),
+    tipoCoabitado: coabitado === 'SIM' ? (tipoCoabitado || 'Coabitado com outra escola Estadual') : undefined,
+    observacoesFicha: observacoesFicha,
+    usaSaldoPafAnterior,
+    numeroPafAnteriorCancelado: usaSaldoPafAnterior === 'Sim' ? numeroPafAnteriorCancelado.trim().toUpperCase() || undefined : undefined,
+    valorSaldoPafAnterior: usaSaldoPafAnterior === 'Sim' ? parseBRLToFloat(valorSaldoPafAnterior) : undefined,
+    necessidadeAditivoEstimada: usaSaldoPafAnterior === 'Sim' ? necessidadeAditivoCalc : undefined
+  });
+
   const handleFinalizarEGravar = (isDraft: boolean) => {
+    const hoje = new Date().toISOString().split('T')[0];
+
+    // Rascunho aberto pelo lápis/linha da lista: atualiza o registro existente em vez de
+    // criar um novo, preservando id, dataCriacao e o histórico de etapas já percorrido.
+    if (solicitacaoBaseEdicao) {
+      const atualizada: Solicitacao = {
+        ...solicitacaoBaseEdicao,
+        nomeEscola,
+        codesc,
+        tipo: tipoObra,
+        municipio,
+        sre,
+        statusAprovacaoRegional: !isDraft ? 'pendente' : solicitacaoBaseEdicao.statusAprovacaoRegional,
+        justificativaReprovacaoRegional: !isDraft ? undefined : solicitacaoBaseEdicao.justificativaReprovacaoRegional,
+        historicoEtapas: [
+          ...solicitacaoBaseEdicao.historicoEtapas,
+          ...(!isDraft ? [{ etapa: 'cadastro' as EtapaProcesso, data: hoje, responsavel: `${responsavel || 'Téc. de Infraestrutura'} (enviado para aprovação do coordenador regional)` }] : [])
+        ],
+        documentos: documentosChecklist,
+        outrosDocumentos: outrosDocumentosChecklist,
+        ...construirCamposFormulario()
+      };
+
+      onUpdateSolicitacao(atualizada);
+      if (onLimparEdicaoDirect) onLimparEdicaoDirect();
+      setSolicitacaoBaseEdicao(null);
+      setErro('');
+      setModalEnviadoTexto(!isDraft
+        ? 'O atendimento foi atualizado e encaminhado para aprovação do coordenador regional. Após aprovado, seguirá para a DORE.'
+        : 'Rascunho atualizado com sucesso.');
+      setMostrarModalEnviado(true);
+      resetToForm();
+      return;
+    }
+
     // Envio (não-rascunho) não vai mais direto para 'analise' — fica em 'cadastro' aguardando
     // aprovação do coordenador regional (statusAprovacaoRegional), que é quem libera para a DORE.
     const novaId = `SOL-2026-${Math.floor(100 + Math.random() * 900)}`;
@@ -532,50 +673,19 @@ export function NovoAtendimentoPanel({
       tipo: tipoObra,
       municipio,
       sre,
-      dataCriacao: new Date().toISOString().split('T')[0],
+      dataCriacao: hoje,
       etapaAtual: 'cadastro',
       statusAprovacaoRegional: !isDraft ? 'pendente' : undefined,
       historicoEtapas: [
-        { etapa: 'cadastro' as EtapaProcesso, data: new Date().toISOString().split('T')[0], responsavel: responsavel || 'Téc. de Infraestrutura' },
-        ...(!isDraft ? [{ etapa: 'cadastro' as EtapaProcesso, data: new Date().toISOString().split('T')[0], responsavel: `${responsavel || 'Téc. de Infraestrutura'} (enviado para aprovação do coordenador regional)` }] : [])
+        { etapa: 'cadastro' as EtapaProcesso, data: hoje, responsavel: responsavel || 'Téc. de Infraestrutura' },
+        ...(!isDraft ? [{ etapa: 'cadastro' as EtapaProcesso, data: hoje, responsavel: `${responsavel || 'Téc. de Infraestrutura'} (enviado para aprovação do coordenador regional)` }] : [])
       ],
       documentos: documentosChecklist,
       outrosDocumentos: outrosDocumentosChecklist,
       medicoes: [],
       aditivos: [],
       ajustes: [],
-
-      // Extended fields
-      codigoEndereco: codigoEndereco.trim() || undefined,
-      formaOcupacao: formaOcupacao === 'OUTRO' ? `OUTRO (${outraFormaOcupacao.trim().toUpperCase()})` : formaOcupacao,
-      seiMinutaOcupacao: formaOcupacao === 'OUTRO' ? seiMinutaOcupacao.trim() || undefined : undefined,
-      predio: predio.toUpperCase(),
-      tipoObra,
-      tipoAtendimento,
-      numPaf: tipoAtendimento === 'EMENDA' ? numPaf.trim().toUpperCase() : undefined,
-      anoEmenda: tipoAtendimento === 'EMENDA' ? anoEmenda.trim() : undefined,
-      emendaImpositiva: tipoAtendimento === 'EMENDA' ? emendaImpositiva : undefined,
-      formaAtendimento,
-      origemDemanda: origemDemanda || undefined,
-      orgaoEmissorNotificacao: origemDemanda === 'Notificação' ? orgaoEmissorNotificacao || undefined : undefined,
-      numeroNotificacao: origemDemanda === 'Notificação' ? numeroNotificacao || undefined : undefined,
-      dataNotificacao: origemDemanda === 'Notificação' ? dataNotificacao || undefined : undefined,
-      prazoAtendimentoNotificacao: origemDemanda === 'Notificação' ? prazoAtendimentoNotificacao || undefined : undefined,
-      grauPrioridade: grauPrioridade as any || undefined,
-      descricaoFolhaRosto,
-      valorPlanilha: valorPlanilha ? parseBRLToFloat(valorPlanilha) : 0,
-      prazoEstimadoMeses: prazoEstimadoMeses ? parseInt(prazoEstimadoMeses, 10) : undefined,
-      iss: iss ? (iss.includes('%') ? iss : `${iss}%`) : '5%',
-      responsavel,
-      tombado: tombado.toUpperCase(),
-      orgaoTombador: tombado !== 'NÃO É TOMBADO' ? (orgaoTombador.toUpperCase() || 'MUNICIPAL') : undefined,
-      coabitado: coabitado.toUpperCase(),
-      tipoCoabitado: coabitado === 'SIM' ? (tipoCoabitado || 'Coabitado com outra escola Estadual') : undefined,
-      observacoesFicha: observacoesFicha,
-      usaSaldoPafAnterior,
-      numeroPafAnteriorCancelado: usaSaldoPafAnterior === 'Sim' ? numeroPafAnteriorCancelado.trim().toUpperCase() || undefined : undefined,
-      valorSaldoPafAnterior: usaSaldoPafAnterior === 'Sim' ? parseBRLToFloat(valorSaldoPafAnterior) : undefined,
-      necessidadeAditivoEstimada: usaSaldoPafAnterior === 'Sim' ? necessidadeAditivoCalc : undefined
+      ...construirCamposFormulario()
     };
 
     onSolicitacaoCriada(nova);
@@ -617,6 +727,8 @@ export function NovoAtendimentoPanel({
     setValorSaldoPafAnterior('');
     setTentouFinalizar(false);
     setSelectedAtendimentoForEdit(null);
+    setSolicitacaoBaseEdicao(null);
+    if (onLimparEdicaoDirect) onLimparEdicaoDirect();
     setOutrosDocumentosChecklist([]);
     setNovoCustomDocNome('');
     setDocumentosChecklist(
