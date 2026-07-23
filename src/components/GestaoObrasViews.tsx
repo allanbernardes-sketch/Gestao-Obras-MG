@@ -2796,9 +2796,13 @@ export function AtribuicaoPanel({
   };
 
   const solicitacoesFiltradas = solicitacoes.filter(sol => {
-    // Fila Ativa: Aguardando Atribuição / Em Análise DORE (analise) + Em Correção pela SRE (correcao).
+    // Fila Ativa: Aguardando Atribuição / Em Análise DORE (analise) + Em Correção pela SRE (correcao)
+    // + obras em Execução com aditivo ou ajuste de planilha pendente de análise da DORE.
     // Processos em etapas futuras (paf_autorizacao em diante) ou cancelados vivem na aba Histórico.
-    if (sol.etapaAtual !== 'analise' && sol.etapaAtual !== 'correcao') return false;
+    const temAditivoPendente = (sol.aditivos || []).some(a => a.status === 'Pendente');
+    const temAjustePendente = (sol.ajustes || []).some(a => a.status === 'analise_dore');
+    const emExecucaoComPendencia = sol.etapaAtual === 'execucao' && (temAditivoPendente || temAjustePendente);
+    if (sol.etapaAtual !== 'analise' && sol.etapaAtual !== 'correcao' && !emExecucaoComPendencia) return false;
 
     // 1. ID de Obra
     if (filtroId && sol.id !== filtroId) return false;
@@ -2915,6 +2919,41 @@ export function AtribuicaoPanel({
         setFeedbackMsg(prev => ({ ...prev, [sol.id]: '' }));
       }, 2000);
     }
+  };
+
+  // Atribui (ou remove) o analista de um aditivo/ajuste específico — independente do
+  // analista da solicitação principal, usado nas linhas de obras em Execução com pendência.
+  const handleAssignAnalystItem = (sol: Solicitacao, tipo: 'aditivo' | 'ajuste', itemId: string, usrId: string) => {
+    const selectedUser = usrId ? analistasSgo.find(u => u.id === usrId) : undefined;
+    const nomeAnalista = selectedUser?.nome;
+    const feedbackKey = `${sol.id}_${tipo}_${itemId}`;
+
+    const updated: Solicitacao = {
+      ...sol,
+      aditivos: tipo === 'aditivo'
+        ? (sol.aditivos || []).map(a => a.id === itemId ? { ...a, analistaAtribuido: nomeAnalista } : a)
+        : sol.aditivos,
+      ajustes: tipo === 'ajuste'
+        ? (sol.ajustes || []).map(a => a.id === itemId ? { ...a, analistaAtribuido: nomeAnalista } : a)
+        : sol.ajustes,
+      historicoEtapas: [
+        ...sol.historicoEtapas,
+        {
+          etapa: sol.etapaAtual,
+          data: new Date().toISOString().split('T')[0],
+          responsavel: nomeAnalista
+            ? `Gestor DORE (Analista ${nomeAnalista} Atribuído ao ${tipo === 'aditivo' ? 'Aditivo' : 'Ajuste'} ${itemId})`
+            : `Gestor DORE (Atribuição Removida do ${tipo === 'aditivo' ? 'Aditivo' : 'Ajuste'} ${itemId})`
+        }
+      ]
+    };
+
+    onUpdateSolicitacao(updated);
+
+    setFeedbackMsg(prev => ({ ...prev, [feedbackKey]: nomeAnalista ? 'Atribuído com sucesso!' : 'Atribuição removida!' }));
+    setTimeout(() => {
+      setFeedbackMsg(prev => ({ ...prev, [feedbackKey]: '' }));
+    }, 2000);
   };
 
   return (
@@ -3208,6 +3247,11 @@ export function AtribuicaoPanel({
                       label: 'Análise de Engenharia',
                       className: 'border border-indigo-300 text-indigo-700 bg-indigo-50/20 text-[10px] font-bold uppercase tracking-wide rounded px-2.5 py-1 whitespace-nowrap'
                     };
+                  case 'execucao':
+                    return {
+                      label: 'Em Execução',
+                      className: 'border border-emerald-300 text-emerald-700 bg-emerald-50/20 text-[10px] font-bold uppercase tracking-wide rounded px-2.5 py-1 whitespace-nowrap'
+                    };
                   default:
                     return {
                       label: etapa === 'paf_autorizacao' ? 'Autorização PAF' : etapa.toUpperCase().replace('_', ' '),
@@ -3321,18 +3365,20 @@ export function AtribuicaoPanel({
                     {(() => {
                       const hasAditivo = sol.aditivos && sol.aditivos.some(a => a.status === 'Pendente');
                       const hasAjuste = sol.ajustes && sol.ajustes.some(a => a.status === 'analise_dore');
-                      if (hasAditivo) {
+                      if (hasAditivo || hasAjuste) {
                         return (
-                          <span className="border border-rose-300 text-rose-700 bg-rose-50/30 px-3 py-1.5 rounded text-[9.5px] font-bold uppercase tracking-[0.05em]">
-                            Termo Aditivo
-                          </span>
-                        );
-                      }
-                      if (hasAjuste) {
-                        return (
-                          <span className="border border-violet-300 text-violet-700 bg-violet-50/30 px-3 py-1.5 rounded text-[9.5px] font-bold uppercase tracking-[0.05em]">
-                            Ajuste
-                          </span>
+                          <div className="flex flex-col items-center gap-1">
+                            {hasAditivo && (
+                              <span className="border border-rose-300 text-rose-700 bg-rose-50/30 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-[0.05em] whitespace-nowrap">
+                                ⚠️ Aditivo pendente
+                              </span>
+                            )}
+                            {hasAjuste && (
+                              <span className="border border-violet-300 text-violet-700 bg-violet-50/30 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-[0.05em] whitespace-nowrap">
+                                ⚠️ Ajuste pendente
+                              </span>
+                            )}
+                          </div>
                         );
                       }
                       return (
@@ -3372,45 +3418,127 @@ export function AtribuicaoPanel({
 
                   {/* 9. ANALISTA DESIGNADO */}
                   <td className="py-4 px-4 whitespace-nowrap">
-                    <div className="flex flex-col gap-1 max-w-[220px]">
-                      {(() => {
-                        // Analista só pode se autoatribuir — não pode trocar a atribuição para outro analista nem mexer em processo já atribuído a colega
-                        const atribuidoOutroAnalista = isAnalista && !!sol.analistaAtribuido && sol.analistaAtribuido !== meuNomeAnalista;
-                        const opcoesAnalistas = isAnalista
-                          ? analistasSgo.filter(usr => usr.nome === meuNomeAnalista)
-                          : analistasSgo;
-                        return (
-                          <select
-                            value={currentAssignId}
-                            onChange={(e) => !somenteLeitura && !atribuidoOutroAnalista && handleAssignAnalyst(sol, e.target.value)}
-                            disabled={somenteLeitura || atribuidoOutroAnalista}
-                            className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold transition-all duration-150 w-full min-w-[210px] ${(somenteLeitura || atribuidoOutroAnalista) ? 'cursor-default opacity-60' : 'cursor-pointer'} ${
-                              sol.analistaAtribuido
-                                ? 'border-blue-500 text-blue-700 shadow-3xs'
-                                : 'border-slate-300 text-slate-500 font-medium'
-                            }`}
-                          >
-                            <option value="" className="text-slate-500 font-bold bg-white text-center py-2">
-                              -- Não Atribuído --
-                            </option>
-                            {opcoesAnalistas.map(usr => {
-                              const formattedLabel = usr.perfil === 'tecnico_infra'
-                                ? `${usr.nome} (Fiscal)`
-                                : `${usr.nome} (DORE)`;
-                              return (
-                                <option key={usr.id} value={usr.id} className="text-slate-800 bg-white font-bold py-2">
-                                  {formattedLabel}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        );
-                      })()}
+                    <div className="flex flex-col gap-2 max-w-[220px]">
+                      {sol.etapaAtual === 'execucao' ? (
+                        // Obra em Execução com pendência: cada aditivo/ajuste tem seu próprio analista,
+                        // independente do analista da solicitação principal (que aqui nem se aplica).
+                        <>
+                          {(sol.aditivos || []).filter(a => a.status === 'Pendente').map(adt => {
+                            const currentItemAssignId = analistasSgo.find(u => u.nome === adt.analistaAtribuido)?.id || '';
+                            const atribuidoOutroAnalista = isAnalista && !!adt.analistaAtribuido && adt.analistaAtribuido !== meuNomeAnalista;
+                            const opcoesAnalistas = isAnalista
+                              ? analistasSgo.filter(usr => usr.nome === meuNomeAnalista)
+                              : analistasSgo;
+                            const feedbackKey = `${sol.id}_aditivo_${adt.id}`;
+                            return (
+                              <div key={adt.id} className="space-y-0.5">
+                                <span className="text-[9px] font-bold text-rose-600 uppercase tracking-wide block">Aditivo Nº {adt.numeroAditivo || adt.id}</span>
+                                <select
+                                  value={currentItemAssignId}
+                                  onChange={(e) => !somenteLeitura && !atribuidoOutroAnalista && handleAssignAnalystItem(sol, 'aditivo', adt.id, e.target.value)}
+                                  disabled={somenteLeitura || atribuidoOutroAnalista}
+                                  className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold transition-all duration-150 w-full ${(somenteLeitura || atribuidoOutroAnalista) ? 'cursor-default opacity-60' : 'cursor-pointer'} ${
+                                    adt.analistaAtribuido ? 'border-blue-500 text-blue-700 shadow-3xs' : 'border-slate-300 text-slate-500 font-medium'
+                                  }`}
+                                >
+                                  <option value="" className="text-slate-500 font-bold bg-white text-center py-2">-- Não Atribuído --</option>
+                                  {opcoesAnalistas.map(usr => {
+                                    const formattedLabel = usr.perfil === 'tecnico_infra' ? `${usr.nome} (Fiscal)` : `${usr.nome} (DORE)`;
+                                    return (
+                                      <option key={usr.id} value={usr.id} className="text-slate-800 bg-white font-bold py-2">
+                                        {formattedLabel}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                {feedbackMsg[feedbackKey] && (
+                                  <span className="text-[9px] font-bold text-blue-600 block animate-pulse text-center">
+                                    {feedbackMsg[feedbackKey]}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
 
-                      {feedbackMsg[sol.id] && (
-                        <span className="text-[9px] font-bold text-blue-600 block animate-pulse text-center">
-                          {feedbackMsg[sol.id]}
-                        </span>
+                          {(sol.ajustes || []).filter(a => a.status === 'analise_dore').map(aju => {
+                            const currentItemAssignId = analistasSgo.find(u => u.nome === aju.analistaAtribuido)?.id || '';
+                            const atribuidoOutroAnalista = isAnalista && !!aju.analistaAtribuido && aju.analistaAtribuido !== meuNomeAnalista;
+                            const opcoesAnalistas = isAnalista
+                              ? analistasSgo.filter(usr => usr.nome === meuNomeAnalista)
+                              : analistasSgo;
+                            const feedbackKey = `${sol.id}_ajuste_${aju.id}`;
+                            return (
+                              <div key={aju.id} className="space-y-0.5">
+                                <span className="text-[9px] font-bold text-violet-600 uppercase tracking-wide block">Ajuste Nº {aju.numero}</span>
+                                <select
+                                  value={currentItemAssignId}
+                                  onChange={(e) => !somenteLeitura && !atribuidoOutroAnalista && handleAssignAnalystItem(sol, 'ajuste', aju.id, e.target.value)}
+                                  disabled={somenteLeitura || atribuidoOutroAnalista}
+                                  className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold transition-all duration-150 w-full ${(somenteLeitura || atribuidoOutroAnalista) ? 'cursor-default opacity-60' : 'cursor-pointer'} ${
+                                    aju.analistaAtribuido ? 'border-blue-500 text-blue-700 shadow-3xs' : 'border-slate-300 text-slate-500 font-medium'
+                                  }`}
+                                >
+                                  <option value="" className="text-slate-500 font-bold bg-white text-center py-2">-- Não Atribuído --</option>
+                                  {opcoesAnalistas.map(usr => {
+                                    const formattedLabel = usr.perfil === 'tecnico_infra' ? `${usr.nome} (Fiscal)` : `${usr.nome} (DORE)`;
+                                    return (
+                                      <option key={usr.id} value={usr.id} className="text-slate-800 bg-white font-bold py-2">
+                                        {formattedLabel}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                {feedbackMsg[feedbackKey] && (
+                                  <span className="text-[9px] font-bold text-blue-600 block animate-pulse text-center">
+                                    {feedbackMsg[feedbackKey]}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <>
+                          {(() => {
+                            // Analista só pode se autoatribuir — não pode trocar a atribuição para outro analista nem mexer em processo já atribuído a colega
+                            const atribuidoOutroAnalista = isAnalista && !!sol.analistaAtribuido && sol.analistaAtribuido !== meuNomeAnalista;
+                            const opcoesAnalistas = isAnalista
+                              ? analistasSgo.filter(usr => usr.nome === meuNomeAnalista)
+                              : analistasSgo;
+                            return (
+                              <select
+                                value={currentAssignId}
+                                onChange={(e) => !somenteLeitura && !atribuidoOutroAnalista && handleAssignAnalyst(sol, e.target.value)}
+                                disabled={somenteLeitura || atribuidoOutroAnalista}
+                                className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold transition-all duration-150 w-full min-w-[210px] ${(somenteLeitura || atribuidoOutroAnalista) ? 'cursor-default opacity-60' : 'cursor-pointer'} ${
+                                  sol.analistaAtribuido
+                                    ? 'border-blue-500 text-blue-700 shadow-3xs'
+                                    : 'border-slate-300 text-slate-500 font-medium'
+                                }`}
+                              >
+                                <option value="" className="text-slate-500 font-bold bg-white text-center py-2">
+                                  -- Não Atribuído --
+                                </option>
+                                {opcoesAnalistas.map(usr => {
+                                  const formattedLabel = usr.perfil === 'tecnico_infra'
+                                    ? `${usr.nome} (Fiscal)`
+                                    : `${usr.nome} (DORE)`;
+                                  return (
+                                    <option key={usr.id} value={usr.id} className="text-slate-800 bg-white font-bold py-2">
+                                      {formattedLabel}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            );
+                          })()}
+
+                          {feedbackMsg[sol.id] && (
+                            <span className="text-[9px] font-bold text-blue-600 block animate-pulse text-center">
+                              {feedbackMsg[sol.id]}
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>

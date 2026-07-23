@@ -1819,10 +1819,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
   const _temEmpresas = (currentSol.empresasAnteriores || []).length > 0;
 
   // Default values lazily resolved for rendering if not initialized on Solicitacao
-  const listDiarios = currentSol.diariosObra || [
-    { id: 'd-1', data: '2026-05-20', texto: 'Vistoria de rotina realizada pelo fiscal técnico de engenharia. Avanço físico estimado em 45%, pilares e laje do bloco principal concluídos com sucesso. Recomenda-se maior velocidade na cobertura antes do período climático instável.', autor: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', categoria: 'Ocorrência' as const },
-    { id: 'd-2', data: '2026-05-10', texto: 'Verificação técnica geral em conjunto com a construtora. Instalações elétricas em bom andamento, tubulação subterrânea executada, materiais e insumos recebidos no canteiro conforme especificações e planilhas.', autor: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', categoria: 'Trabalho' as const }
-  ];
+  const listDiarios = currentSol.diariosObra || [];
 
   const listVistorias = currentSol.vistoriasObra || [
     { id: 'v-1', dataVistoria: '2026-05-20', vistoriador: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', laudoResumido: 'Instalações hidráulicas testadas em pressão interna e aprovadas sem vazamentos ou infiltrações registradas de forma crônica.', resultado: 'Relatório Emitido' as any, nomeRelatorio: 'relatorio_visita_hidraulica_v1.pdf', tamanhoRelatorio: '1.4 MB' },
@@ -1850,15 +1847,53 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     if (isParalisando) setMostrarParalisacao(false);
   };
 
-  const adicNovoDiario = (e: React.FormEvent) => {
+  const adicNovoDiario = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!diarioTexto.trim()) return;
 
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        alert('Não foi possível localizar o registro da obra no banco para gravar o diário.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const dataRegistro = new Date().toISOString().split('T')[0];
+    const autor = currentSol.fiscalObraAtribuido || 'Fiscal de Campo DORE';
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data: diarioRow, error: diarioError } = await supabase
+      .from('diarios_obra')
+      .insert({
+        solicitacao_id: dbId,
+        data_registro: dataRegistro,
+        conteudo: diarioTexto,
+        categoria: diarioCategoria ?? null,
+        anexo_foto: null,
+        autor: autor ?? null,
+        usuario_id: userData.user?.id ?? null
+      })
+      .select('id')
+      .single();
+
+    if (diarioError || !diarioRow) {
+      console.error('Erro ao gravar diário no Supabase:', diarioError);
+      alert('Erro ao gravar o diário no banco de dados. Tente novamente.');
+      return;
+    }
+
     const novoReg = {
-      id: `d-${Date.now()}`,
-      data: new Date().toISOString().split('T')[0],
+      id: diarioRow.id,
+      data: dataRegistro,
       texto: diarioTexto,
-      autor: currentSol.fiscalObraAtribuido || 'Fiscal de Campo DORE',
+      autor,
       categoria: diarioCategoria
     };
 
@@ -1871,7 +1906,14 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     setDiarioTexto('');
   };
 
-  const deletarDiario = (id: string) => {
+  const deletarDiario = async (id: string) => {
+    const { error } = await supabase.from('diarios_obra').delete().eq('id', id);
+    if (error) {
+      console.error('Erro ao excluir diário no Supabase:', error);
+      alert('Erro ao excluir o diário no banco de dados. Tente novamente.');
+      return;
+    }
+
     const updated = {
       ...currentSol,
       diariosObra: listDiarios.filter(d => d.id !== id)
@@ -6484,16 +6526,77 @@ function SubAjustes({
     setStep(2);
   };
 
-  const handleCreateAjuste = (e: React.FormEvent) => {
+  const handleCreateAjuste = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!observacoesAjuste.trim()) {
       alert('Por favor, preencha as notas técnicas / justificativa!');
       return;
     }
 
+    // Resolve o uuid real da solicitação (usa o cache local ou busca pelo codigo_sgo)
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        alert('Não foi possível localizar o registro da obra no banco para gravar o ajuste.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const { count, error: countError } = await supabase
+      .from('ajustes_planilha')
+      .select('id', { count: 'exact', head: true })
+      .eq('solicitacao_id', dbId);
+    if (countError) {
+      console.error('Erro ao contar ajustes existentes:', countError);
+      alert('Erro ao calcular o número do ajuste. Tente novamente.');
+      return;
+    }
+    const numeroAjusteInt = (count ?? 0) + 1;
+
+    const dataAjuste = new Date().toISOString().split('T')[0];
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data: ajusteRow, error: ajusteError } = await supabase
+      .from('ajustes_planilha')
+      .insert({
+        solicitacao_id: dbId,
+        numero_ajuste: numeroAjusteInt,
+        valor_ajuste: numAcre,
+        status: 'pendente',
+        tipo_ajuste: tipoAjuste,
+        responsavel_planilha: responsavelP,
+        registro_profissional: registroProfissional,
+        ajuste_referente: 'atendimento_inicial',
+        valor_contrato: valorContratoOriginal,
+        diferenca_planilhas: valorAditivoLiquido,
+        desconto: 0,
+        avanco_fisico: 0,
+        supressao: numSup > 0 ? numSup : null,
+        reprogramacao,
+        saldo_complementar: saldoComplementar,
+        percentual_contrato: parseFloat(percentualContrato.toFixed(2)),
+        observacoes: observacoesAjuste,
+        data_ajuste: dataAjuste,
+        usuario_id: userData.user?.id ?? null,
+      })
+      .select('id')
+      .single();
+
+    if (ajusteError || !ajusteRow) {
+      console.error('Erro ao gravar ajuste no Supabase:', ajusteError);
+      alert('Erro ao gravar o ajuste no banco de dados. Tente novamente.');
+      return;
+    }
+
     const novoAjuste: AjustePlanilha = {
-      id: `ajust_${Date.now()}`,
-      numero: (currentSol.ajustes?.length || 0) + 1,
+      id: ajusteRow.id,
+      numero: numeroAjusteInt,
       tipoAjuste,
       valorAjuste: numAcre,
       responsavelPlanilha: responsavelP,
@@ -6504,8 +6607,8 @@ function SubAjustes({
       desconto: 0,
       avancoFisico: 0,
       observacoes: observacoesAjuste,
-      dataCriacao: new Date().toISOString().split('T')[0],
-      status: 'analise_dore', // Sent to DORE
+      dataCriacao: dataAjuste,
+      status: 'analise_dore', // Sent to DORE (banco: 'pendente')
       analistaAtribuido: undefined,
       supressao: numSup > 0 ? numSup : undefined,
       reprogramacao,
@@ -6518,22 +6621,12 @@ function SubAjustes({
 
     const updated = {
       ...currentSol,
-      etapaAtual: 'analise' as const,
-      analistaAtribuido: undefined,
-      historicoEtapas: [
-        ...(currentSol.historicoEtapas || []),
-        {
-          etapa: 'analise' as const,
-          data: new Date().toISOString().split('T')[0],
-          responsavel: 'Fiscal de Obra (Novo Pleito de Ajuste de Planilha)'
-        }
-      ],
       ajustes: [novoAjuste, ...(currentSol.ajustes || [])]
     };
 
     onUpdate(updated);
 
-    alert('Nova solicitação de ajuste cadastrada e encaminhada com sucesso para Análise Técnica da DORE para atribuição de um analista!');
+    alert('Nova solicitação de ajuste cadastrada com sucesso e está pendente de análise. A obra continua em execução.');
 
     // Reset Form
     setTipoAjuste('sem_alteracao_meta');
@@ -6548,23 +6641,44 @@ function SubAjustes({
     setActiveTab('historico');
   };
 
-  const handleDoreAction = (id: string, decision: 'validado' | 'em_elaboracao') => {
+  const handleDoreAction = async (id: string, decision: 'validado' | 'em_elaboracao') => {
     if (!parecerDoreInput.trim()) {
       alert('Favor inserir uma justificativa/parecer técnico para esta validação.');
       return;
     }
 
+    const targetAjuste = (currentSol.ajustes || []).find(a => a.id === id);
+    if (!targetAjuste) return;
+
+    const statusBanco = decision === 'validado' ? 'aprovado' : 'recusado';
+    const dataDecisao = new Date().toISOString().split('T')[0];
+
+    const { error } = await supabase
+      .from('ajustes_planilha')
+      .update({
+        status: statusBanco,
+        parecer_dore: parecerDoreInput,
+        data_ajuste: dataDecisao,
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Erro ao atualizar ajuste no Supabase:', error);
+      alert('Erro ao atualizar o ajuste no banco de dados. Tente novamente.');
+      return;
+    }
+
     let updatedSolMock = { ...currentSol };
-    const targetAjuste = (updatedSolMock.ajustes || []).find(a => a.id === id);
+    const targetAjusteLocal = (updatedSolMock.ajustes || []).find(a => a.id === id);
 
-    if (targetAjuste) {
-      targetAjuste.status = decision;
-      targetAjuste.parecerDore = parecerDoreInput;
-      targetAjuste.dataCriacao = new Date().toISOString().split('T')[0];
+    if (targetAjusteLocal) {
+      targetAjusteLocal.status = decision;
+      targetAjusteLocal.parecerDore = parecerDoreInput;
+      targetAjusteLocal.dataCriacao = dataDecisao;
 
-      // If validated/approved, compile effects into valorPlanilha
+      // Se aprovado, soma a diferença de planilha (não o valor líquido do ajuste) ao contrato
       if (decision === 'validado') {
-        const ajuVal = targetAjuste.valorAditivo || 0;
+        const ajuVal = targetAjusteLocal.diferencaPlanilhas || 0;
         updatedSolMock.valorPlanilha = (updatedSolMock.valorPlanilha || 0) + ajuVal;
         updatedSolMock.valorHomologadoContratacao = (updatedSolMock.valorHomologadoContratacao || 0) + ajuVal;
       }
@@ -6575,11 +6689,17 @@ function SubAjustes({
     }
   };
 
-  const handleExcluirAjuste = (id: string) => {
+  const handleExcluirAjuste = async (id: string) => {
+    const { error } = await supabase.from('ajustes_planilha').delete().eq('id', id);
+    if (error) {
+      console.error('Erro ao excluir ajuste no Supabase:', error);
+      return;
+    }
+
     let updatedSolMock = { ...currentSol };
     const targetAjuste = (updatedSolMock.ajustes || []).find(a => a.id === id);
     if (targetAjuste && targetAjuste.status === 'validado') {
-      const ajuVal = targetAjuste.valorAditivo || 0;
+      const ajuVal = targetAjuste.diferencaPlanilhas || 0;
       updatedSolMock.valorPlanilha = (updatedSolMock.valorPlanilha || 0) - ajuVal;
       updatedSolMock.valorHomologadoContratacao = (updatedSolMock.valorHomologadoContratacao || 0) - ajuVal;
     }
@@ -6900,6 +7020,36 @@ function SubAjustes({
                       <option value="Não">Não</option>
                       <option value="Sim">Sim</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Valor do Acréscimo + Valor da Supressão lado a lado */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                      Valor do Acréscimo (R$)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={valorAjusteInp}
+                      onChange={(e) => setValorAjusteInp(e.target.value)}
+                      placeholder="Ex. 50000"
+                      className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">
+                      Valor da Supressão (R$)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={supressao}
+                      onChange={(e) => setSupressao(e.target.value)}
+                      placeholder="Ex. 10000"
+                      className="w-full text-xs p-3 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden font-mono"
+                    />
                   </div>
                 </div>
 

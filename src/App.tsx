@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, UsuarioSistema, computeStatusObra } from './types';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, computeStatusObra } from './types';
 import { recalcularPrioridade } from './utils/prioridade';
 import { recalcularIEE } from './utils/iee';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
@@ -778,7 +778,104 @@ export default function App() {
             }
           }
 
-          setSolicitacoes(comAditivos);
+          // Carrega os ajustes de planilha registrados de cada solicitação
+          let comAjustes = comAditivos;
+          if (dbIds.length > 0) {
+            const { data: ajustesData, error: ajustesError } = await supabase
+              .from('ajustes_planilha')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('numero_ajuste', { ascending: true });
+
+            if (ajustesError) {
+              console.error('Erro ao carregar ajustes de planilha:', ajustesError);
+            } else if (ajustesData) {
+              const statusAjusteDoBanco = (v: string | null): AjustePlanilha['status'] => {
+                switch (v) {
+                  case 'aprovado': return 'validado';
+                  case 'recusado': return 'em_elaboracao';
+                  default: return 'analise_dore';
+                }
+              };
+
+              const porSolicitacaoAju = new Map<string, any[]>();
+              (ajustesData as any[]).forEach((row) => {
+                const lista = porSolicitacaoAju.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoAju.set(row.solicitacao_id, lista);
+              });
+
+              comAjustes = comAditivos.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoAju.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  ajustes: linhas.map((row: any): AjustePlanilha => ({
+                    id: row.id,
+                    numero: row.numero_ajuste,
+                    tipoAjuste: row.tipo_ajuste ?? 'sem_alteracao_meta',
+                    valorAjuste: row.valor_ajuste ?? 0,
+                    responsavelPlanilha: row.responsavel_planilha ?? '',
+                    registroProfissional: row.registro_profissional ?? '',
+                    ajusteReferente: row.ajuste_referente ?? 'atendimento_inicial',
+                    valorContrato: row.valor_contrato ?? 0,
+                    diferencaPlanilhas: row.diferenca_planilhas ?? 0,
+                    desconto: row.desconto ?? 0,
+                    avancoFisico: row.avanco_fisico ?? 0,
+                    observacoes: row.observacoes ?? '',
+                    dataCriacao: row.data_ajuste ? String(row.data_ajuste) : '',
+                    status: statusAjusteDoBanco(row.status),
+                    analistaAtribuido: row.analista_nome ?? undefined,
+                    supressao: row.supressao ?? undefined,
+                    reprogramacao: row.reprogramacao ?? undefined,
+                    saldoComplementar: row.saldo_complementar ?? undefined,
+                    valorAditivo: row.diferenca_planilhas ?? undefined,
+                    percentualContrato: row.percentual_contrato ?? undefined,
+                    parecerDore: row.parecer_dore ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
+          // Carrega os diários de obra registrados de cada solicitação
+          let comDiarios = comAjustes;
+          if (dbIds.length > 0) {
+            const { data: diariosData, error: diariosError } = await supabase
+              .from('diarios_obra')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('data_registro', { ascending: false });
+
+            if (diariosError) {
+              console.error('Erro ao carregar diários de obra:', diariosError);
+            } else if (diariosData) {
+              const porSolicitacaoDiario = new Map<string, any[]>();
+              (diariosData as any[]).forEach((row) => {
+                const lista = porSolicitacaoDiario.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoDiario.set(row.solicitacao_id, lista);
+              });
+
+              comDiarios = comAjustes.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoDiario.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  diariosObra: linhas.map((row: any) => ({
+                    id: row.id,
+                    data: row.data_registro ? String(row.data_registro) : '',
+                    texto: row.conteudo ?? '',
+                    categoria: row.categoria ?? undefined,
+                    anexoFoto: row.anexo_foto ?? undefined,
+                    autor: row.autor ?? '',
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comDiarios);
           return;
         }
       } catch (e) {

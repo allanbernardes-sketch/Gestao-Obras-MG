@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, AjustePlanilha, UsuarioSistema, ParcelaPAF } from '../types';
+import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, UsuarioSistema, ParcelaPAF } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { supabase } from '../lib/supabase';
 import { gerarParecerIA } from './GeradorParecerIA';
@@ -357,25 +357,6 @@ Plataforma e-SGO - SEE-MG`;
   const [aditivoDocName, setAditivoDocName] = useState('');
   const [aditivoAnalista, setAditivoAnalista] = useState('');
 
-  // Ajustes de Planilha states
-  const [ajusteTipo, setAjusteTipo] = useState<'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto'>('sem_alteracao_meta');
-  const [ajusteValor, setAjusteValor] = useState('12422.94');
-  const [ajusteResponsavel, setAjusteResponsavel] = useState('');
-  const [ajusteRegistro, setAjusteRegistro] = useState('242488/D');
-  const [ajusteReferenteOpt, setAjusteReferenteOpt] = useState<'atendimento_inicial' | 'saldo_nova_cotacao'>('atendimento_inicial');
-  const [ajusteValorContrato, setAjusteValorContrato] = useState(solicitacao.valorHomologadoContratacao?.toString() || '400498.42');
-  const [ajusteDiferenca, setAjusteDiferenca] = useState('153284.34');
-  const [ajusteDesconto, setAjusteDesconto] = useState('28');
-  const [ajusteAvanco, setAjusteAvanco] = useState('50');
-  const [ajusteObservacoes, setAjusteObservacoes] = useState('');
-  const [ajustePlanilhaFileName, setAjustePlanilhaFileName] = useState('');
-  const [ajustePlanilhaFileSize, setAjustePlanilhaFileSize] = useState('');
-  const [ajustePlanilhaUploadedAt, setAjustePlanilhaUploadedAt] = useState('');
-  const [selectedAjusteId, setSelectedAjusteId] = useState<string | null>(null);
-  const [ajusteParecerDoreInput, setAjusteParecerDoreInput] = useState('');
-  const [ajusteAnalistaAtribuidoInput, setAjusteAnalistaAtribuidoInput] = useState('');
-
-  const planilhaAjusteFormInputRef = useRef<HTMLInputElement>(null);
 
   // Upload real de documento — lê o conteúdo do arquivo (base64) via FileReader para permitir download posterior pelo analista
   const handleSimulatedUpload = (docId: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -933,10 +914,6 @@ ${totalPendencias > 0
     setPlanilhaMedicaoFinalFileSize(solicitacao.planilhaMedicaoFinalFileSize || '');
     setPlanilhaMedicaoFinalUploadedAt(solicitacao.planilhaMedicaoFinalUploadedAt || '');
 
-    if (solicitacao.valorHomologadoContratacao) {
-      setAjusteValorContrato(solicitacao.valorHomologadoContratacao.toString());
-    }
-
     // Sync PAF related fields
     setNumPAFInput(solicitacao.numeroPAF || '');
     const initialDataCreation = solicitacao.dataHomologacao || new Date().toISOString().split('T')[0];
@@ -1050,133 +1027,8 @@ ${totalPendencias > 0
     alert('Ordem de Início emitida com sucesso! O processo avançou para a etapa de Execução Física de Obra.');
   };
 
-  const handlePlanilhaAjusteUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
-    setAjustePlanilhaFileName(file.name);
-    setAjustePlanilhaFileSize(sizeFormatted);
-    setAjustePlanilhaUploadedAt(new Date().toLocaleDateString('pt-BR'));
-  };
-
-  const salvarAjustePlanilha = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!ajustePlanilhaFileName) {
-      alert('Atenção: É obrigatório anexar a planilha de ajuste para prosseguir!');
-      return;
-    }
-
-    const numeroNovo = (solicitacao.ajustes?.length || 0) + 1;
-    const novoAjuste: AjustePlanilha = {
-      id: `AJU-${new Date().getTime().toString().slice(-4)}`,
-      numero: numeroNovo,
-      tipoAjuste: ajusteTipo,
-      valorAjuste: parseFloat(ajusteValor) || 0,
-      responsavelPlanilha: ajusteResponsavel,
-      registroProfissional: ajusteRegistro,
-      ajusteReferente: ajusteReferenteOpt,
-      valorContrato: parseFloat(ajusteValorContrato) || 0,
-      diferencaPlanilhas: parseFloat(ajusteDiferenca) || 0,
-      desconto: parseFloat(ajusteDesconto) || 0,
-      avancoFisico: parseFloat(ajusteAvanco) || 0,
-      observacoes: ajusteObservacoes,
-      dataCriacao: new Date().toLocaleDateString('pt-BR'),
-      status: 'analise_dore',
-      analistaAtribuido: undefined,
-      planilhaAjusteFileName: ajustePlanilhaFileName,
-      planilhaAjusteFileSize: ajustePlanilhaFileSize,
-      planilhaAjusteUploadedAt: ajustePlanilhaUploadedAt,
-      parecerDore: ''
-    };
-
-    onUpdate({
-      ...solicitacao,
-      etapaAtual: 'analise' as const,
-      analistaAtribuido: undefined,
-      historicoEtapas: [
-        ...(solicitacao.historicoEtapas || []),
-        {
-          etapa: 'analise' as const,
-          data: new Date().toISOString().split('T')[0],
-          responsavel: 'Fiscal de Obra (Novo Pleito de Ajuste de Planilha)'
-        }
-      ],
-      ajustes: [...(solicitacao.ajustes || []), novoAjuste]
-    });
-
-    alert(`Solicitação de Ajuste nº ${numeroNovo} cadastrada e encaminhada com sucesso para Análise Técnica da DORE para atribuição de um analista!`);
-    
-    // reset spreadsheet form values
-    setAjustePlanilhaFileName('');
-    setAjustePlanilhaFileSize('');
-    setAjustePlanilhaUploadedAt('');
-    setAjusteObservacoes('');
-    setActiveTab('execucao');
-  };
-
-  const atualizarStatusAjuste = (ajusteId: string, novoStatus: 'em_elaboracao' | 'analise_dore' | 'validado') => {
-    const ajustesAtuais = solicitacao.ajustes || [];
-    const novosAjustes = idAdjustmentStatusHelper(ajustesAtuais, ajusteId, novoStatus);
-
-    const isSendingToDore = novoStatus === 'analise_dore';
-
-    onUpdate({
-      ...solicitacao,
-      etapaAtual: isSendingToDore ? 'analise' as const : solicitacao.etapaAtual,
-      analistaAtribuido: isSendingToDore ? undefined : solicitacao.analistaAtribuido,
-      ajustes: novosAjustes,
-      historicoEtapas: isSendingToDore ? [
-        ...(solicitacao.historicoEtapas || []),
-        {
-          etapa: 'analise' as const,
-          data: new Date().toISOString().split('T')[0],
-          responsavel: 'Téc. Infraestrutura (Envio de Ajuste)'
-        }
-      ] : solicitacao.historicoEtapas
-    });
-    alert(isSendingToDore 
-      ? 'Ajuste encaminhado com sucesso para a tela de atribuição em análise técnica!'
-      : 'Status da solicitação de ajuste atualizado!'
-    );
-  };
-
-  const idAdjustmentStatusHelper = (ajustes: AjustePlanilha[], id: string, status: 'em_elaboracao' | 'analise_dore' | 'validado'): AjustePlanilha[] => {
-    return ajustes.map(a => a.id === id ? { ...a, status, analistaAtribuido: status === 'analise_dore' ? undefined : a.analistaAtribuido } : a);
-  };
-
-  const atribuirAnalistaAjuste = (ajusteId: string, analista: string) => {
-    const ajustesAtuais = solicitacao.ajustes || [];
-    const novosAjustes = dependencyAdjustmentAnalystHelper(ajustesAtuais, ajusteId, analista);
-
-    onUpdate({
-      ...solicitacao,
-      ajustes: novosAjustes
-    });
-    alert(`Análise do ajuste de planilha atribuída com sucesso ao técnico/analista: ${analista}`);
-  };
-
-  const dependencyAdjustmentAnalystHelper = (ajustes: AjustePlanilha[], id: string, analyst: string): AjustePlanilha[] => {
-    return ajustes.map(a => a.id === id ? { ...a, analistaAtribuido: analyst } : a);
-  };
-
-  const validarAjusteDore = (ajusteId: string, parecer: string) => {
-    const ajustesAtuais = solicitacao.ajustes || [];
-    const novosAjustes = dependencyAdjustmentValidationHelper(ajustesAtuais, ajusteId, parecer);
-
-    onUpdate({
-      ...solicitacao,
-      ajustes: novosAjustes
-    });
-
-    alert('Parecer registrado e ajuste homologado/validado com sucesso!');
-    setSelectedAjusteId(null);
-    setAjusteParecerDoreInput('');
-  };
-
-  const dependencyAdjustmentValidationHelper = (ajustes: AjustePlanilha[], id: string, opinion: string): AjustePlanilha[] => {
-    return ajustes.map(a => a.id === id ? { ...a, status: 'validado' as const, parecerDore: opinion } : a);
-  };
+  // Ajustes de planilha agora são criados e avaliados em Execução › Ajustes
+  // (ExecucaoSubmodulos.tsx, com escrita real no Supabase); a aba "ajustes" abaixo é somente leitura.
 
   // EXECUTION PROCESSORS
   const assumirNovaEmpresa = (nome: string, cnpj: string) => {
@@ -3756,29 +3608,22 @@ ${totalPendencias > 0
             <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-blue-50/50 border border-blue-100 p-5 rounded-xl gap-4">
               <div>
                 <h2 className="text-sm font-bold text-neutral-800 flex items-center gap-1.5 uppercase tracking-wide">
-                  <RefreshCw className="w-5 h-5 text-blue-600 animate-spin-slow" />
-                  Módulo de Solicitação de Ajustes de Planilha
+                  <RefreshCw className="w-5 h-5 text-blue-600" />
+                  Ajustes de Planilha
                 </h2>
                 <p className="text-[11px] text-neutral-500 mt-1">
-                  Registre alterações de planilha, meta física ou serviços extraordinários em concordância técnica com a fiscalização.
+                  Ajustes são criados e avaliados em Execução › Ajustes — aqui é somente leitura.
                 </p>
-              </div>
-              <div className="px-3.5 py-2 bg-white border border-blue-200 rounded-lg text-xs font-black text-neutral-850 flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75 animate-ping"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-                </span>
-                <span>PRÓXIMO REGISTRO ELETRÔNICO Nº {(solicitacao.ajustes?.length || 0) + 1}</span>
               </div>
             </div>
 
-            {/* SEÇÃO 1: ACOMPANHAMENTO E ANÁLISE DE HISTÓRICO DE AJUSTES */}
+            {/* HISTÓRICO DE AJUSTES (somente leitura) */}
             <div className="bg-white p-5 rounded-xl border border-neutral-200 space-y-4">
               <div>
                 <h3 className="font-display font-black text-xs text-neutral-800 uppercase tracking-widest">
                   Histórico e Tramitação de Solicitações de Ajuste
                 </h3>
-                <p className="text-[11px] text-neutral-400 mt-0.5">Acompanhe a análise técnica, atribuições de técnicos e pareceres homologados pela DORE.</p>
+                <p className="text-[11px] text-neutral-400 mt-0.5">Acompanhe a análise técnica e os pareceres homologados pela DORE.</p>
               </div>
 
               {!solicitacao.ajustes || solicitacao.ajustes.length === 0 ? (
@@ -3799,6 +3644,7 @@ ${totalPendencias > 0
                             {aju.tipoAjuste === 'com_alteracao_meta' && 'Ajuste com alteração/acréscimo de meta'}
                             {aju.tipoAjuste === 'com_alteracao_meta_projeto' && 'Ajuste com alteração/acréscimo de meta e com alteração de projeto'}
                             {aju.tipoAjuste === 'sem_alteracao_meta_com_projeto' && 'Ajuste sem alteração/acréscimo de meta e com alteração de projeto'}
+                            {aju.tipoAjuste === 'ajuste_sem_meta_com_projeto' && 'Ajuste sem meta e com alteração de projeto'}
                           </span>
 
                           {/* Status workflow indicator badge */}
@@ -3811,8 +3657,8 @@ ${totalPendencias > 0
                               ⏳ EM ANÁLISE TÉCNICA DORE
                             </span>
                           ) : (
-                            <span className="bg-blue-100 text-blue-900 border border-blue-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                              ✎ EM ELABORAÇÃO
+                            <span className="bg-red-100 text-red-900 border border-red-300 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                              ✎ RECUSADO / EM REVISÃO
                             </span>
                           )}
                         </div>
@@ -3821,7 +3667,7 @@ ${totalPendencias > 0
 
                       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
                         <div className="bg-white p-2.5 rounded-lg border border-slate-200/80 shadow-2xs">
-                          <span className="text-[9px] font-black text-neutral-450 uppercase block">Valor Homologado</span>
+                          <span className="text-[9px] font-black text-neutral-450 uppercase block">Valor Proposto</span>
                           <span className="font-mono font-black text-neutral-900 mt-1 block">
                             R$ {aju.valorAjuste.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
@@ -3848,7 +3694,7 @@ ${totalPendencias > 0
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] bg-slate-100 p-3 rounded-lg border border-slate-200 text-slate-705">
                         <div>
-                          <span className="font-semibold text-slate-500">Laboratório Elaborador: </span>
+                          <span className="font-semibold text-slate-500">Elaborador da Planilha: </span>
                           <strong className="text-neutral-800">{aju.responsavelPlanilha}</strong> <span className="text-slate-400 font-mono">({aju.registroProfissional})</span>
                         </div>
                         <div>
@@ -3859,496 +3705,22 @@ ${totalPendencias > 0
 
                       {aju.observacoes && (
                         <div className="p-3 bg-yellow-50/55 text-slate-700 rounded-lg border border-yellow-200 leading-relaxed text-xs">
-                          <strong className="text-yellow-850 block mb-1 font-bold uppercase text-[9px] tracking-wide">Nova Meta Proposta / Serviços Extraordinários:</strong>
+                          <strong className="text-yellow-850 block mb-1 font-bold uppercase text-[9px] tracking-wide">Justificativa / Observações:</strong>
                           <p className="italic">"{aju.observacoes}"</p>
                         </div>
                       )}
 
-                      {/* Display spreadsheet attachment information */}
-                      {aju.planilhaAjusteFileName && (
-                        <div className="bg-emerald-50/60 border border-emerald-250 p-3 rounded-xl flex items-center justify-between gap-3 text-xs leading-none">
-                          <div className="flex items-center gap-2.5 truncate">
-                            <FileCheck className="w-5 h-5 text-emerald-600 shrink-0" />
-                            <div className="truncate text-left space-y-1">
-                              <span className="font-bold text-slate-800 block truncate">{aju.planilhaAjusteFileName}</span>
-                              <span className="text-[10px] text-slate-400 block font-mono">Tamanho: {aju.planilhaAjusteFileSize} • Carregado na plataforma em {aju.planilhaAjusteUploadedAt}</span>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            id={`btn-download-simulated-${aju.id}`}
-                            onClick={() => handleDownloadDocument(aju.planilhaAjusteFileName, "Planilha de Ajuste Executivo")}
-                            className="text-emerald-800 hover:text-emerald-950 font-black text-[11px] bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 px-3 py-1.5 rounded-lg shrink-0 transition cursor-pointer flex items-center gap-1.5"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            Download Planilha
-                          </button>
+                      {aju.status !== 'analise_dore' && aju.parecerDore && (
+                        <div className="p-3 bg-neutral-100/85 rounded-lg border border-neutral-150 text-xs">
+                          <span className="font-semibold text-neutral-700 block text-[9.5px] uppercase tracking-wide">Parecer da DORE:</span>
+                          <p className="text-neutral-600 italic mt-0.5">{aju.parecerDore}</p>
                         </div>
                       )}
-
-                      {/* WORKFLOW CONTROLS INTERACTIVE PANEL */}
-                      <div className="pt-3.5 border-t border-slate-200/80 space-y-3">
-                        
-                        {/* 1. GESTOR DORE: ATRIBUIR QUALQUER TÉCNICO DESEJADO */}
-                        {(perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
-                          <div className="bg-white border border-slate-200 p-3.5 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                            <div className="flex items-center gap-2.5">
-                              <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
-                              <div>
-                                <span className="block text-[11px] font-black uppercase text-slate-500 tracking-wider">Distribuição Operacional (Gestor DORE)</span>
-                                <span className="block text-[10px] text-slate-400">Atribua a análise da planilha a qualquer técnico ou perfil desejado.</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <label className="text-[11px] font-bold text-neutral-600">Responsável Tributário:</label>
-                              <select
-                                id={`select-dist-analista-${aju.id}`}
-                                value={aju.analistaAtribuido || 'Eng. André Silva'}
-                                onChange={(e) => atribuirAnalistaAjuste(aju.id, e.target.value)}
-                                className="text-xs bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-neutral-800 font-bold focus:outline-hidden focus:ring-1 focus:ring-blue-500 cursor-pointer"
-                              >
-                                {(usuariosSeguranca.length > 0 ? usuariosSeguranca : []).map(u => (
-                                  <option key={u.id} value={`${u.nome} (${u.departamento})`}>{u.nome} ({u.departamento})</option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 2. TÉCNICO ENCAMINHAR PARA ANÁLISE DORE (Workflow transitions) */}
-                        {aju.status === 'em_elaboracao' && (
-                          <div className="flex items-center gap-3 bg-blue-50/50 p-2.5 rounded-lg border border-blue-200/50">
-                            <span className="text-[11px] text-blue-700 font-bold flex-1">Ajuste salvo como rascunho de preenchimento do Técnico. Envie para dar início ao processo de análise e validação.</span>
-                            <button
-                              type="button"
-                              id={`btn-enviar-dore-analise-${aju.id}`}
-                              onClick={() => atualizarStatusAjuste(aju.id, 'analise_dore')}
-                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs shrink-0 select-none cursor-pointer flex items-center gap-1 leading-none shadow-sm transition"
-                            >
-                              <RefreshCw className="w-3 h-3 animate-spin-slow text-white" />
-                              Encaminhar ao Engenheiro DORE
-                            </button>
-                          </div>
-                        )}
-
-                        {/* 3. ENGENHEIRO DORE: ADICIONAR PARECER TÉCNICO E VALIDAR */}
-                        {aju.status === 'analise_dore' && (
-                          <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-250 space-y-3 text-left">
-                            <div className="flex items-center gap-2">
-                              <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                              <div>
-                                <span className="block text-[11px] font-black text-amber-900 uppercase">Parecer Técnico da Engenharia DORE</span>
-                                <span className="text-[10px] text-slate-500 block">Status: Sob análise técnica de <strong className="text-amber-800">{aju.analistaAtribuido || 'Eng. André Silva'}</strong></span>
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <label className="block text-[10px] font-bold text-amber-800 uppercase">Justificativa de Homologação / Parecer técnico:</label>
-                              <textarea
-                                id={`parecer-input-text-${aju.id}`}
-                                placeholder="Descreva aqui o parecer consolidado e as concordâncias físico-financeiras para validar em definitivo esta solicitação de adequação de meta de planilha técnica..."
-                                className="w-full text-xs p-3 border border-amber-300 rounded-lg bg-white text-neutral-800 focus:ring-1 focus:ring-amber-500 min-h-[70px] font-sans"
-                                defaultValue={aju.parecerDore}
-                              />
-                            </div>
-
-                            <button
-                              type="button"
-                              id={`btn-validar-dore-confirm-${aju.id}`}
-                              onClick={() => {
-                                const inputEl = document.getElementById(`parecer-input-text-${aju.id}`) as HTMLTextAreaElement;
-                                const val = inputEl ? inputEl.value : 'Análise técnica finalizada. Planilha orçamentária ajustada em plena conformidade com as metas do plano de trabalho pactuado.';
-                                if (!val.trim()) {
-                                  alert('Atenção: Por favor, preencha o Parecer Técnico para fundamentar a homologação!');
-                                  return;
-                                }
-                                validarAjusteDore(aju.id, val);
-                              }}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs cursor-pointer inline-flex items-center gap-1.5 select-none transition-colors border border-emerald-500"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              Registrar Parecer & Homologar Ajuste (Concluir)
-                            </button>
-                          </div>
-                        )}
-
-                        {/* 4. PARECER FINALIZADO E VALIDADO */}
-                        {aju.status === 'validado' && (
-                          <div className="p-4 bg-emerald-50 text-emerald-950 rounded-xl border border-emerald-250 font-sans space-y-1.5 text-xs text-left shadow-2xs">
-                            <strong className="text-emerald-850 text-[10px] uppercase font-black block tracking-wider leading-none">
-                              ✓ Parecer Consolidado DORE (Homologado):
-                            </strong>
-                            <p className="italic text-slate-700">"{aju.parecerDore}"</p>
-                            <div className="flex items-center gap-2 text-[10px] text-emerald-600 font-mono mt-2 pt-2 border-t border-emerald-100">
-                              <span>Técnico Conclusivo: {aju.analistaAtribuido || 'Eng. André Silva'}</span>
-                              <span>•</span>
-                              <span>Data de Homologação: {aju.dataCriacao}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
-            {/* SEÇÃO 2: FORMULÁRIO DE CADASTRO DE AJUSTE (TÉCNICO / FISCAL) */}
-            <form onSubmit={salvarAjustePlanilha} className="bg-white border border-neutral-200 rounded-xl shadow-2xs overflow-hidden">
-              <div className="bg-neutral-50 px-5 py-4 border-b border-neutral-200 flex items-center justify-between">
-                <div>
-                  <h3 className="font-display font-bold text-xs text-neutral-800 uppercase tracking-widest flex items-center gap-2">
-                    <FileCheck className="w-4 h-4 text-emerald-600" />
-                    Abertura de Nova Solicitação de Ajuste de Planilha
-                  </h3>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">Preenchimento de responsabilidade do Técnico de Infraestrutura ou Fiscal de Obra.</p>
-                </div>
-                <span className="text-[10px] text-neutral-400">Os campos com * são obrigatórios</span>
-              </div>
-
-              <div className="p-6 space-y-6">
-                {/* 1. SELEÇÃO DO TIPO DE AJUSTE */}
-                <div className="space-y-3">
-                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
-                    I. Escolha o Tipo de Ajuste *
-                  </label>
-                  <p className="text-[11px] text-neutral-400">Classificação normativa do impacto físico-financeiro no contrato.</p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-                    <label className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer transition-all ${
-                      ajusteTipo === 'sem_alteracao_meta' 
-                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500' 
-                        : 'bg-white border-neutral-200 hover:bg-neutral-50/50'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="tipoAjuste"
-                        value="sem_alteracao_meta"
-                        checked={ajusteTipo === 'sem_alteracao_meta'}
-                        onChange={() => setAjusteTipo('sem_alteracao_meta')}
-                        className="mt-1 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-neutral-850 block">Ajuste sem alteração de meta</span>
-                        <span className="text-[10px] text-neutral-450 block leading-tight">Adequações técnicas que não interferem no escopo físico original acordado.</span>
-                      </div>
-                    </label>
-
-                    <label className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer transition-all ${
-                      ajusteTipo === 'com_alteracao_meta' 
-                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500' 
-                        : 'bg-white border-neutral-200 hover:bg-neutral-50/50'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="tipoAjuste"
-                        value="com_alteracao_meta"
-                        checked={ajusteTipo === 'com_alteracao_meta'}
-                        onChange={() => setAjusteTipo('com_alteracao_meta')}
-                        className="mt-1 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-neutral-850 block">Ajuste com alteração/acréscimo de meta</span>
-                        <span className="text-[10px] text-neutral-450 block leading-tight">Modificações que acrescentam ou alteram o objeto/metas físicas do projeto.</span>
-                      </div>
-                    </label>
-
-                    <label className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer transition-all ${
-                      ajusteTipo === 'com_alteracao_meta_projeto' 
-                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500' 
-                        : 'bg-white border-neutral-200 hover:bg-neutral-50/50'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="tipoAjuste"
-                        value="com_alteracao_meta_projeto"
-                        checked={ajusteTipo === 'com_alteracao_meta_projeto'}
-                        onChange={() => setAjusteTipo('com_alteracao_meta_projeto')}
-                        className="mt-1 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-neutral-850 block">Ajuste com meta e alteração de projeto</span>
-                        <span className="text-[10px] text-neutral-450 block leading-tight">Complexidade máxima: altera as metas físicas e também os arquivos técnicos do projeto.</span>
-                      </div>
-                    </label>
-
-                    <label className={`p-4 border rounded-xl flex items-start gap-3 cursor-pointer transition-all ${
-                      ajusteTipo === 'sem_alteracao_meta_com_projeto' 
-                        ? 'bg-blue-50/50 border-blue-500 ring-1 ring-blue-500' 
-                        : 'bg-white border-neutral-200 hover:bg-neutral-50/50'
-                    }`}>
-                      <input
-                        type="radio"
-                        name="tipoAjuste"
-                        value="sem_alteracao_meta_com_projeto"
-                        checked={ajusteTipo === 'sem_alteracao_meta_com_projeto'}
-                        onChange={() => setAjusteTipo('sem_alteracao_meta_com_projeto')}
-                        className="mt-1 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-neutral-850 block">Ajuste sem meta e com alteração de projeto</span>
-                        <span className="text-[10px] text-neutral-450 block leading-tight">Análise técnica referente aos quantitativos e tabela de serviços DORE/SIN.</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* 2. DADOS DA SOLICITAÇÃO E RESPONSÁVEL */}
-                <div className="space-y-4 pt-4 border-t border-neutral-150">
-                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
-                    II. Responsabilidade Técnica & Valores do Ajuste
-                  </label>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
-                        Valor Proposto do Ajuste (R$) *
-                      </label>
-                      <div className="relative rounded-lg shadow-xs">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-500 text-xs font-bold">R$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={ajusteValor}
-                          onChange={(e) => setAjusteValor(e.target.value)}
-                          placeholder="12.422,94"
-                          className="w-full pl-8 pr-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono font-bold text-neutral-800"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
-                        Elaborador da Planilha *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={ajusteResponsavel}
-                        onChange={(e) => setAjusteResponsavel(e.target.value)}
-                        placeholder="Nome do Engenheiro / Técnico"
-                        className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-sans text-neutral-800"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
-                        Registro Profissional (CREA/CAU/CFT) *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={ajusteRegistro}
-                        onChange={(e) => setAjusteRegistro(e.target.value)}
-                        placeholder="Ex: 242488/D"
-                        className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-800"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. ENQUADRAMENTO REFERENTE AO CONTRATO */}
-                <div className="space-y-4 pt-4 border-t border-neutral-150">
-                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
-                    III. Enquadramento Técnico e Referência Contratual
-                  </label>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5">
-                        Ajuste Referente a: *
-                      </label>
-                      <div className="flex gap-4 pt-1">
-                        <label className="flex items-center gap-2 text-xs text-neutral-750 font-bold cursor-pointer">
-                          <input
-                            type="radio"
-                            name="ajusteReferente"
-                            value="atendimento_inicial"
-                            checked={ajusteReferenteOpt === 'atendimento_inicial'}
-                            onChange={() => setAjusteReferenteOpt('atendimento_inicial')}
-                            className="text-blue-600 focus:ring-blue-500"
-                          />
-                          ATENDIMENTO INICIAL
-                        </label>
-                        <label className="flex items-center gap-2 text-xs text-neutral-750 font-bold cursor-pointer">
-                          <input
-                            type="radio"
-                            name="ajusteReferente"
-                            value="saldo_nova_cotacao"
-                            checked={ajusteReferenteOpt === 'saldo_nova_cotacao'}
-                            onChange={() => setAjusteReferenteOpt('saldo_nova_cotacao')}
-                            className="text-blue-600 focus:ring-blue-500"
-                          />
-                          Saldo Nova Cotação
-                        </label>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1.5">
-                        Valor Atual do Contrato (R$)
-                      </label>
-                      <div className="relative rounded-lg shadow-xs max-w-xs">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-500 text-xs font-bold font-mono">R$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={ajusteValorContrato}
-                          onChange={(e) => setAjusteValorContrato(e.target.value)}
-                          placeholder="400.498,42"
-                          className="w-full pl-8 pr-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-605"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
-                        Diferença Planilhas Autorizadas e Contrato (R$) *
-                      </label>
-                      <div className="relative rounded-lg shadow-xs">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-550 text-xs font-mono font-bold">R$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={ajusteDiferenca}
-                          onChange={(e) => setAjusteDiferenca(e.target.value)}
-                          placeholder="153.284,34"
-                          className="w-full pl-8 pr-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-850"
-                        />
-                      </div>
-                      <span className="text-[9px] text-neutral-400 mt-0.5 block">Exclui valores vinculados especificamente ao Engenheiro Fiscal</span>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
-                        BDI / Desconto (%) *
-                      </label>
-                      <div className="relative rounded-lg shadow-xs">
-                        <input
-                          type="number"
-                          required
-                          value={ajusteDesconto}
-                          onChange={(e) => setAjusteDesconto(e.target.value)}
-                          placeholder="28"
-                          className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-850"
-                        />
-                        <span className="absolute inset-y-0 right-3 flex items-center text-neutral-500 text-xs font-bold">%</span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-neutral-500 uppercase mb-1">
-                        Avanço Físico Obra (%) *
-                      </label>
-                      <div className="relative rounded-lg shadow-xs">
-                        <input
-                          type="number"
-                          required
-                          value={ajusteAvanco}
-                          onChange={(e) => setAjusteAvanco(e.target.value)}
-                          placeholder="50"
-                          className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white font-mono text-neutral-850"
-                        />
-                        <span className="absolute inset-y-0 right-3 flex items-center text-neutral-500 text-xs font-bold">%</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. OBSERVAÇÕES E META PROPOSTA */}
-                <div className="space-y-3 pt-4 border-t border-neutral-150">
-                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wider">
-                    IV. Memória de Observância / Descrição da NOVA META PROPOSTA *
-                  </label>
-                  <p className="text-[11px] text-neutral-400">Escreva detalhadamente a justificativa para este ajuste e como se caracteriza o escopo físico da nova meta.</p>
-                  
-                  <textarea
-                    required
-                    value={ajusteObservacoes}
-                    onChange={(e) => setAjusteObservacoes(e.target.value)}
-                    placeholder="Ex: Adequação das fundações do bloco B devido a interferência imprevista de rochas basálticas identificadas na escavação física. Troca de pavimentação asfáltica de acessos por bloco articulado intertravado ecológico sem alteração do valor global."
-                    className="w-full text-xs p-3 border border-neutral-300 rounded-lg bg-white h-24 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-sans text-neutral-800"
-                  />
-                </div>
-
-                {/* 5. MANDATORY SPREADSHEET PHOTO / EXCEL COMPONENT (CRITICAL REQUIREMENT) */}
-                <div className="space-y-3 pt-4 border-t border-red-100">
-                  <label className="block text-xs font-bold text-red-600 uppercase tracking-wider flex items-center gap-1.5">
-                    <UploadCloud className="w-4 h-4" />
-                    V. Anexar Planilha de Ajuste Orçamentário (Obrigatório) *
-                  </label>
-                  <p className="text-[11px] text-neutral-400">Classificação estatutária: É obrigatório e imprescindível anexar a nova planilha orçamentária para avançar o processo técnico.</p>
-
-                  <input
-                    type="file"
-                    ref={planilhaAjusteFormInputRef}
-                    id="planilha-ajuste-input-upload-form"
-                    accept=".xlsx, .xls, .csv"
-                    onChange={handlePlanilhaAjusteUpload}
-                    className="hidden"
-                  />
-
-                  {!ajustePlanilhaFileName ? (
-                    <div className="border-2 border-dashed border-red-300 bg-red-50/20 rounded-xl p-6 text-center space-y-2 cursor-pointer hover:bg-red-50/45 transition-all"
-                         onClick={() => planilhaAjusteFormInputRef.current?.click()}>
-                      <UploadCloud className="w-8 h-8 text-red-400 mx-auto animate-bounce" />
-                      <p className="text-xs text-red-800 font-extrabold uppercase">Planilha de Ajuste Não Selecionada *</p>
-                      <p className="text-[10px] text-slate-500">Clique aqui para selecionar e anexar documento Excel contendo tabelas DORE/SIN.</p>
-                    </div>
-                  ) : (
-                    <div className="border border-emerald-300 bg-emerald-50/50 rounded-xl p-4 flex items-center justify-between gap-3 shadow-3xs">
-                      <div className="flex items-center gap-2.5 truncate">
-                        <FileCheck className="w-8 h-8 text-emerald-600 shrink-0" />
-                        <div className="truncate text-left space-y-1">
-                          <span className="font-bold text-emerald-950 text-xs block truncate">{ajustePlanilhaFileName}</span>
-                          <span className="text-[10px] text-emerald-600 font-mono block">Tamanho: {ajustePlanilhaFileSize} • Carregado com Sucesso</span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAjustePlanilhaFileName('');
-                          setAjustePlanilhaFileSize('');
-                          setAjustePlanilhaUploadedAt('');
-                        }}
-                        className="text-red-600 hover:text-red-800 text-[11px] font-bold bg-white border border-red-200 px-3 py-1.5 rounded-lg hover:bg-neutral-50 shrink-0 transition shadow-2xs cursor-pointer"
-                      >
-                        Substituir Planilha
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* RODAPÉ DO FORMULÁRIO COM AÇÕES */}
-              <div className="bg-neutral-50 px-6 py-4 border-t border-neutral-200 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Reset fields
-                    setAjustePlanilhaFileName('');
-                    setAjustePlanilhaFileSize('');
-                    setAjustePlanilhaUploadedAt('');
-                    setAjusteObservacoes('');
-                    setActiveTab('execucao');
-                  }}
-                  className="px-4 py-2 border border-neutral-300 bg-white rounded-lg text-xs font-bold text-neutral-600 hover:bg-neutral-50 transition-all cursor-pointer"
-                >
-                  Cancelar e Voltar para Medições
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-extrabold shadow-sm transition-colors cursor-pointer"
-                >
-                  Salvar e Protocolar Solicitação de Ajuste
-                </button>
-              </div>
-            </form>
           </div>
         )}
 
