@@ -1826,10 +1826,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     { id: 'v-2', dataVistoria: '2026-05-10', vistoriador: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', laudoResumido: 'Alvenaria com pequenas irregularidades pontuais de esquadro no bloco B, construtora orientada a efetuar correções físicas imediatas.', resultado: 'Relatório Emitido' as any, nomeRelatorio: 'laudo_vistoria_alvenaria_v2.pdf', tamanhoRelatorio: '2.1 MB' }
   ];
 
-  const listRestricoes = currentSol.restricoesObra || [
-    { id: 'r-1', descricao: 'Atraso na entrega do cimento estrutural e telhas termoacústicas pela distribuidora homologada.', dataIdentificacao: '2026-05-15', impacto: 'Médio' as const, status: 'Ativa' as const, categoria: 'Fornecedor' as const, previsaoResolucao: '2026-06-05' },
-    { id: 'r-2', descricao: 'Necessidade de remanejamento técnico de cabo de alta tensão adjacente ao bloco C pela concessionária CEMIG.', dataIdentificacao: '2026-05-02', impacto: 'Alto' as const, status: 'Ativa' as const, categoria: 'Técnica' as const, previsaoResolucao: '2026-06-20' }
-  ];
+  const listRestricoes = currentSol.restricoesObra || [];
 
   // Action handlers
   const updateObraStatus = () => {
@@ -1953,14 +1950,52 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     onUpdate(updated);
   };
 
-  const adicNovaRestricao = (e: React.FormEvent) => {
+  const adicNovaRestricao = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restricaoDesc.trim()) return;
 
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        alert('Não foi possível localizar o registro da obra no banco para gravar a restrição.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const dataIdentificacao = new Date().toISOString().split('T')[0];
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data: restricaoRow, error: restricaoError } = await supabase
+      .from('restricoes_obra')
+      .insert({
+        solicitacao_id: dbId,
+        descricao: restricaoDesc,
+        tipo: restricaoCategoria ?? null,
+        status: 'ativa',
+        data_abertura: dataIdentificacao,
+        impacto: restricaoImpacto ?? null,
+        previsao_resolucao: restricaoPrevisao && restricaoPrevisao.trim() !== '' ? restricaoPrevisao : null,
+        usuario_id: userData.user?.id ?? null
+      })
+      .select('id')
+      .single();
+
+    if (restricaoError || !restricaoRow) {
+      console.error('Erro ao gravar restrição no Supabase:', restricaoError);
+      alert('Erro ao gravar a restrição no banco de dados. Tente novamente.');
+      return;
+    }
+
     const novoReg = {
-      id: `r-${Date.now()}`,
+      id: restricaoRow.id,
       descricao: restricaoDesc,
-      dataIdentificacao: new Date().toISOString().split('T')[0],
+      dataIdentificacao,
       impacto: restricaoImpacto,
       status: 'Ativa' as const,
       categoria: restricaoCategoria,
@@ -1977,15 +2012,32 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     setRestricaoPrevisao('');
   };
 
-  const resolverRestricao = (id: string) => {
+  const resolverRestricao = async (id: string) => {
     if (!parecerResolucaoTxt.trim()) return;
+
+    const resolvidaEm = new Date().toISOString().split('T')[0];
+
+    const { error } = await supabase
+      .from('restricoes_obra')
+      .update({
+        status: 'resolvida',
+        data_resolucao: resolvidaEm,
+        parecer_resolucao: parecerResolucaoTxt
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Erro ao atualizar restrição no Supabase:', error);
+      alert('Erro ao atualizar a restrição no banco de dados. Tente novamente.');
+      return;
+    }
 
     const updatedRestricoes = listRestricoes.map(r => {
       if (r.id === id) {
         return {
           ...r,
           status: 'Resolvida' as const,
-          resolvidaEm: new Date().toISOString().split('T')[0],
+          resolvidaEm,
           parecerResolucao: parecerResolucaoTxt
         };
       }
@@ -2002,7 +2054,14 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     setResolvendoId(null);
   };
 
-  const deletarRestricao = (id: string) => {
+  const deletarRestricao = async (id: string) => {
+    const { error } = await supabase.from('restricoes_obra').delete().eq('id', id);
+    if (error) {
+      console.error('Erro ao excluir restrição no Supabase:', error);
+      alert('Erro ao excluir a restrição no banco de dados. Tente novamente.');
+      return;
+    }
+
     const updated = {
       ...currentSol,
       restricoesObra: listRestricoes.filter(r => r.id !== id)

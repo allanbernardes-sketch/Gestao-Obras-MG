@@ -875,7 +875,51 @@ export default function App() {
             }
           }
 
-          setSolicitacoes(comDiarios);
+          // Carrega as restrições de obra registradas de cada solicitação
+          let comRestricoes = comDiarios;
+          if (dbIds.length > 0) {
+            const { data: restricoesData, error: restricoesError } = await supabase
+              .from('restricoes_obra')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: false });
+
+            if (restricoesError) {
+              console.error('Erro ao carregar restrições de obra:', restricoesError);
+            } else if (restricoesData) {
+              const statusRestricaoDoBanco = (v: string | null): 'Ativa' | 'Resolvida' => {
+                return v === 'resolvida' ? 'Resolvida' : 'Ativa';
+              };
+
+              const porSolicitacaoRestricao = new Map<string, any[]>();
+              (restricoesData as any[]).forEach((row) => {
+                const lista = porSolicitacaoRestricao.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoRestricao.set(row.solicitacao_id, lista);
+              });
+
+              comRestricoes = comDiarios.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoRestricao.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  restricoesObra: linhas.map((row: any) => ({
+                    id: row.id,
+                    descricao: row.descricao ?? '',
+                    dataIdentificacao: row.data_abertura ? String(row.data_abertura) : '',
+                    categoria: row.tipo ?? undefined,
+                    status: statusRestricaoDoBanco(row.status),
+                    impacto: row.impacto ?? undefined,
+                    previsaoResolucao: row.previsao_resolucao ? String(row.previsao_resolucao) : undefined,
+                    resolvidaEm: row.data_resolucao ? String(row.data_resolucao) : undefined,
+                    parecerResolucao: row.parecer_resolucao ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comRestricoes);
           return;
         }
       } catch (e) {
