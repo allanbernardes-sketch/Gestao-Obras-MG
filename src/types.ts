@@ -331,8 +331,9 @@ export interface Solicitacao {
     dataVistoria: string;
     vistoriador: string;
     laudoResumido: string;
-    resultado: 'Aprovada' | 'Aprovada com Ressalvas' | 'Reprovada';
-    fotosLaudos?: string[];
+    resultado?: string;
+    nomeRelatorio?: string;
+    tamanhoRelatorio?: string;
   }[];
 
   // Saldo Complementar de Obra Distratada

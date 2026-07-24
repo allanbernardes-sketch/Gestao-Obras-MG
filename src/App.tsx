@@ -919,7 +919,45 @@ export default function App() {
             }
           }
 
-          setSolicitacoes(comRestricoes);
+          // Carrega as vistorias de obra registradas de cada solicitação
+          let comVistorias = comRestricoes;
+          if (dbIds.length > 0) {
+            const { data: vistoriasData, error: vistoriasError } = await supabase
+              .from('vistorias_obra')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('data_vistoria', { ascending: false });
+
+            if (vistoriasError) {
+              console.error('Erro ao carregar vistorias de obra:', vistoriasError);
+            } else if (vistoriasData) {
+              const porSolicitacaoVistoria = new Map<string, any[]>();
+              (vistoriasData as any[]).forEach((row) => {
+                const lista = porSolicitacaoVistoria.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoVistoria.set(row.solicitacao_id, lista);
+              });
+
+              comVistorias = comRestricoes.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoVistoria.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  vistoriasObra: linhas.map((row: any) => ({
+                    id: row.id,
+                    dataVistoria: row.data_vistoria ? String(row.data_vistoria) : '',
+                    vistoriador: row.vistoriador ?? '',
+                    laudoResumido: row.observacoes ?? '',
+                    nomeRelatorio: row.nome_relatorio ?? undefined,
+                    tamanhoRelatorio: row.tamanho_relatorio ?? undefined,
+                    resultado: row.resultado ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comVistorias);
           return;
         }
       } catch (e) {

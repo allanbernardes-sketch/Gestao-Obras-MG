@@ -1821,10 +1821,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
   // Default values lazily resolved for rendering if not initialized on Solicitacao
   const listDiarios = currentSol.diariosObra || [];
 
-  const listVistorias = currentSol.vistoriasObra || [
-    { id: 'v-1', dataVistoria: '2026-05-20', vistoriador: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', laudoResumido: 'Instalações hidráulicas testadas em pressão interna e aprovadas sem vazamentos ou infiltrações registradas de forma crônica.', resultado: 'Relatório Emitido' as any, nomeRelatorio: 'relatorio_visita_hidraulica_v1.pdf', tamanhoRelatorio: '1.4 MB' },
-    { id: 'v-2', dataVistoria: '2026-05-10', vistoriador: currentSol.fiscalObraAtribuido || 'Engª. Helena Rocha', laudoResumido: 'Alvenaria com pequenas irregularidades pontuais de esquadro no bloco B, construtora orientada a efetuar correções físicas imediatas.', resultado: 'Relatório Emitido' as any, nomeRelatorio: 'laudo_vistoria_alvenaria_v2.pdf', tamanhoRelatorio: '2.1 MB' }
-  ];
+  const listVistorias = currentSol.vistoriasObra || [];
 
   const listRestricoes = currentSol.restricoesObra || [];
 
@@ -1918,18 +1915,58 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     onUpdate(updated);
   };
 
-  const adicNovaVistoria = (e: React.FormEvent) => {
+  const adicNovaVistoria = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vistoLaudoResumido.trim()) return;
 
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        alert('Não foi possível localizar o registro da obra no banco para gravar a vistoria.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const vistoriador = vistoVistoriador || 'Engenheiro Responsável';
+    const nomeRelatorio = relatorioVisitaFile ? relatorioVisitaFile.name : undefined;
+    const tamanhoRelatorio = relatorioVisitaFile ? relatorioVisitaFile.size : undefined;
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data: vistoriaRow, error: vistoriaError } = await supabase
+      .from('vistorias_obra')
+      .insert({
+        solicitacao_id: dbId,
+        data_vistoria: vistoriaData,
+        vistoriador: vistoriador ?? null,
+        observacoes: vistoLaudoResumido ?? null,
+        nome_relatorio: nomeRelatorio ?? null,
+        tamanho_relatorio: tamanhoRelatorio ?? null,
+        resultado: 'emitido',
+        usuario_id: userData.user?.id ?? null
+      })
+      .select('id')
+      .single();
+
+    if (vistoriaError || !vistoriaRow) {
+      console.error('Erro ao gravar vistoria no Supabase:', vistoriaError);
+      alert('Erro ao gravar a vistoria no banco de dados. Tente novamente.');
+      return;
+    }
+
     const novoReg = {
-      id: `v-${Date.now()}`,
+      id: vistoriaRow.id,
       dataVistoria: vistoriaData,
-      vistoriador: vistoVistoriador || 'Engenheiro Responsável',
+      vistoriador,
       laudoResumido: vistoLaudoResumido,
-      resultado: 'Relatório Emitido' as any,
-      nomeRelatorio: relatorioVisitaFile ? relatorioVisitaFile.name : undefined,
-      tamanhoRelatorio: relatorioVisitaFile ? relatorioVisitaFile.size : undefined
+      resultado: 'emitido',
+      nomeRelatorio,
+      tamanhoRelatorio
     };
 
     const updated = {
@@ -1942,7 +1979,14 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     setRelatorioVisitaFile(null);
   };
 
-  const deletarVistoria = (id: string) => {
+  const deletarVistoria = async (id: string) => {
+    const { error } = await supabase.from('vistorias_obra').delete().eq('id', id);
+    if (error) {
+      console.error('Erro ao excluir vistoria no Supabase:', error);
+      alert('Erro ao excluir a vistoria no banco de dados. Tente novamente.');
+      return;
+    }
+
     const updated = {
       ...currentSol,
       vistoriasObra: listVistorias.filter(v => v.id !== id)
@@ -3067,9 +3111,9 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                       Aprovada: 'bg-emerald-50 border-emerald-250 text-emerald-700',
                       'Aprovada com Ressalvas': 'bg-amber-50 border-amber-250 text-amber-700',
                       Reprovada: 'bg-rose-50 border-rose-200 text-rose-700',
-                      'Relatório Emitido': 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      emitido: 'bg-indigo-50 border-indigo-200 text-indigo-700'
                     };
-                    const sc = statusColors[v.resultado] || 'bg-slate-50 border-slate-200 text-slate-700';
+                    const sc = statusColors[v.resultado || ''] || 'bg-slate-50 border-slate-200 text-slate-700';
 
                     return (
                       <div key={v.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col space-y-2">
