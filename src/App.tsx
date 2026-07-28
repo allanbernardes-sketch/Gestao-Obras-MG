@@ -92,6 +92,7 @@ function dataOuNull(val?: string): string | null {
 export default function App() {
   const [logado, setLogado] = useState(false);
   const [nomeUsuario, setNomeUsuario] = useState('');
+  const [idUsuarioLogado, setIdUsuarioLogado] = useState<string | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [perfilUsuario, setPerfilUsuario] = useState<PerfilUsuario>('tecnico_infra');
   const [idSolicitacaoSelecionada, setIdSolicitacaoSelecionada] = useState<string | null>(null);
@@ -519,10 +520,13 @@ export default function App() {
     setEmpNome(''); setEmpCnpj(''); setEmpResp(''); setEmpSit('Regular'); setEmpTel(''); setEmpMail('');
   };
 
-  // Controle de acesso regional: tecnico_infra e coordenador_regional só veem dados das suas SREs
-  const regionaisDoTecnico: string[] = (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional')
+  // Controle de acesso regional: tecnico_infra e coordenador_regional só veem dados das suas SREs.
+  // O usuário logado é identificado pelo auth uid — nunca por "primeiro usuário com o perfil".
+  const perfilRestritoPorRegional = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional';
+
+  const regionaisDoTecnico: string[] = perfilRestritoPorRegional
     ? (() => {
-        const u = usuariosSeguranca.find(u => u.perfil === perfilUsuario);
+        const u = usuariosSeguranca.find(u => u.id === idUsuarioLogado);
         if (!u) return [];
         return u.regionais?.length ? u.regionais : (u.departamento ? [u.departamento] : []);
       })()
@@ -531,18 +535,15 @@ export default function App() {
   const sreDoTecnico = regionaisDoTecnico[0] || '';
 
   // Nome do técnico logado (para permitir acesso a obras onde é fiscal, mesmo fora da sua SRE)
-  const nomeTecnicoLogado = perfilUsuario === 'tecnico_infra'
-    ? (usuariosSeguranca.find(u => u.perfil === 'tecnico_infra')?.nome || '')
-    : '';
+  const nomeTecnicoLogado = perfilUsuario === 'tecnico_infra' ? nomeUsuario : '';
 
   // Nome do coordenador regional logado (usado para registrar quem aprovou/reprovou o atendimento)
-  const nomeCoordenadorLogado = perfilUsuario === 'coordenador_regional'
-    ? (usuariosSeguranca.find(u => u.perfil === 'coordenador_regional')?.nome || '')
-    : '';
+  const nomeCoordenadorLogado = perfilUsuario === 'coordenador_regional' ? nomeUsuario : '';
 
-  const solicitacoesVisiveis = regionaisDoTecnico.length
+  // Fail-closed: perfil restrito sem regionais cadastradas não vê nada (antes via o estado inteiro)
+  const solicitacoesVisiveis = perfilRestritoPorRegional
     ? solicitacoes.filter(s =>
-        regionaisDoTecnico.some(sre => s.sre?.toLowerCase() === sre.toLowerCase()) ||
+        regionaisDoTecnico.some(sre => normalizarSre(s.sre) === normalizarSre(sre)) ||
         (nomeTecnicoLogado && s.fiscalObraAtribuido === nomeTecnicoLogado)
       )
     : solicitacoes;
@@ -1106,7 +1107,7 @@ export default function App() {
     async function carregarUsuarios() {
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('usuarios')
-        .select('id, nome, email, perfil_id, perfis(codigo)')
+        .select('id, nome, email, perfil_id, perfis(codigo), usuario_regionais(regionais_sre(nome))')
         .eq('ativo', true);
 
       if (usuariosError) {
@@ -1115,13 +1116,19 @@ export default function App() {
       }
 
       if (usuariosData) {
-        setUsuariosSeguranca(usuariosData.map((u: any) => ({
-          id: u.id,
-          nome: u.nome,
-          email: u.email,
-          perfil: u.perfis?.codigo ?? '',
-          departamento: '',
-        })));
+        setUsuariosSeguranca(usuariosData.map((u: any) => {
+          const regionais = (u.usuario_regionais ?? [])
+            .map((ur: any) => ur.regionais_sre?.nome)
+            .filter(Boolean) as string[];
+          return {
+            id: u.id,
+            nome: u.nome,
+            email: u.email,
+            perfil: u.perfis?.codigo ?? '',
+            departamento: regionais[0] ?? '',
+            regionais,
+          };
+        }));
       }
     }
 
@@ -1146,6 +1153,7 @@ export default function App() {
       if (usuario) {
         setPerfilUsuario((usuario.perfis as unknown as { codigo: string }).codigo as PerfilUsuario);
         setNomeUsuario(usuario.nome as string);
+        setIdUsuarioLogado(userId);
         setLogado(true);
       }
     }
@@ -1158,6 +1166,7 @@ export default function App() {
       if (!session) {
         setLogado(false);
         setNomeUsuario('');
+        setIdUsuarioLogado(null);
       }
     });
 
@@ -1677,9 +1686,10 @@ export default function App() {
     atualizarEGuardarSolicitacoes(novas, [nova]);
   };
 
-  const handleLogin = (perfil: PerfilUsuario, nome: string) => {
+  const handleLogin = (perfil: PerfilUsuario, nome: string, usuarioId: string) => {
     setPerfilUsuario(perfil);
     setNomeUsuario(nome);
+    setIdUsuarioLogado(usuarioId);
     setLogado(true);
   };
 
@@ -1687,6 +1697,7 @@ export default function App() {
     supabase.auth.signOut();
     setLogado(false);
     setNomeUsuario('');
+    setIdUsuarioLogado(null);
     setMostrarMenuNotif(false);
   };
 
