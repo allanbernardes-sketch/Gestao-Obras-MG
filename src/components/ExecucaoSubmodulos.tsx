@@ -4134,6 +4134,7 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
             <div>
               <label className="text-[10px] font-bold text-slate-500 block mb-1">Valor Medido (R$)*</label>
               <input
+                data-testid="medicao-valor"
                 id="med-valor-input"
                 type="number"
                 step="0.01"
@@ -4308,6 +4309,7 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
           )}
 
           <button
+            data-testid="medicao-registrar"
             id="sub-medicao-nova-btn"
             type="submit"
             className="w-full py-2.5 text-xs text-white font-black uppercase bg-emerald-600 hover:bg-emerald-700 rounded-xl cursor-pointer transition-colors shadow-3xs hover:shadow-xs flex items-center justify-center gap-1"
@@ -6039,6 +6041,7 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
         </button>
         {!somenteLeitura && (
         <button
+          data-testid="aditivo-criar"
           onClick={() => { if (podeSolicitarAditivo) { setActiveTab('novo_atendimento'); setStep(1); } }}
           title={
             isDistratadaAdt ? 'Contrato distratado — não é possível solicitar aditivos' :
@@ -6232,6 +6235,7 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
 
                               <div className="flex gap-2 justify-end">
                                 <button
+                                  data-testid="aditivo-recusar"
                                   type="button"
                                   onClick={() => handleDoreAction(adt.id, 'Recusado')}
                                   className="px-4 py-1.5 text-xs font-black text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-lg uppercase cursor-pointer"
@@ -6239,6 +6243,7 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
                                   Indeferir / Recusar
                                 </button>
                                 <button
+                                  data-testid="aditivo-aprovar"
                                   type="button"
                                   onClick={() => handleDoreAction(adt.id, 'Aprovado')}
                                   className="px-4 py-1.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg uppercase cursor-pointer shadow-xs"
@@ -6500,6 +6505,7 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
                   </button>
 
                   <button
+                    data-testid="aditivo-salvar"
                     type="submit"
                     className="px-6 py-2.5 text-xs text-white font-black uppercase bg-blue-600 hover:bg-blue-700 rounded-xl cursor-pointer shadow-md"
                   >
@@ -6844,6 +6850,7 @@ function SubAjustes({
         </button>
         {!somenteLeitura && (
         <button
+          data-testid="ajuste-criar"
           onClick={() => { if (!isDistratadaAjuste) { setActiveTab('novo_atendimento'); setStep(1); } }}
           title={isDistratadaAjuste ? 'Contrato distratado — não é possível registrar ajustes' : ''}
           className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider transition-colors flex items-center gap-2 border-b-2 ${
@@ -7029,6 +7036,7 @@ function SubAjustes({
 
                               <div className="flex gap-2 justify-end">
                                 <button
+                                  data-testid="ajuste-recusar"
                                   type="button"
                                   onClick={() => handleDoreAction(aju.id, 'em_elaboracao')}
                                   className="px-4 py-1.5 text-xs font-black text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg uppercase cursor-pointer"
@@ -7036,6 +7044,7 @@ function SubAjustes({
                                   Retornar p/ Correção
                                 </button>
                                 <button
+                                  data-testid="ajuste-aprovar"
                                   type="button"
                                   onClick={() => handleDoreAction(aju.id, 'validado')}
                                   className="px-4 py-1.5 text-xs font-black text-white bg-purple-600 hover:bg-purple-700 rounded-lg uppercase cursor-pointer shadow-xs"
@@ -7252,6 +7261,7 @@ function SubAjustes({
                   </button>
 
                   <button
+                    data-testid="ajuste-salvar"
                     type="submit"
                     className="px-6 py-2.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 font-black rounded-xl uppercase cursor-pointer"
                   >

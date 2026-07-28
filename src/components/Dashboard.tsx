@@ -488,7 +488,8 @@ export default function Dashboard({
                   const temRecusas = sol.documentos.some((d) => d.status === 'recusado');
 
                   return (
-                    <tr 
+                    <tr
+                      data-testid={`card-solicitacao-${sol.id}`}
                       key={sol.id}
                       onClick={() => onSelect(sol)}
                       className="hover:bg-slate-50/70 transition-colors cursor-pointer group"
