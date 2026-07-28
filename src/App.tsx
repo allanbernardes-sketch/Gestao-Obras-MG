@@ -24,6 +24,13 @@ import CentralNavegacaoObras from './components/CentralNavegacaoObras';
 import OrcamentoModule from './components/orcamento/OrcamentoModule';
 import PatrimonioModule from './components/patrimonio/PatrimonioModule';
 import { supabase } from './lib/supabase';
+import {
+  resolverUsuarioIdPorNome,
+  sincronizarDocumentosDaSolicitacao,
+  sincronizarHistoricoEtapas,
+  normalizarSre,
+  formatarTamanhoArquivo,
+} from './lib/persistencia';
 
 // Perfis selecionáveis diretamente no Cadastro de Usuário (Segurança). 'fiscal_obra' fica de fora
 // por não ter nenhum comportamento implementado no restante do sistema ainda.
@@ -546,7 +553,7 @@ export default function App() {
       try {
         const { data, error } = await supabase
           .from('solicitacoes')
-          .select('*')
+          .select('*, analista:usuarios!solicitacoes_analista_atribuido_id_fkey(nome), fiscal:usuarios!solicitacoes_fiscal_obra_atribuido_id_fkey(nome)')
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -564,6 +571,8 @@ export default function App() {
             sre: row.sre ?? '',
             dataCriacao: row.created_at ? String(row.created_at).split('T')[0] : '',
             etapaAtual: row.etapa_atual,
+            analistaAtribuido: row.analista?.nome ?? undefined,
+            fiscalObraAtribuido: row.fiscal?.nome ?? undefined,
             historicoEtapas: [],
             documentos: [],
             medicoes: [],
@@ -1150,24 +1159,15 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Persists updates: state React (síncrono) + localStorage (fallback) + Supabase (assíncrono)
-  const atualizarEGuardarSolicitacoes = (novasBrutas: Solicitacao[]) => {
-    // Recalcula score/estrelas/etiquetas a cada criação, atualização ou ajuste de prioridade manual
-    const novas = novasBrutas.map(recalcularPrioridade).map(recalcularIEE);
-    setSolicitacoes(novas);
+  // Persiste UMA solicitação no Supabase: upsert dos escalares + sincronização das
+  // tabelas-filhas de checklist/histórico. Lança em qualquer erro; retorna o uuid da linha.
+  const persistirSolicitacao = async (sol: Solicitacao): Promise<string> => {
+    const { data: auth } = await supabase.auth.getUser();
+    const usuarioId = auth?.user?.id ?? null;
 
-    // Fallback localStorage durante transição
-    try {
-      localStorage.setItem('gesto_solicitacoes', JSON.stringify(novas));
-    } catch (err) {
-      console.warn('localStorage cheio:', err);
-    }
-
-    // Escrita assíncrona no Supabase
-    novas.forEach(async (sol) => {
-      const { error } = await supabase
-        .from('solicitacoes')
-        .upsert({
+    const { data, error } = await supabase
+      .from('solicitacoes')
+      .upsert({
           codigo_sgo: sol.id,
           codesc: sol.codesc,
           nome_escola: sol.nomeEscola,
@@ -1241,19 +1241,53 @@ export default function App() {
           contador_analises: sol.contadorAnalises ?? 0,
           valor_contrato: sol.contratoValorInicial ?? null,
           status_obra: statusObraParaBanco(sol),
-          analista_atribuido_id: null,
-          fiscal_obra_atribuido_id: null,
+          analista_atribuido_id: resolverUsuarioIdPorNome(usuariosSeguranca, sol.analistaAtribuido),
+          fiscal_obra_atribuido_id: resolverUsuarioIdPorNome(usuariosSeguranca, sol.fiscalObraAtribuido),
           updated_at: new Date().toISOString()
-        }, { onConflict: 'codigo_sgo' });
+        }, { onConflict: 'codigo_sgo' })
+        .select('id')
+        .single();
 
-      if (error) {
-        console.error('Erro Supabase completo:', JSON.stringify(error, null, 2));
-        console.error('Código:', error.code);
-        console.error('Mensagem:', error.message);
-        console.error('Detalhes:', error.details);
-        console.error('Hint:', error.hint);
+    if (error) throw error;
+    const dbId = (data as { id: string }).id;
+
+    await sincronizarDocumentosDaSolicitacao(dbId, sol, usuarioId);
+    await sincronizarHistoricoEtapas(dbId, sol, usuarioId);
+    return dbId;
+  };
+
+  // Persists updates: state React (síncrono) + localStorage (fallback) + Supabase (assíncrono).
+  // Só as `alteradas` vão ao banco — nada de regravar a lista inteira a cada edição.
+  const atualizarEGuardarSolicitacoes = (novasBrutas: Solicitacao[], alteradas: Solicitacao[]) => {
+    // Recalcula score/estrelas/etiquetas a cada criação, atualização ou ajuste de prioridade manual
+    const novas = novasBrutas.map(recalcularPrioridade).map(recalcularIEE);
+    setSolicitacoes(novas);
+
+    // Fallback localStorage durante transição
+    try {
+      localStorage.setItem('gesto_solicitacoes', JSON.stringify(novas));
+    } catch (err) {
+      console.warn('localStorage cheio:', err);
+    }
+
+    // Persiste as versões recalculadas (score/IEE atualizados) das alteradas
+    const paraPersistir = alteradas
+      .map(a => novas.find(s => s.id === a.id))
+      .filter((s): s is Solicitacao => !!s);
+
+    (async () => {
+      for (const sol of paraPersistir) {
+        try {
+          const dbId = await persistirSolicitacao(sol);
+          if (!sol._dbId) {
+            setSolicitacoes(prev => prev.map(s => s.id === sol.id ? { ...s, _dbId: dbId } : s));
+          }
+        } catch (error: any) {
+          console.error('Erro ao persistir solicitação no Supabase:', JSON.stringify(error, null, 2));
+          alert(`Falha ao salvar "${sol.nomeEscola}" no banco de dados. As alterações estão salvas apenas neste navegador. Detalhe: ${error?.message ?? error}`);
+        }
       }
-    });
+    })();
   };
 
   const handleInjetarDemandaTeste = (subTask: string) => {
@@ -1378,7 +1412,7 @@ export default function App() {
     }
 
     const novas = [nova, ...solicitacoes];
-    atualizarEGuardarSolicitacoes(novas);
+    atualizarEGuardarSolicitacoes(novas, [nova]);
     setSelectedSchoolsPorSubtask(prev => ({
       ...prev,
       [subTask]: randomId
@@ -1388,7 +1422,7 @@ export default function App() {
   const handleUpdateSolicitacao = (updated: Solicitacao) => {
     const old = solicitacoes.find(s => s.id === updated.id);
     const novas = solicitacoes.map(s => s.id === updated.id ? updated : s);
-    atualizarEGuardarSolicitacoes(novas);
+    atualizarEGuardarSolicitacoes(novas, [updated]);
 
     if (old) {
       // 1. Check if step/etapa was transitioned
@@ -1550,9 +1584,43 @@ export default function App() {
     }
   };
 
-  const handleDeleteSolicitacao = (id: string) => {
+  const handleDeleteSolicitacao = async (id: string) => {
+    const sol = solicitacoes.find(s => s.id === id);
     const novas = solicitacoes.filter(s => s.id !== id);
-    atualizarEGuardarSolicitacoes(novas);
+
+    // Exclusão real no banco (antes, a linha "ressuscitava" no reload)
+    if (sol) {
+      try {
+        let dbId = sol._dbId;
+        if (!dbId) {
+          const { data } = await supabase
+            .from('solicitacoes')
+            .select('id')
+            .eq('codigo_sgo', sol.id)
+            .maybeSingle();
+          dbId = (data as { id: string } | null)?.id;
+        }
+        if (dbId) {
+          // Filhas com FK NO ACTION precisam sair antes; documentos/histórico caem por CASCADE
+          const tabelasNoAction = [
+            'medicoes', 'aditivos', 'ajustes_planilha', 'diarios_obra',
+            'restricoes_obra', 'vistorias_obra', 'reequilibrios_financeiros', 'saldos_complementares',
+          ];
+          for (const tabela of tabelasNoAction) {
+            const { error } = await supabase.from(tabela).delete().eq('solicitacao_id', dbId);
+            if (error) throw error;
+          }
+          const { error } = await supabase.from('solicitacoes').delete().eq('id', dbId);
+          if (error) throw error;
+        }
+      } catch (error: any) {
+        console.error('Erro ao excluir solicitação no Supabase:', JSON.stringify(error, null, 2));
+        alert(`Falha ao excluir "${sol.nomeEscola}" no banco de dados. A exclusão não foi aplicada. Detalhe: ${error?.message ?? error}`);
+        return;
+      }
+    }
+
+    atualizarEGuardarSolicitacoes(novas, []);
   };
 
   // Lápis de edição em listas/kanban: rascunho (etapaAtual === 'cadastro') sempre volta ao
@@ -1601,7 +1669,7 @@ export default function App() {
 
   const handleNovaSolicitacao = (nova: Solicitacao) => {
     const novas = [nova, ...solicitacoes];
-    atualizarEGuardarSolicitacoes(novas);
+    atualizarEGuardarSolicitacoes(novas, [nova]);
   };
 
   const handleLogin = (perfil: PerfilUsuario, nome: string) => {
