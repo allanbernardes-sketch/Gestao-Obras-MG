@@ -522,6 +522,49 @@ export function syncChecklistDocs(
   return updated;
 }
 
+// Reconstrói o checklist na estrutura canônica de 8 documentos, preservando os dados
+// de upload/validação dos existentes (com aliases de ids legados: doc_3→doc_3_pdf) e
+// aplicando syncChecklistDocs para os documentos condicionais. Fonte única usada tanto
+// pela migração do localStorage quanto pela releitura do Supabase.
+export function montarChecklistCanonico(
+  existentes: DocumentoChecklist[] = [],
+  /** origemDemanda: nova forma; notificacao: retrocompatibilidade */
+  origemOuNotificacao?: string,
+  formaAtendimento?: string
+): DocumentoChecklist[] {
+  const achar = (...ids: string[]) => existentes.find(d => ids.includes(d.id));
+
+  const herdar = (
+    base: Pick<DocumentoChecklist, 'id' | 'nome' | 'obrigatorio' | 'desc'>,
+    doc?: DocumentoChecklist
+  ): DocumentoChecklist => ({
+    ...base,
+    fileName: doc?.fileName,
+    fileSize: doc?.fileSize,
+    uploadedAt: doc?.uploadedAt,
+    fileContent: doc?.fileContent,
+    fileType: doc?.fileType,
+    status: doc?.status || 'pendente',
+    justificativa: doc?.justificativa,
+  });
+
+  const canonicos: DocumentoChecklist[] = [
+    herdar({ id: 'doc_1', nome: 'Planilha Orçamentária', obrigatorio: true, desc: 'Anexar nos formatos .pdf e .xlsx.' }, achar('doc_1')),
+    herdar({ id: 'doc_2', nome: 'Registro do imóvel', obrigatorio: true, desc: 'Título de propriedade ou certidão de registro correspondente.' }, achar('doc_2')),
+    herdar({ id: 'doc_3_pdf', nome: 'Projeto de Engenharia (PDF)', obrigatorio: true, desc: 'Projeto técnico estrutural e arquitetônico no formato .pdf.' }, achar('doc_3_pdf', 'doc_3')),
+    herdar({ id: 'doc_3_dwg', nome: 'Projeto de Engenharia (DWG)', obrigatorio: true, desc: 'Projeto técnico estrutural e arquitetônico no formato .dwg (AutoCAD).' }, achar('doc_3_dwg')),
+    herdar({ id: 'doc_4', nome: 'Parecer técnico', obrigatorio: true, desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada.' }, achar('doc_4')),
+    herdar({ id: 'doc_ata', nome: 'Ata do Colegiado', obrigatorio: true, desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.' }, achar('doc_ata')),
+    herdar({ id: 'doc_foto', nome: 'Relatório fotográfico', obrigatorio: true, desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.' }, achar('doc_foto')),
+    herdar({ id: 'doc_5', nome: 'Imposto ISS', obrigatorio: false, desc: 'Guia ou comprovante de recolhimento tributário aplicável.' }, achar('doc_5')),
+  ];
+
+  // Documentos condicionais já existentes entram preservados; syncChecklistDocs
+  // decide se ficam, saem ou precisam ser criados conforme os campos atuais.
+  const condicionais = existentes.filter(d => d.id === 'doc_notificacao' || d.id === 'doc_recurso_sem_onus');
+  return syncChecklistDocs([...canonicos, ...condicionais], origemOuNotificacao, formaAtendimento);
+}
+
 export interface EmpresaSeguranca {
   id: string;
   nome: string;

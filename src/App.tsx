@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, computeStatusObra } from './types';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, DocumentoChecklist, computeStatusObra, montarChecklistCanonico } from './types';
 import { recalcularPrioridade } from './utils/prioridade';
 import { recalcularIEE } from './utils/iee';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
@@ -559,8 +559,8 @@ export default function App() {
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // Arrays aninhados (documentos, medições, aditivos, ajustes, histórico) ainda
-          // não são persistidos no Supabase nesta etapa — iniciam vazios por enquanto.
+          // Arrays aninhados iniciam vazios aqui e são preenchidos pelos fetches
+          // das tabelas-filhas logo abaixo (medições, aditivos, documentos, histórico…).
           const doSupabase: Solicitacao[] = data.map((row: any) => ({
             id: row.codigo_sgo,
             _dbId: row.id,
@@ -966,7 +966,112 @@ export default function App() {
             }
           }
 
-          setSolicitacoes(comVistorias);
+          // Carrega o checklist documental e o histórico de etapas; o que ainda não
+          // existe no banco é hidratado do localStorage (recuperação da era pré-persistência)
+          const localPorCodigo = new Map<string, Solicitacao>();
+          try {
+            const salvoLocal = localStorage.getItem('gesto_solicitacoes');
+            if (salvoLocal) {
+              (JSON.parse(salvoLocal) as Solicitacao[]).forEach(s => localPorCodigo.set(s.id, s));
+            }
+          } catch (e) {
+            console.warn('localStorage ilegível — carga segue sem recuperação local:', e);
+          }
+
+          let comDocumentos = comVistorias;
+          if (dbIds.length > 0) {
+            const { data: docsData, error: docsError } = await supabase
+              .from('documentos')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .in('categoria', ['checklist_obrigatorio', 'checklist_outros']);
+
+            const { data: histData, error: histError } = await supabase
+              .from('solicitacao_historico_etapas')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: true });
+
+            if (docsError) console.error('Erro ao carregar documentos:', docsError);
+            if (histError) console.error('Erro ao carregar histórico de etapas:', histError);
+
+            const docsPorSolicitacao = new Map<string, any[]>();
+            ((docsData as any[]) ?? []).forEach((row) => {
+              const lista = docsPorSolicitacao.get(row.solicitacao_id) ?? [];
+              lista.push(row);
+              docsPorSolicitacao.set(row.solicitacao_id, lista);
+            });
+
+            const histPorSolicitacao = new Map<string, any[]>();
+            ((histData as any[]) ?? []).forEach((row) => {
+              const lista = histPorSolicitacao.get(row.solicitacao_id) ?? [];
+              lista.push(row);
+              histPorSolicitacao.set(row.solicitacao_id, lista);
+            });
+
+            comDocumentos = comVistorias.map(sol => {
+              const solLocal = localPorCodigo.get(sol.id);
+              const linhasDoc = sol._dbId ? docsPorSolicitacao.get(sol._dbId) : undefined;
+              const linhasHist = sol._dbId ? histPorSolicitacao.get(sol._dbId) : undefined;
+
+              let documentos: DocumentoChecklist[];
+              let outrosDocumentos = sol.outrosDocumentos;
+
+              if (linhasDoc && linhasDoc.length > 0) {
+                // Banco é a fonte; base64 (fileContent) só existe no navegador que fez o upload
+                const porNomeLogico = new Map<string, any>(
+                  linhasDoc.filter(r => r.categoria === 'checklist_obrigatorio').map(r => [r.nome_logico, r])
+                );
+                documentos = montarChecklistCanonico([], sol.origemDemanda, sol.formaAtendimento).map(doc => {
+                  const row = porNomeLogico.get(doc.id);
+                  if (!row) return doc;
+                  const docLocal = solLocal?.documentos?.find(d => d.id === doc.id);
+                  return {
+                    ...doc,
+                    status: row.status ?? doc.status,
+                    justificativa: row.justificativa ?? undefined,
+                    fileName: row.file_name ?? undefined,
+                    fileType: row.file_type ?? undefined,
+                    fileSize: formatarTamanhoArquivo(row.file_size_bytes),
+                    uploadedAt: row.uploaded_at ? String(row.uploaded_at).split('T')[0] : undefined,
+                    fileContent: docLocal && docLocal.fileName === row.file_name ? docLocal.fileContent : undefined,
+                  };
+                });
+                outrosDocumentos = linhasDoc
+                  .filter(r => r.categoria === 'checklist_outros')
+                  .map((row): DocumentoChecklist => ({
+                    id: row.id,
+                    nome: row.nome_logico,
+                    obrigatorio: !!row.obrigatorio,
+                    desc: 'Documento complementar anexado ao processo.',
+                    status: row.status ?? 'pendente',
+                    justificativa: row.justificativa ?? undefined,
+                    fileName: row.file_name ?? undefined,
+                    fileType: row.file_type ?? undefined,
+                    fileSize: formatarTamanhoArquivo(row.file_size_bytes),
+                    uploadedAt: row.uploaded_at ? String(row.uploaded_at).split('T')[0] : undefined,
+                    fileContent: solLocal?.outrosDocumentos?.find(d => d.nome === row.nome_logico && d.fileName === row.file_name)?.fileContent,
+                  }));
+              } else {
+                // Recuperação: dados que o bug antigo descartava continuam no localStorage;
+                // serão persistidos no banco no próximo save desta solicitação
+                documentos = montarChecklistCanonico(solLocal?.documentos, sol.origemDemanda, sol.formaAtendimento);
+                outrosDocumentos = solLocal?.outrosDocumentos ?? undefined;
+              }
+
+              const historicoEtapas = (linhasHist && linhasHist.length > 0)
+                ? linhasHist.map(row => ({
+                    etapa: row.etapa_nova,
+                    data: row.created_at ? String(row.created_at).split('T')[0] : '',
+                    responsavel: row.responsavel ?? '',
+                  }))
+                : (solLocal?.historicoEtapas ?? []);
+
+              return { ...sol, documentos, outrosDocumentos, historicoEtapas };
+            });
+          }
+
+          setSolicitacoes(comDocumentos);
           return;
         }
       } catch (e) {
@@ -979,112 +1084,12 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved) as Solicitacao[];
 
-        // Dynamic clean migration of checklists to use current structural constraints
-        // preserving user-uploaded filenames, sizes, and statuses
-        const migrado = parsed.map(s => {
-          const doc1    = s.documentos?.find(d => d.id === 'doc_1');
-          const doc2    = s.documentos?.find(d => d.id === 'doc_2');
-          const doc3pdf = s.documentos?.find(d => d.id === 'doc_3_pdf' || d.id === 'doc_3');
-          const doc3dwg = s.documentos?.find(d => d.id === 'doc_3_dwg');
-          const doc4    = s.documentos?.find(d => d.id === 'doc_4' || d.id === 'doc_7');
-          const docAta  = s.documentos?.find(d => d.id === 'doc_ata');
-          const docFoto = s.documentos?.find(d => d.id === 'doc_foto');
-          const doc5    = s.documentos?.find(d => d.id === 'doc_5' || d.id === 'doc_6');
-
-          return {
-            ...s,
-            documentos: [
-              {
-                id: 'doc_1',
-                nome: 'Planilha Orçamentária',
-                obrigatorio: true,
-                desc: 'Anexar nos formatos .pdf e .xlsx.',
-                fileName: doc1?.fileName,
-                fileSize: doc1?.fileSize,
-                uploadedAt: doc1?.uploadedAt,
-                status: doc1?.status || 'pendente',
-                justificativa: doc1?.justificativa
-              },
-              {
-                id: 'doc_2',
-                nome: 'Registro do imóvel',
-                obrigatorio: true,
-                desc: 'Título de propriedade ou certidão de registro correspondente.',
-                fileName: doc2?.fileName,
-                fileSize: doc2?.fileSize,
-                uploadedAt: doc2?.uploadedAt,
-                status: doc2?.status || 'pendente',
-                justificativa: doc2?.justificativa
-              },
-              {
-                id: 'doc_3_pdf',
-                nome: 'Projeto de Engenharia (PDF)',
-                obrigatorio: true,
-                desc: 'Projeto técnico estrutural e arquitetônico no formato .pdf.',
-                fileName: doc3pdf?.fileName,
-                fileSize: doc3pdf?.fileSize,
-                uploadedAt: doc3pdf?.uploadedAt,
-                status: doc3pdf?.status || 'pendente',
-                justificativa: doc3pdf?.justificativa
-              },
-              {
-                id: 'doc_3_dwg',
-                nome: 'Projeto de Engenharia (DWG)',
-                obrigatorio: true,
-                desc: 'Projeto técnico estrutural e arquitetônico no formato .dwg (AutoCAD).',
-                fileName: doc3dwg?.fileName,
-                fileSize: doc3dwg?.fileSize,
-                uploadedAt: doc3dwg?.uploadedAt,
-                status: doc3dwg?.status || 'pendente',
-                justificativa: doc3dwg?.justificativa
-              },
-              {
-                id: 'doc_4',
-                nome: 'Parecer técnico',
-                obrigatorio: true,
-                desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada.',
-                fileName: doc4?.id === 'doc_4' ? doc4?.fileName : undefined,
-                fileSize: doc4?.id === 'doc_4' ? doc4?.fileSize : undefined,
-                uploadedAt: doc4?.id === 'doc_4' ? doc4?.uploadedAt : undefined,
-                status: doc4?.id === 'doc_4' ? (doc4?.status || 'pendente') : 'pendente',
-                justificativa: doc4?.id === 'doc_4' ? doc4?.justificativa : undefined
-              },
-              {
-                id: 'doc_ata',
-                nome: 'Ata do Colegiado',
-                obrigatorio: true,
-                desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.',
-                fileName: docAta?.fileName,
-                fileSize: docAta?.fileSize,
-                uploadedAt: docAta?.uploadedAt,
-                status: docAta?.status || 'pendente',
-                justificativa: docAta?.justificativa
-              },
-              {
-                id: 'doc_foto',
-                nome: 'Relatório fotográfico',
-                obrigatorio: true,
-                desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.',
-                fileName: docFoto?.fileName,
-                fileSize: docFoto?.fileSize,
-                uploadedAt: docFoto?.uploadedAt,
-                status: docFoto?.status || 'pendente',
-                justificativa: docFoto?.justificativa
-              },
-              {
-                id: 'doc_5',
-                nome: 'Imposto ISS',
-                obrigatorio: false,
-                desc: 'Guia ou comprovante de recolhimento tributário aplicável.',
-                fileName: doc5?.id === 'doc_5' ? doc5?.fileName : undefined,
-                fileSize: doc5?.id === 'doc_5' ? doc5?.fileSize : undefined,
-                uploadedAt: doc5?.id === 'doc_5' ? doc5?.uploadedAt : undefined,
-                status: doc5?.id === 'doc_5' ? (doc5?.status || 'pendente') : 'pendente',
-                justificativa: doc5?.id === 'doc_5' ? doc5?.justificativa : undefined
-              }
-            ]
-          };
-        });
+        // Migração do checklist para a estrutura canônica atual, preservando os
+        // dados de upload/validação (fonte única: montarChecklistCanonico em types.ts)
+        const migrado = parsed.map(s => ({
+          ...s,
+          documentos: montarChecklistCanonico(s.documentos, s.origemDemanda, s.formaAtendimento),
+        }));
 
         const migradoComPrioridade = migrado.map(recalcularPrioridade).map(recalcularIEE);
         setSolicitacoes(migradoComPrioridade);
