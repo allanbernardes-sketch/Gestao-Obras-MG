@@ -37,6 +37,15 @@ export function tamanhoEmBytes(display?: string): number | null {
   return Math.round(valor * (m[2].toUpperCase() === 'MB' ? 1024 * 1024 : 1024));
 }
 
+// Datas do modelo local são 'YYYY-MM-DD'; qualquer outra coisa vira null para
+// não derrubar o insert com timestamp inválido.
+const DATA_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function timestampDeData(data: string | undefined, horaMinSeg: string): string | null {
+  if (!data || !DATA_ISO_RE.test(data)) return null;
+  return `${data}T${horaMinSeg}`;
+}
+
 export function formatarTamanhoArquivo(bytes?: number | null): string | undefined {
   if (bytes == null) return undefined;
   return bytes > 1024 * 1024
@@ -67,7 +76,7 @@ export async function sincronizarDocumentosDaSolicitacao(
     file_name: doc.fileName ?? null,
     file_type: doc.fileType ?? null,
     file_size_bytes: tamanhoEmBytes(doc.fileSize),
-    uploaded_at: doc.uploadedAt ? `${doc.uploadedAt}T12:00:00` : null,
+    uploaded_at: timestampDeData(doc.uploadedAt, '12:00:00'),
     uploaded_by: doc.fileName ? usuarioId : null,
   });
 
@@ -102,14 +111,17 @@ export async function sincronizarHistoricoEtapas(
 ): Promise<void> {
   // O modelo local só tem a data (YYYY-MM-DD); created_at determinístico
   // (12:00 + index) preserva a ordem do array na releitura.
-  const linhas = (sol.historicoEtapas ?? []).map((h, index) => ({
-    solicitacao_id: dbId,
-    etapa_nova: h.etapa,
-    etapa_anterior: index > 0 ? sol.historicoEtapas[index - 1].etapa : null,
-    responsavel: h.responsavel || null,
-    usuario_id: usuarioId,
-    created_at: `${h.data}T12:${String(Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}`,
-  }));
+  const linhas = (sol.historicoEtapas ?? []).map((h, index) => {
+    const hora = `12:${String(Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}`;
+    return {
+      solicitacao_id: dbId,
+      etapa_nova: h.etapa,
+      etapa_anterior: index > 0 ? sol.historicoEtapas[index - 1].etapa : null,
+      responsavel: h.responsavel || null,
+      usuario_id: usuarioId,
+      created_at: timestampDeData(h.data, hora) ?? new Date().toISOString(),
+    };
+  });
 
   let idsInseridos: string[] = [];
   if (linhas.length > 0) {
