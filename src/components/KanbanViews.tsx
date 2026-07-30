@@ -795,12 +795,12 @@ export default function KanbanViews({
             }).sort(compararPorPrioridade);
 
             return (
-              <div 
+              <div
                 key={col.key}
-                className="bg-slate-100/70 border border-slate-200/60 rounded-xl p-3 flex flex-col space-y-3 min-w-[210px] max-h-[800px] overflow-y-auto"
+                className="bg-slate-100/70 border border-slate-200/60 rounded-xl p-3 flex flex-col space-y-3 min-w-[210px] max-h-[65vh] overflow-y-auto"
               >
                 {/* Column header */}
-                <div className={`p-2 rounded-lg border text-left ${col.bgHeader}`}>
+                <div className={`p-2 rounded-lg border text-left sticky top-0 z-10 ${col.bgHeader}`}>
                   <div className="flex items-center justify-between font-bold text-slate-800">
                     <span className="text-xs tracking-tight font-display">{col.label}</span>
                     <span className="font-mono text-[9.5px] px-1.5 py-0.5 bg-white border rounded">
@@ -857,10 +857,10 @@ export default function KanbanViews({
             return (
               <div
                 key={usuarioColuna?.id || 'sem-atribuicao'}
-                className="bg-slate-100/70 border border-slate-200/60 rounded-xl p-3 flex flex-col space-y-3 min-w-[220px] max-h-[800px] overflow-y-auto"
+                className="bg-slate-100/70 border border-slate-200/60 rounded-xl p-3 flex flex-col space-y-3 min-w-[220px] max-h-[65vh] overflow-y-auto"
               >
                 {/* Column header */}
-                <div className={`p-2.5 rounded-lg border text-left bg-white border-slate-205 shadow-3xs`}>
+                <div className={`p-2.5 rounded-lg border text-left sticky top-0 z-10 bg-white border-slate-205 shadow-3xs`}>
                   <div className="flex items-center justify-between font-bold text-slate-800">
                     <span className="text-xs font-display flex items-center gap-1.5">
                       {iniciais ? (

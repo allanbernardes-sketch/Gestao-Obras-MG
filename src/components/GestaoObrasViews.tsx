@@ -2733,6 +2733,7 @@ interface AtribuicaoPanelProps {
   onMudarViewMode?: (mode: 'lista' | 'kanban_status' | 'kanban_analista') => void;
   perfilUsuario?: string;
   onNavToAnalise?: (sol: Solicitacao) => void;
+  onNavToAnaliseContratual?: (sol: Solicitacao, tipo: 'aditivo' | 'ajuste', itemId: string) => void;
   somenteLeitura?: boolean;
 }
 
@@ -2746,6 +2747,7 @@ export function AtribuicaoPanel({
   onMudarViewMode,
   perfilUsuario = 'gestor_dore',
   onNavToAnalise,
+  onNavToAnaliseContratual,
   somenteLeitura = false
 }: AtribuicaoPanelProps) {
   const [feedbackMsg, setFeedbackMsg] = useState<{ [solId: string]: string }>({});
@@ -3222,9 +3224,15 @@ export function AtribuicaoPanel({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {solicitacoesFiltradas.map(sol => {
-              const currentAssignId = Object.keys(atribuicoes).find(k => k === sol.id) 
-                ? atribuicoes[sol.id] 
+              const currentAssignId = Object.keys(atribuicoes).find(k => k === sol.id)
+                ? atribuicoes[sol.id]
                 : analistasSgo.find(u => u.nome === sol.analistaAtribuido)?.id || '';
+
+              // Obra em execução entra na Fila Ativa por ter aditivo/ajuste pendente de validação DORE —
+              // "Abrir" deve levar direto ao item pendente na Validação Contratual, não à Validação Técnica
+              // (que só lista etapaAtual === 'analise' e nunca mostraria essa obra).
+              const primeiroAditivoPendente = (sol.aditivos || []).find(a => a.status === 'Pendente');
+              const primeiroAjustePendente = (sol.ajustes || []).find(a => a.status === 'analise_dore');
 
               const totalDocs = sol.documentos ? sol.documentos.length : 8;
               const docsAprovados = sol.documentos ? sol.documentos.filter(d => d.status === 'aprovado').length : 0;
@@ -3567,8 +3575,16 @@ export function AtribuicaoPanel({
                   {/* AÇÕES */}
                   <td className="py-4 px-4 text-center whitespace-nowrap">
                     <button
-                      onClick={() => onNavToAnalise?.(sol)}
-                      title="Abrir processo na Validação Técnica"
+                      onClick={() => {
+                        if (primeiroAditivoPendente) {
+                          onNavToAnaliseContratual?.(sol, 'aditivo', primeiroAditivoPendente.id);
+                        } else if (primeiroAjustePendente) {
+                          onNavToAnaliseContratual?.(sol, 'ajuste', primeiroAjustePendente.id);
+                        } else {
+                          onNavToAnalise?.(sol);
+                        }
+                      }}
+                      title={primeiroAditivoPendente || primeiroAjustePendente ? 'Abrir processo na Validação Contratual' : 'Abrir processo na Validação Técnica'}
                       className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 hover:bg-indigo-50 rounded px-2.5 py-1.5 transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" /> Abrir
