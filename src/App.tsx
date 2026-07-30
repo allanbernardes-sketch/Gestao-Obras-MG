@@ -13,7 +13,7 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft, FileCheck } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, AtribuicaoHistoricoPanel, AprovacaoRegionalPanel } from './components/GestaoObrasViews';
@@ -21,6 +21,7 @@ import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
 import AcompanhamentoPaf from './components/AcompanhamentoPaf';
 import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
 import CentralNavegacaoObras from './components/CentralNavegacaoObras';
+import ValidacaoContratual from './components/ValidacaoContratual';
 import OrcamentoModule from './components/orcamento/OrcamentoModule';
 import PatrimonioModule from './components/patrimonio/PatrimonioModule';
 import { supabase } from './lib/supabase';
@@ -157,6 +158,7 @@ export default function App() {
   const [activeModule, setActiveModule] = useState<'seguranca' | 'orcamento' | 'gestao_obras' | 'imoveis' | 'abertura_chamados' | 'central_logs'>('gestao_obras');
   const [activeSubTask, setActiveSubTask] = useState<string>('visao_geral');
   const [selectedSchoolsPorSubtask, setSelectedSchoolsPorSubtask] = useState<{ [subtask: string]: string }>({});
+  const [itemContratualSelecionado, setItemContratualSelecionado] = useState<{ tipo: 'aditivo' | 'ajuste' | 'saldo'; itemId: string } | null>(null);
   const [schoolSearchQuery, setSchoolSearchQuery] = useState('');
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
@@ -2150,11 +2152,12 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
                       {[
                         { id: 'analise_atribuicao', label: 'Atribuição', icon: Users },
-                        { id: 'analise', label: 'Validação Técnica', icon: FileText }
+                        { id: 'analise', label: 'Validação Técnica', icon: FileText },
+                        { id: 'analise_contratual', label: 'Validação Contratual', icon: FileCheck }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && item.id === 'analise');
+                        const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && (item.id === 'analise' || item.id === 'analise_contratual'));
                         return (
                           <button
                             key={item.id}
@@ -3853,6 +3856,11 @@ export default function App() {
                               setActiveSubTask('analise');
                               setSelectedSchoolsPorSubtask(prev => ({ ...prev, analise: sol.id }));
                             }}
+                            onNavToAnaliseContratual={(sol, tipo, itemId) => {
+                              setActiveSubTask('analise_contratual');
+                              setSelectedSchoolsPorSubtask(prev => ({ ...prev, analise_contratual: sol.id }));
+                              setItemContratualSelecionado({ tipo, itemId });
+                            }}
                           />
                         ) : (
                           <KanbanViews
@@ -3872,6 +3880,17 @@ export default function App() {
                           />
                         )}
                       </div>
+                    );
+                  })() : activeSubTask === 'analise_contratual' ? (() => {
+                    const solicitacaoAtiva = solicitacoesVisiveis.find(s => s.id === selectedSchoolsPorSubtask.analise_contratual) || null;
+                    return (
+                      <ValidacaoContratual
+                        solicitacao={solicitacaoAtiva}
+                        itemSelecionado={itemContratualSelecionado}
+                        perfilUsuario={perfilUsuario}
+                        usuariosSeguranca={usuariosSeguranca}
+                        onUpdate={handleUpdateSolicitacao}
+                      />
                     );
                   })() : activeSubTask === 'execucao_central' ? (
                     <CentralNavegacaoObras
