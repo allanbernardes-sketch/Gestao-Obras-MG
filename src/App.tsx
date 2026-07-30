@@ -957,7 +957,99 @@ export default function App() {
             }
           }
 
-          setSolicitacoes(comVistorias);
+          // Carrega os reequilíbrios financeiros registrados de cada solicitação
+          let comReequilibrios = comVistorias;
+          if (dbIds.length > 0) {
+            const { data: reequilibriosData, error: reequilibriosError } = await supabase
+              .from('reequilibrios_financeiros')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: false });
+
+            if (reequilibriosError) {
+              console.error('Erro ao carregar reequilíbrios financeiros:', reequilibriosError);
+            } else if (reequilibriosData) {
+              const statusReequilibrioDoBanco = (v: string | null): 'aguardando_analista' | 'aprovado' | 'reprovado' => {
+                if (v === 'aprovado') return 'aprovado';
+                if (v === 'recusado') return 'reprovado';
+                return 'aguardando_analista';
+              };
+
+              const porSolicitacaoReequilibrio = new Map<string, any[]>();
+              (reequilibriosData as any[]).forEach((row) => {
+                const lista = porSolicitacaoReequilibrio.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoReequilibrio.set(row.solicitacao_id, lista);
+              });
+
+              comReequilibrios = comVistorias.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoReequilibrio.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  reequilibrios: linhas.map((row: any) => ({
+                    id: row.id,
+                    dataCriacao: row.created_at ? String(row.created_at).split('T')[0] : '',
+                    status: statusReequilibrioDoBanco(row.status),
+                    valorReequilibrado: row.valor_reequilibrio ?? undefined,
+                    dataReferenceSEE: row.data_referencia_see ? String(row.data_referencia_see) : undefined,
+                    descontoContratual: row.desconto_contratual ?? undefined,
+                    valorOriginal: row.valor_original ?? undefined,
+                    analistaAtribuido: row.analista_nome ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
+          // Carrega os saldos complementares registrados de cada solicitação
+          let comSaldos = comReequilibrios;
+          if (dbIds.length > 0) {
+            const { data: saldosData, error: saldosError } = await supabase
+              .from('saldos_complementares')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: false });
+
+            if (saldosError) {
+              console.error('Erro ao carregar saldos complementares:', saldosError);
+            } else if (saldosData) {
+              const statusSaldoDoBanco = (v: string | null): 'aguardando_analista' | 'aprovado' | 'reprovado' => {
+                if (v === 'aprovado') return 'aprovado';
+                if (v === 'recusado') return 'reprovado';
+                return 'aguardando_analista';
+              };
+
+              const porSolicitacaoSaldo = new Map<string, any[]>();
+              (saldosData as any[]).forEach((row) => {
+                const lista = porSolicitacaoSaldo.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoSaldo.set(row.solicitacao_id, lista);
+              });
+
+              comSaldos = comReequilibrios.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoSaldo.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  saldosComplementares: linhas.map((row: any) => ({
+                    id: row.id,
+                    dataCriacao: row.created_at ? String(row.created_at).split('T')[0] : '',
+                    status: statusSaldoDoBanco(row.status),
+                    valorTC: row.valor_tc ?? 0,
+                    valorLiberado: row.valor_liberado ?? 0,
+                    valorPago: row.valor_pago ?? 0,
+                    saldoEmConta: row.saldo_em_conta ?? 0,
+                    necessidadeAditivo: row.necessidade_aditivo ?? 0,
+                    analistaAtribuido: row.analista_nome ?? undefined,
+                    documentos: row.documentos_checklist ? JSON.parse(row.documentos_checklist) : [],
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comSaldos);
           return;
         }
       } catch (e) {
