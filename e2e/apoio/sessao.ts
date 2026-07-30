@@ -22,15 +22,37 @@ export type PerfilTeste = keyof typeof CREDENCIAIS;
 
 export async function entrarComo(page: Page, perfil: PerfilTeste): Promise<void> {
   await page.goto('/');
-  await page.getByTestId('login-email').fill(CREDENCIAIS[perfil]);
+
+  // Uma sessão anterior persistida reautentica sozinha no goto — desloga antes.
+  const formulario = page.getByTestId('login-email');
+  const botaoSair = page.getByTestId('botao-sair');
+  await expect(formulario.or(botaoSair)).toBeVisible({ timeout: 20_000 });
+  if (await botaoSair.isVisible()) {
+    await sairDoSistema(page);
+  }
+
+  await formulario.fill(CREDENCIAIS[perfil]);
   await page.getByTestId('login-senha').fill(SENHA_TESTE);
   await page.getByTestId('login-entrar').click();
-  await expect(page.getByTestId('botao-sair')).toBeVisible({ timeout: 20_000 });
+  await expect(botaoSair).toBeVisible({ timeout: 20_000 });
+
+  // As consultas iniciais do App rodam no mount, ANTES do login (anon + RLS =
+  // vazio) e não são refeitas ao autenticar. Um reload com a sessão persistida
+  // remonta o App já autenticado e hidrata usuários/solicitações do banco.
+  await page.reload();
+  await expect(botaoSair).toBeVisible({ timeout: 20_000 });
 }
 
 export async function sairDoSistema(page: Page): Promise<void> {
   await page.getByTestId('botao-sair').click();
   await expect(page.getByTestId('login-entrar')).toBeVisible({ timeout: 10_000 });
+  // signOut é assíncrono: garante que o token saiu do storage antes de seguir,
+  // senão o próximo goto reautentica com a sessão antiga.
+  await page.waitForFunction(
+    () => !Object.keys(window.localStorage).some((k) => k.startsWith('sb-')),
+    undefined,
+    { timeout: 10_000 }
+  );
 }
 
 export async function trocarPerfil(page: Page, perfil: PerfilTeste): Promise<void> {

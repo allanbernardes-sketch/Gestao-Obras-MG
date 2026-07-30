@@ -5,8 +5,11 @@ import { limparTabelasTransacionais } from './banco';
 // - `dialogos`: alert()/confirm() nativos são aceitos automaticamente e as
 //   mensagens ficam registradas para asserção (por padrão o Playwright cancela
 //   confirms, o que travaria os fluxos do app).
-// - banco transacional truncado e localStorage limpo antes de cada teste — o
-//   fallback local ('gesto_solicitacoes') mascararia falhas de persistência.
+// - banco transacional truncado antes de cada teste. O localStorage NÃO é limpo
+//   a cada navegação: cada teste já nasce num contexto novo (storage vazio) e o
+//   app depende da sessão persistida do Supabase Auth para carregar os dados do
+//   banco no mount (as consultas iniciais rodam antes do login e o RLS devolve
+//   vazio para anon) — limpar a cada documento mataria a sessão em todo reload.
 
 interface FixturesSgo {
   dialogos: string[];
@@ -24,13 +27,6 @@ export const test = base.extend<FixturesSgo>({
 
   page: async ({ page }, use) => {
     await limparTabelasTransacionais();
-    await page.addInitScript(() => {
-      try {
-        window.localStorage.clear();
-      } catch {
-        // storage indisponível (primeira navegação) — ignorar
-      }
-    });
     await use(page);
   },
 });

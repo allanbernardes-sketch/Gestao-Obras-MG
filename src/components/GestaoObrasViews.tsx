@@ -2336,6 +2336,7 @@ export function NovoAtendimentoPanel({
                 </button>
 
                 <button
+                  data-testid="atendimento-editar-enviar"
                   type="button"
                   onClick={() => {
                     if (!sol) return;

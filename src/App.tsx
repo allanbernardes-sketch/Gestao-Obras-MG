@@ -2892,6 +2892,7 @@ export default function App() {
                                     {(perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) ? (
                                       <div className="flex items-center justify-center gap-1.5">
                                         <button
+                                          data-testid={`paf-autorizar-${sol.id}`}
                                           onClick={() => setConfirmingSolId(sol.id)}
                                           className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors shadow-3xs cursor-pointer"
                                         >
@@ -3016,6 +3017,7 @@ export default function App() {
                               Cancelar
                             </button>
                             <button
+                              data-testid="paf-autorizacao-confirmar"
                               onClick={() => {
                                 handleAutorizarPAF(activeConfirming);
                                 setConfirmingSolId(null);

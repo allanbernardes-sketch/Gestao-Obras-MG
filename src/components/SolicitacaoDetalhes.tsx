@@ -2370,6 +2370,7 @@ ${totalPendencias > 0
                           Número Oficial do PAF *
                         </label>
                         <input
+                          data-testid="paf-numero"
                           type="text"
                           placeholder="Ex: PAF-3320-2026"
                           value={numPAFInput}
@@ -2739,6 +2740,7 @@ ${totalPendencias > 0
                           Data da Ordem de Início *
                         </label>
                         <input
+                          data-testid="ordem-inicio-data"
                           type="date"
                           value={dataOrdemInicioInput}
                           onChange={(e) => setDataOrdemInicioInput(e.target.value)}
@@ -2753,6 +2755,7 @@ ${totalPendencias > 0
                           Previsão de Término da Obra *
                         </label>
                         <input
+                          data-testid="ordem-inicio-previsao"
                           type="date"
                           value={previsaoTerminoInput}
                           onChange={(e) => setPrevisaoTerminoInput(e.target.value)}
@@ -2773,6 +2776,7 @@ ${totalPendencias > 0
                             <span className="text-neutral-500 text-xs">R$</span>
                           </div>
                           <input
+                            data-testid="ordem-inicio-valor"
                             type="number"
                             step="0.01"
                             placeholder="0,00"
@@ -2901,6 +2905,7 @@ ${totalPendencias > 0
                           <span className="block text-xs font-bold text-neutral-700">Anexar cronograma físico-financeiro</span>
                           <span className="text-[9px] text-neutral-400 block mt-0.5">Formatos: .pdf, .xls, .xlsx (Máx: 10MB)</span>
                           <input
+                            data-testid="ordem-inicio-cronograma"
                             ref={cronogramaInputRef}
                             type="file"
                             accept=".pdf,.xls,.xlsx"
@@ -2915,6 +2920,7 @@ ${totalPendencias > 0
                     <div className="pt-2 flex justify-end gap-2.5">
                       {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                         <button
+                          data-testid="ordem-inicio-salvar"
                           type="submit"
                           className="px-3.5 py-1.5 border border-blue-600 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-extrabold cursor-pointer transition-colors"
                         >
