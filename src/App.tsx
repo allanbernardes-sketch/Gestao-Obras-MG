@@ -554,6 +554,11 @@ export default function App() {
         if (data && data.length > 0) {
           // Arrays aninhados (documentos, medições, aditivos, ajustes, histórico) ainda
           // não são persistidos no Supabase nesta etapa — iniciam vazios por enquanto.
+          const { data: usuariosParaFiscal } = await supabase
+            .from('usuarios')
+            .select('id, nome');
+          const nomePorUsuarioId = new Map((usuariosParaFiscal || []).map((u: any) => [u.id, u.nome]));
+
           const doSupabase: Solicitacao[] = data.map((row: any) => ({
             id: row.codigo_sgo,
             _dbId: row.id,
@@ -626,6 +631,8 @@ export default function App() {
             coordenadorAprovador: row.coordenador_aprovador ?? undefined,
             dataAprovacaoRegional: row.data_aprovacao_regional ?? undefined,
             justificativaReprovacaoRegional: row.justificativa_reprovacao_regional ?? undefined,
+            fiscalObraAtribuidoId: row.fiscal_obra_atribuido_id ?? undefined,
+            fiscalObraAtribuido: row.fiscal_obra_atribuido_id ? nomePorUsuarioId.get(row.fiscal_obra_atribuido_id) : undefined,
             statusObra: statusObraDoBanco(row.status_obra),
             statusSecoes: {
               identificacao_escolar: { status: row.status_identificacao_escolar, motivo: row.motivo_identificacao_escolar ?? undefined },
@@ -1334,7 +1341,7 @@ export default function App() {
           valor_contrato: sol.contratoValorInicial ?? null,
           status_obra: statusObraParaBanco(sol),
           analista_atribuido_id: null,
-          fiscal_obra_atribuido_id: null,
+          fiscal_obra_atribuido_id: sol.fiscalObraAtribuidoId ?? null,
           updated_at: new Date().toISOString()
         }, { onConflict: 'codigo_sgo' });
 

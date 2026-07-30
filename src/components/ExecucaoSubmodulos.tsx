@@ -783,6 +783,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
 
     const baseVal = parseFloat(valorInput) || 0;
     const finalVal = parseFloat(valorHomologadoInput) || baseVal;
+    const fiscalObraAtribuidoId = usuariosSeguranca.find(u => u.nome === fiscalObraAtribuido)?.id;
 
     // Is it based on an existing ticket/request, or creating fresh?
     if (vincularExistente && selectedAtendimentoId) {
@@ -796,6 +797,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           classeObra,
           pontuacaoComplexidade,
           fiscalObraAtribuido,
+          fiscalObraAtribuidoId,
           empresaContratada: empresaInput || 'Construtora do Estado S.A.',
           cnpjEmpresa: cnpjInput || '02.455.996/0001-34',
           statusContratoEmpresa: 'Ativa',
@@ -835,6 +837,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
         classeObra,
         pontuacaoComplexidade,
         fiscalObraAtribuido,
+        fiscalObraAtribuidoId,
         duracaoObraMeses: parseInt(duracaoMeses) || 6,
         statusObra: 'Não Iniciada',
         cadastroObraConfirmado: true,
@@ -926,7 +929,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                   type="button"
                   onClick={() => {
                     if (!podeAtribuirFiscal || !targetSol || !novoFiscalSelecionado) return;
-                    onUpdate({ ...targetSol, fiscalObraAtribuido: novoFiscalSelecionado });
+                    const novoFiscalId = usuariosSeguranca.find(u => u.nome === novoFiscalSelecionado)?.id;
+                    onUpdate({ ...targetSol, fiscalObraAtribuido: novoFiscalSelecionado, fiscalObraAtribuidoId: novoFiscalId });
                     setReatribuirFiscalSolId(null);
                   }}
                   disabled={!podeAtribuirFiscal}
@@ -1576,7 +1580,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                                 type="button"
                                 onClick={() => {
                                   setReatribuirFiscalSolId(sol.id);
-                                  setNovoFiscalSelecionado(sol.fiscalObraAtribuido || 'Eng. Roberto Mendes');
+                                  setNovoFiscalSelecionado(sol.fiscalObraAtribuido || '');
                                 }}
                                 className="px-2 py-1 text-[9.5px] font-extrabold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg cursor-pointer transition"
                               >
@@ -4751,6 +4755,7 @@ function SubContratos({
         dataOrdemInicio: undefined,
         previsaoTerminoObra: undefined,
         fiscalObraAtribuido: undefined,
+        fiscalObraAtribuidoId: undefined,
         cadastroObraConfirmado: false,
         classeObra: undefined,
         pontuacaoComplexidade: undefined,
@@ -7298,7 +7303,8 @@ function SubFiscalizacao({
     e.preventDefault();
     const updated = {
       ...currentSol,
-      fiscalObraAtribuido: fiscalInput
+      fiscalObraAtribuido: fiscalInput,
+      fiscalObraAtribuidoId: usuariosSeguranca.find(u => u.nome === fiscalInput)?.id
     };
     onUpdate(updated);
   };

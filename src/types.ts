@@ -272,6 +272,7 @@ export interface Solicitacao {
   classeObra?: string;
   pontuacaoComplexidade?: number;
   fiscalObraAtribuido?: string;
+  fiscalObraAtribuidoId?: string;
   cadastroObraConfirmado?: boolean;
 
   // Campos específicos do Distrato
