@@ -4,7 +4,7 @@ import { PerfilUsuario } from '../types';
 import { supabase } from '../lib/supabase';
 
 interface LoginScreenProps {
-  onLogin: (perfil: PerfilUsuario, nome: string) => void;
+  onLogin: (perfil: PerfilUsuario, nome: string, usuarioId: string) => void;
 }
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
@@ -44,7 +44,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     }
 
     const perfil = (usuario.perfis as unknown as { codigo: string }).codigo as PerfilUsuario;
-    onLogin(perfil, usuario.nome as string);
+    onLogin(perfil, usuario.nome as string, data.user.id);
     setLoading(false);
   };
 

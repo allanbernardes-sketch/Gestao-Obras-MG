@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, computeStatusObra } from './types';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, DocumentoChecklist, computeStatusObra, montarChecklistCanonico } from './types';
 import { recalcularPrioridade } from './utils/prioridade';
 import { recalcularIEE } from './utils/iee';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
@@ -25,6 +25,13 @@ import ValidacaoContratual from './components/ValidacaoContratual';
 import OrcamentoModule from './components/orcamento/OrcamentoModule';
 import PatrimonioModule from './components/patrimonio/PatrimonioModule';
 import { supabase } from './lib/supabase';
+import {
+  resolverUsuarioIdPorNome,
+  sincronizarDocumentosDaSolicitacao,
+  sincronizarHistoricoEtapas,
+  normalizarSre,
+  formatarTamanhoArquivo,
+} from './lib/persistencia';
 
 // Perfis selecionáveis diretamente no Cadastro de Usuário (Segurança). 'fiscal_obra' fica de fora
 // por não ter nenhum comportamento implementado no restante do sistema ainda.
@@ -86,6 +93,7 @@ function dataOuNull(val?: string): string | null {
 export default function App() {
   const [logado, setLogado] = useState(false);
   const [nomeUsuario, setNomeUsuario] = useState('');
+  const [idUsuarioLogado, setIdUsuarioLogado] = useState<string | null>(null);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [perfilUsuario, setPerfilUsuario] = useState<PerfilUsuario>('tecnico_infra');
   const [idSolicitacaoSelecionada, setIdSolicitacaoSelecionada] = useState<string | null>(null);
@@ -514,10 +522,13 @@ export default function App() {
     setEmpNome(''); setEmpCnpj(''); setEmpResp(''); setEmpSit('Regular'); setEmpTel(''); setEmpMail('');
   };
 
-  // Controle de acesso regional: tecnico_infra e coordenador_regional só veem dados das suas SREs
-  const regionaisDoTecnico: string[] = (perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional')
+  // Controle de acesso regional: tecnico_infra e coordenador_regional só veem dados das suas SREs.
+  // O usuário logado é identificado pelo auth uid — nunca por "primeiro usuário com o perfil".
+  const perfilRestritoPorRegional = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional';
+
+  const regionaisDoTecnico: string[] = perfilRestritoPorRegional
     ? (() => {
-        const u = usuariosSeguranca.find(u => u.perfil === perfilUsuario);
+        const u = usuariosSeguranca.find(u => u.id === idUsuarioLogado);
         if (!u) return [];
         return u.regionais?.length ? u.regionais : (u.departamento ? [u.departamento] : []);
       })()
@@ -526,18 +537,15 @@ export default function App() {
   const sreDoTecnico = regionaisDoTecnico[0] || '';
 
   // Nome do técnico logado (para permitir acesso a obras onde é fiscal, mesmo fora da sua SRE)
-  const nomeTecnicoLogado = perfilUsuario === 'tecnico_infra'
-    ? (usuariosSeguranca.find(u => u.perfil === 'tecnico_infra')?.nome || '')
-    : '';
+  const nomeTecnicoLogado = perfilUsuario === 'tecnico_infra' ? nomeUsuario : '';
 
   // Nome do coordenador regional logado (usado para registrar quem aprovou/reprovou o atendimento)
-  const nomeCoordenadorLogado = perfilUsuario === 'coordenador_regional'
-    ? (usuariosSeguranca.find(u => u.perfil === 'coordenador_regional')?.nome || '')
-    : '';
+  const nomeCoordenadorLogado = perfilUsuario === 'coordenador_regional' ? nomeUsuario : '';
 
-  const solicitacoesVisiveis = regionaisDoTecnico.length
+  // Fail-closed: perfil restrito sem regionais cadastradas não vê nada (antes via o estado inteiro)
+  const solicitacoesVisiveis = perfilRestritoPorRegional
     ? solicitacoes.filter(s =>
-        regionaisDoTecnico.some(sre => s.sre?.toLowerCase() === sre.toLowerCase()) ||
+        regionaisDoTecnico.some(sre => normalizarSre(s.sre) === normalizarSre(sre)) ||
         (nomeTecnicoLogado && s.fiscalObraAtribuido === nomeTecnicoLogado)
       )
     : solicitacoes;
@@ -548,19 +556,14 @@ export default function App() {
       try {
         const { data, error } = await supabase
           .from('solicitacoes')
-          .select('*')
+          .select('*, analista:usuarios!solicitacoes_analista_atribuido_id_fkey(nome), fiscal:usuarios!solicitacoes_fiscal_obra_atribuido_id_fkey(nome)')
           .order('created_at', { ascending: false });
 
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // Arrays aninhados (documentos, medições, aditivos, ajustes, histórico) ainda
-          // não são persistidos no Supabase nesta etapa — iniciam vazios por enquanto.
-          const { data: usuariosParaFiscal } = await supabase
-            .from('usuarios')
-            .select('id, nome');
-          const nomePorUsuarioId = new Map((usuariosParaFiscal || []).map((u: any) => [u.id, u.nome]));
-
+          // Arrays aninhados iniciam vazios aqui e são preenchidos pelos fetches
+          // das tabelas-filhas logo abaixo (medições, aditivos, documentos, histórico…).
           const doSupabase: Solicitacao[] = data.map((row: any) => ({
             id: row.codigo_sgo,
             _dbId: row.id,
@@ -571,6 +574,8 @@ export default function App() {
             sre: row.sre ?? '',
             dataCriacao: row.created_at ? String(row.created_at).split('T')[0] : '',
             etapaAtual: row.etapa_atual,
+            analistaAtribuido: row.analista?.nome ?? undefined,
+            fiscalObraAtribuido: row.fiscal?.nome ?? undefined,
             historicoEtapas: [],
             documentos: [],
             medicoes: [],
@@ -634,7 +639,6 @@ export default function App() {
             dataAprovacaoRegional: row.data_aprovacao_regional ?? undefined,
             justificativaReprovacaoRegional: row.justificativa_reprovacao_regional ?? undefined,
             fiscalObraAtribuidoId: row.fiscal_obra_atribuido_id ?? undefined,
-            fiscalObraAtribuido: row.fiscal_obra_atribuido_id ? nomePorUsuarioId.get(row.fiscal_obra_atribuido_id) : undefined,
             statusObra: statusObraDoBanco(row.status_obra),
             statusSecoes: {
               identificacao_escolar: { status: row.status_identificacao_escolar, motivo: row.motivo_identificacao_escolar ?? undefined },
@@ -966,8 +970,113 @@ export default function App() {
             }
           }
 
+          // Carrega o checklist documental e o histórico de etapas; o que ainda não
+          // existe no banco é hidratado do localStorage (recuperação da era pré-persistência)
+          const localPorCodigo = new Map<string, Solicitacao>();
+          try {
+            const salvoLocal = localStorage.getItem('gesto_solicitacoes');
+            if (salvoLocal) {
+              (JSON.parse(salvoLocal) as Solicitacao[]).forEach(s => localPorCodigo.set(s.id, s));
+            }
+          } catch (e) {
+            console.warn('localStorage ilegível — carga segue sem recuperação local:', e);
+          }
+
+          let comDocumentos = comVistorias;
+          if (dbIds.length > 0) {
+            const { data: docsData, error: docsError } = await supabase
+              .from('documentos')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .in('categoria', ['checklist_obrigatorio', 'checklist_outros']);
+
+            const { data: histData, error: histError } = await supabase
+              .from('solicitacao_historico_etapas')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: true });
+
+            if (docsError) console.error('Erro ao carregar documentos:', docsError);
+            if (histError) console.error('Erro ao carregar histórico de etapas:', histError);
+
+            const docsPorSolicitacao = new Map<string, any[]>();
+            ((docsData as any[]) ?? []).forEach((row) => {
+              const lista = docsPorSolicitacao.get(row.solicitacao_id) ?? [];
+              lista.push(row);
+              docsPorSolicitacao.set(row.solicitacao_id, lista);
+            });
+
+            const histPorSolicitacao = new Map<string, any[]>();
+            ((histData as any[]) ?? []).forEach((row) => {
+              const lista = histPorSolicitacao.get(row.solicitacao_id) ?? [];
+              lista.push(row);
+              histPorSolicitacao.set(row.solicitacao_id, lista);
+            });
+
+            comDocumentos = comVistorias.map(sol => {
+              const solLocal = localPorCodigo.get(sol.id);
+              const linhasDoc = sol._dbId ? docsPorSolicitacao.get(sol._dbId) : undefined;
+              const linhasHist = sol._dbId ? histPorSolicitacao.get(sol._dbId) : undefined;
+
+              let documentos: DocumentoChecklist[];
+              let outrosDocumentos = sol.outrosDocumentos;
+
+              if (linhasDoc && linhasDoc.length > 0) {
+                // Banco é a fonte; base64 (fileContent) só existe no navegador que fez o upload
+                const porNomeLogico = new Map<string, any>(
+                  linhasDoc.filter(r => r.categoria === 'checklist_obrigatorio').map(r => [r.nome_logico, r])
+                );
+                documentos = montarChecklistCanonico([], sol.origemDemanda, sol.formaAtendimento).map(doc => {
+                  const row = porNomeLogico.get(doc.id);
+                  if (!row) return doc;
+                  const docLocal = solLocal?.documentos?.find(d => d.id === doc.id);
+                  return {
+                    ...doc,
+                    status: row.status ?? doc.status,
+                    justificativa: row.justificativa ?? undefined,
+                    fileName: row.file_name ?? undefined,
+                    fileType: row.file_type ?? undefined,
+                    fileSize: formatarTamanhoArquivo(row.file_size_bytes),
+                    uploadedAt: row.uploaded_at ? String(row.uploaded_at).split('T')[0] : undefined,
+                    fileContent: docLocal && docLocal.fileName === row.file_name ? docLocal.fileContent : undefined,
+                  };
+                });
+                outrosDocumentos = linhasDoc
+                  .filter(r => r.categoria === 'checklist_outros')
+                  .map((row): DocumentoChecklist => ({
+                    id: row.id,
+                    nome: row.nome_logico,
+                    obrigatorio: !!row.obrigatorio,
+                    desc: 'Documento complementar anexado ao processo.',
+                    status: row.status ?? 'pendente',
+                    justificativa: row.justificativa ?? undefined,
+                    fileName: row.file_name ?? undefined,
+                    fileType: row.file_type ?? undefined,
+                    fileSize: formatarTamanhoArquivo(row.file_size_bytes),
+                    uploadedAt: row.uploaded_at ? String(row.uploaded_at).split('T')[0] : undefined,
+                    fileContent: solLocal?.outrosDocumentos?.find(d => d.nome === row.nome_logico && d.fileName === row.file_name)?.fileContent,
+                  }));
+              } else {
+                // Recuperação: dados que o bug antigo descartava continuam no localStorage;
+                // serão persistidos no banco no próximo save desta solicitação
+                documentos = montarChecklistCanonico(solLocal?.documentos, sol.origemDemanda, sol.formaAtendimento);
+                outrosDocumentos = solLocal?.outrosDocumentos ?? undefined;
+              }
+
+              const historicoEtapas = (linhasHist && linhasHist.length > 0)
+                ? linhasHist.map(row => ({
+                    etapa: row.etapa_nova,
+                    data: row.created_at ? String(row.created_at).split('T')[0] : '',
+                    responsavel: row.responsavel ?? '',
+                  }))
+                : (solLocal?.historicoEtapas ?? []);
+
+              return { ...sol, documentos, outrosDocumentos, historicoEtapas };
+            });
+          }
+
           // Carrega os reequilíbrios financeiros registrados de cada solicitação
-          let comReequilibrios = comVistorias;
+          let comReequilibrios = comDocumentos;
           if (dbIds.length > 0) {
             const { data: reequilibriosData, error: reequilibriosError } = await supabase
               .from('reequilibrios_financeiros')
@@ -991,7 +1100,7 @@ export default function App() {
                 porSolicitacaoReequilibrio.set(row.solicitacao_id, lista);
               });
 
-              comReequilibrios = comVistorias.map(sol => {
+              comReequilibrios = comDocumentos.map(sol => {
                 const linhas = sol._dbId ? porSolicitacaoReequilibrio.get(sol._dbId) : undefined;
                 if (!linhas || linhas.length === 0) return sol;
                 return {
@@ -1071,112 +1180,12 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved) as Solicitacao[];
 
-        // Dynamic clean migration of checklists to use current structural constraints
-        // preserving user-uploaded filenames, sizes, and statuses
-        const migrado = parsed.map(s => {
-          const doc1    = s.documentos?.find(d => d.id === 'doc_1');
-          const doc2    = s.documentos?.find(d => d.id === 'doc_2');
-          const doc3pdf = s.documentos?.find(d => d.id === 'doc_3_pdf' || d.id === 'doc_3');
-          const doc3dwg = s.documentos?.find(d => d.id === 'doc_3_dwg');
-          const doc4    = s.documentos?.find(d => d.id === 'doc_4' || d.id === 'doc_7');
-          const docAta  = s.documentos?.find(d => d.id === 'doc_ata');
-          const docFoto = s.documentos?.find(d => d.id === 'doc_foto');
-          const doc5    = s.documentos?.find(d => d.id === 'doc_5' || d.id === 'doc_6');
-
-          return {
-            ...s,
-            documentos: [
-              {
-                id: 'doc_1',
-                nome: 'Planilha Orçamentária',
-                obrigatorio: true,
-                desc: 'Anexar nos formatos .pdf e .xlsx.',
-                fileName: doc1?.fileName,
-                fileSize: doc1?.fileSize,
-                uploadedAt: doc1?.uploadedAt,
-                status: doc1?.status || 'pendente',
-                justificativa: doc1?.justificativa
-              },
-              {
-                id: 'doc_2',
-                nome: 'Registro do imóvel',
-                obrigatorio: true,
-                desc: 'Título de propriedade ou certidão de registro correspondente.',
-                fileName: doc2?.fileName,
-                fileSize: doc2?.fileSize,
-                uploadedAt: doc2?.uploadedAt,
-                status: doc2?.status || 'pendente',
-                justificativa: doc2?.justificativa
-              },
-              {
-                id: 'doc_3_pdf',
-                nome: 'Projeto de Engenharia (PDF)',
-                obrigatorio: true,
-                desc: 'Projeto técnico estrutural e arquitetônico no formato .pdf.',
-                fileName: doc3pdf?.fileName,
-                fileSize: doc3pdf?.fileSize,
-                uploadedAt: doc3pdf?.uploadedAt,
-                status: doc3pdf?.status || 'pendente',
-                justificativa: doc3pdf?.justificativa
-              },
-              {
-                id: 'doc_3_dwg',
-                nome: 'Projeto de Engenharia (DWG)',
-                obrigatorio: true,
-                desc: 'Projeto técnico estrutural e arquitetônico no formato .dwg (AutoCAD).',
-                fileName: doc3dwg?.fileName,
-                fileSize: doc3dwg?.fileSize,
-                uploadedAt: doc3dwg?.uploadedAt,
-                status: doc3dwg?.status || 'pendente',
-                justificativa: doc3dwg?.justificativa
-              },
-              {
-                id: 'doc_4',
-                nome: 'Parecer técnico',
-                obrigatorio: true,
-                desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada.',
-                fileName: doc4?.id === 'doc_4' ? doc4?.fileName : undefined,
-                fileSize: doc4?.id === 'doc_4' ? doc4?.fileSize : undefined,
-                uploadedAt: doc4?.id === 'doc_4' ? doc4?.uploadedAt : undefined,
-                status: doc4?.id === 'doc_4' ? (doc4?.status || 'pendente') : 'pendente',
-                justificativa: doc4?.id === 'doc_4' ? doc4?.justificativa : undefined
-              },
-              {
-                id: 'doc_ata',
-                nome: 'Ata do Colegiado',
-                obrigatorio: true,
-                desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.',
-                fileName: docAta?.fileName,
-                fileSize: docAta?.fileSize,
-                uploadedAt: docAta?.uploadedAt,
-                status: docAta?.status || 'pendente',
-                justificativa: docAta?.justificativa
-              },
-              {
-                id: 'doc_foto',
-                nome: 'Relatório fotográfico',
-                obrigatorio: true,
-                desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.',
-                fileName: docFoto?.fileName,
-                fileSize: docFoto?.fileSize,
-                uploadedAt: docFoto?.uploadedAt,
-                status: docFoto?.status || 'pendente',
-                justificativa: docFoto?.justificativa
-              },
-              {
-                id: 'doc_5',
-                nome: 'Imposto ISS',
-                obrigatorio: false,
-                desc: 'Guia ou comprovante de recolhimento tributário aplicável.',
-                fileName: doc5?.id === 'doc_5' ? doc5?.fileName : undefined,
-                fileSize: doc5?.id === 'doc_5' ? doc5?.fileSize : undefined,
-                uploadedAt: doc5?.id === 'doc_5' ? doc5?.uploadedAt : undefined,
-                status: doc5?.id === 'doc_5' ? (doc5?.status || 'pendente') : 'pendente',
-                justificativa: doc5?.id === 'doc_5' ? doc5?.justificativa : undefined
-              }
-            ]
-          };
-        });
+        // Migração do checklist para a estrutura canônica atual, preservando os
+        // dados de upload/validação (fonte única: montarChecklistCanonico em types.ts)
+        const migrado = parsed.map(s => ({
+          ...s,
+          documentos: montarChecklistCanonico(s.documentos, s.origemDemanda, s.formaAtendimento),
+        }));
 
         const migradoComPrioridade = migrado.map(recalcularPrioridade).map(recalcularIEE);
         setSolicitacoes(migradoComPrioridade);
@@ -1193,7 +1202,7 @@ export default function App() {
     async function carregarUsuarios() {
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('usuarios')
-        .select('id, nome, email, perfil_id, perfis(codigo)')
+        .select('id, nome, email, perfil_id, perfis(codigo), usuario_regionais(regionais_sre(nome))')
         .eq('ativo', true);
 
       if (usuariosError) {
@@ -1202,13 +1211,19 @@ export default function App() {
       }
 
       if (usuariosData) {
-        setUsuariosSeguranca(usuariosData.map((u: any) => ({
-          id: u.id,
-          nome: u.nome,
-          email: u.email,
-          perfil: u.perfis?.codigo ?? '',
-          departamento: '',
-        })));
+        setUsuariosSeguranca(usuariosData.map((u: any) => {
+          const regionais = (u.usuario_regionais ?? [])
+            .map((ur: any) => ur.regionais_sre?.nome)
+            .filter(Boolean) as string[];
+          return {
+            id: u.id,
+            nome: u.nome,
+            email: u.email,
+            perfil: u.perfis?.codigo ?? '',
+            departamento: regionais[0] ?? '',
+            regionais,
+          };
+        }));
       }
     }
 
@@ -1233,6 +1248,7 @@ export default function App() {
       if (usuario) {
         setPerfilUsuario((usuario.perfis as unknown as { codigo: string }).codigo as PerfilUsuario);
         setNomeUsuario(usuario.nome as string);
+        setIdUsuarioLogado(userId);
         setLogado(true);
       }
     }
@@ -1245,30 +1261,22 @@ export default function App() {
       if (!session) {
         setLogado(false);
         setNomeUsuario('');
+        setIdUsuarioLogado(null);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Persists updates: state React (síncrono) + localStorage (fallback) + Supabase (assíncrono)
-  const atualizarEGuardarSolicitacoes = (novasBrutas: Solicitacao[]) => {
-    // Recalcula score/estrelas/etiquetas a cada criação, atualização ou ajuste de prioridade manual
-    const novas = novasBrutas.map(recalcularPrioridade).map(recalcularIEE);
-    setSolicitacoes(novas);
+  // Persiste UMA solicitação no Supabase: upsert dos escalares + sincronização das
+  // tabelas-filhas de checklist/histórico. Lança em qualquer erro; retorna o uuid da linha.
+  const persistirSolicitacao = async (sol: Solicitacao): Promise<string> => {
+    const { data: auth } = await supabase.auth.getUser();
+    const usuarioId = auth?.user?.id ?? null;
 
-    // Fallback localStorage durante transição
-    try {
-      localStorage.setItem('gesto_solicitacoes', JSON.stringify(novas));
-    } catch (err) {
-      console.warn('localStorage cheio:', err);
-    }
-
-    // Escrita assíncrona no Supabase
-    novas.forEach(async (sol) => {
-      const { error } = await supabase
-        .from('solicitacoes')
-        .upsert({
+    const { data, error } = await supabase
+      .from('solicitacoes')
+      .upsert({
           codigo_sgo: sol.id,
           codesc: sol.codesc,
           nome_escola: sol.nomeEscola,
@@ -1342,19 +1350,54 @@ export default function App() {
           contador_analises: sol.contadorAnalises ?? 0,
           valor_contrato: sol.contratoValorInicial ?? null,
           status_obra: statusObraParaBanco(sol),
-          analista_atribuido_id: null,
-          fiscal_obra_atribuido_id: sol.fiscalObraAtribuidoId ?? null,
+          analista_atribuido_id: resolverUsuarioIdPorNome(usuariosSeguranca, sol.analistaAtribuido),
+          // Preferência: id explícito escolhido na UI (main); fallback: resolução por nome
+          fiscal_obra_atribuido_id: sol.fiscalObraAtribuidoId ?? resolverUsuarioIdPorNome(usuariosSeguranca, sol.fiscalObraAtribuido),
           updated_at: new Date().toISOString()
-        }, { onConflict: 'codigo_sgo' });
+        }, { onConflict: 'codigo_sgo' })
+        .select('id')
+        .single();
 
-      if (error) {
-        console.error('Erro Supabase completo:', JSON.stringify(error, null, 2));
-        console.error('Código:', error.code);
-        console.error('Mensagem:', error.message);
-        console.error('Detalhes:', error.details);
-        console.error('Hint:', error.hint);
+    if (error) throw error;
+    const dbId = (data as { id: string }).id;
+
+    await sincronizarDocumentosDaSolicitacao(dbId, sol, usuarioId);
+    await sincronizarHistoricoEtapas(dbId, sol, usuarioId);
+    return dbId;
+  };
+
+  // Persists updates: state React (síncrono) + localStorage (fallback) + Supabase (assíncrono).
+  // Só as `alteradas` vão ao banco — nada de regravar a lista inteira a cada edição.
+  const atualizarEGuardarSolicitacoes = (novasBrutas: Solicitacao[], alteradas: Solicitacao[]) => {
+    // Recalcula score/estrelas/etiquetas a cada criação, atualização ou ajuste de prioridade manual
+    const novas = novasBrutas.map(recalcularPrioridade).map(recalcularIEE);
+    setSolicitacoes(novas);
+
+    // Fallback localStorage durante transição
+    try {
+      localStorage.setItem('gesto_solicitacoes', JSON.stringify(novas));
+    } catch (err) {
+      console.warn('localStorage cheio:', err);
+    }
+
+    // Persiste as versões recalculadas (score/IEE atualizados) das alteradas
+    const paraPersistir = alteradas
+      .map(a => novas.find(s => s.id === a.id))
+      .filter((s): s is Solicitacao => !!s);
+
+    (async () => {
+      for (const sol of paraPersistir) {
+        try {
+          const dbId = await persistirSolicitacao(sol);
+          if (!sol._dbId) {
+            setSolicitacoes(prev => prev.map(s => s.id === sol.id ? { ...s, _dbId: dbId } : s));
+          }
+        } catch (error: any) {
+          console.error('Erro ao persistir solicitação no Supabase:', JSON.stringify(error, null, 2));
+          alert(`Falha ao salvar "${sol.nomeEscola}" no banco de dados. As alterações estão salvas apenas neste navegador. Detalhe: ${error?.message ?? error}`);
+        }
       }
-    });
+    })();
   };
 
   const handleInjetarDemandaTeste = (subTask: string) => {
@@ -1479,7 +1522,7 @@ export default function App() {
     }
 
     const novas = [nova, ...solicitacoes];
-    atualizarEGuardarSolicitacoes(novas);
+    atualizarEGuardarSolicitacoes(novas, [nova]);
     setSelectedSchoolsPorSubtask(prev => ({
       ...prev,
       [subTask]: randomId
@@ -1489,7 +1532,7 @@ export default function App() {
   const handleUpdateSolicitacao = (updated: Solicitacao) => {
     const old = solicitacoes.find(s => s.id === updated.id);
     const novas = solicitacoes.map(s => s.id === updated.id ? updated : s);
-    atualizarEGuardarSolicitacoes(novas);
+    atualizarEGuardarSolicitacoes(novas, [updated]);
 
     if (old) {
       // 1. Check if step/etapa was transitioned
@@ -1651,9 +1694,43 @@ export default function App() {
     }
   };
 
-  const handleDeleteSolicitacao = (id: string) => {
+  const handleDeleteSolicitacao = async (id: string) => {
+    const sol = solicitacoes.find(s => s.id === id);
     const novas = solicitacoes.filter(s => s.id !== id);
-    atualizarEGuardarSolicitacoes(novas);
+
+    // Exclusão real no banco (antes, a linha "ressuscitava" no reload)
+    if (sol) {
+      try {
+        let dbId = sol._dbId;
+        if (!dbId) {
+          const { data } = await supabase
+            .from('solicitacoes')
+            .select('id')
+            .eq('codigo_sgo', sol.id)
+            .maybeSingle();
+          dbId = (data as { id: string } | null)?.id;
+        }
+        if (dbId) {
+          // Filhas com FK NO ACTION precisam sair antes; documentos/histórico caem por CASCADE
+          const tabelasNoAction = [
+            'medicoes', 'aditivos', 'ajustes_planilha', 'diarios_obra',
+            'restricoes_obra', 'vistorias_obra', 'reequilibrios_financeiros', 'saldos_complementares',
+          ];
+          for (const tabela of tabelasNoAction) {
+            const { error } = await supabase.from(tabela).delete().eq('solicitacao_id', dbId);
+            if (error) throw error;
+          }
+          const { error } = await supabase.from('solicitacoes').delete().eq('id', dbId);
+          if (error) throw error;
+        }
+      } catch (error: any) {
+        console.error('Erro ao excluir solicitação no Supabase:', JSON.stringify(error, null, 2));
+        alert(`Falha ao excluir "${sol.nomeEscola}" no banco de dados. A exclusão não foi aplicada. Detalhe: ${error?.message ?? error}`);
+        return;
+      }
+    }
+
+    atualizarEGuardarSolicitacoes(novas, []);
   };
 
   // Lápis de edição em listas/kanban: rascunho (etapaAtual === 'cadastro') sempre volta ao
@@ -1702,12 +1779,13 @@ export default function App() {
 
   const handleNovaSolicitacao = (nova: Solicitacao) => {
     const novas = [nova, ...solicitacoes];
-    atualizarEGuardarSolicitacoes(novas);
+    atualizarEGuardarSolicitacoes(novas, [nova]);
   };
 
-  const handleLogin = (perfil: PerfilUsuario, nome: string) => {
+  const handleLogin = (perfil: PerfilUsuario, nome: string, usuarioId: string) => {
     setPerfilUsuario(perfil);
     setNomeUsuario(nome);
+    setIdUsuarioLogado(usuarioId);
     setLogado(true);
   };
 
@@ -1715,6 +1793,7 @@ export default function App() {
     supabase.auth.signOut();
     setLogado(false);
     setNomeUsuario('');
+    setIdUsuarioLogado(null);
     setMostrarMenuNotif(false);
   };
 
