@@ -488,7 +488,8 @@ export default function Dashboard({
                   const temRecusas = sol.documentos.some((d) => d.status === 'recusado');
 
                   return (
-                    <tr 
+                    <tr
+                      data-testid={`card-solicitacao-${sol.id}`}
                       key={sol.id}
                       onClick={() => onSelect(sol)}
                       className="hover:bg-slate-50/70 transition-colors cursor-pointer group"
@@ -692,6 +693,7 @@ export default function Dashboard({
                               <div className="flex items-center gap-1 bg-red-50 px-2 py-1 rounded border border-red-200 text-[10px] shrink-0 text-left">
                                 <span className="text-red-700 font-extrabold text-[9px]">Apagar?</span>
                                 <button
+                                  data-testid="excluir-solicitacao-confirmar"
                                   type="button"
                                   onClick={() => {
                                     onDelete(sol.id);
@@ -725,6 +727,7 @@ export default function Dashboard({
                                   </button>
                                 )}
                                 <button
+                                  data-testid={`excluir-solicitacao-${sol.id}`}
                                   type="button"
                                   title="Apagar solicitação"
                                   onClick={() => setConfirmDeleteId(sol.id)}

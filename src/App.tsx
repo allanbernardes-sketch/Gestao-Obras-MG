@@ -1962,6 +1962,7 @@ export default function App() {
             </div>
 
             <button
+              data-testid="botao-sair"
               type="button"
               onClick={handleLogout}
               title="Sair do sistema"
@@ -1985,6 +1986,7 @@ export default function App() {
 
           {/* 1. GESTÃO DE OBRAS */}
           <button
+            data-testid="modulo-gestao-obras"
             type="button"
             title="Gestão de Obras SGO"
             onClick={() => {
@@ -2007,6 +2009,7 @@ export default function App() {
             const bloqueado = !(perfilUsuario === 'diretor_dore' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'admin');
             return (
               <button
+                data-testid="modulo-seguranca"
                 type="button"
                 title={bloqueado ? 'Acesso restrito para este perfil' : 'Segurança & Cadastros'}
                 onClick={bloqueado ? undefined : () => { setActiveModule('seguranca'); setActiveSubTask('cadastro_usuario'); setIdSolicitacaoSelecionada(null); }}
@@ -2029,6 +2032,7 @@ export default function App() {
             const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
+                data-testid="modulo-orcamento"
                 type="button"
                 title={bloqueado ? 'Acesso restrito para este perfil' : 'Orçamentos'}
                 onClick={bloqueado ? undefined : () => { setActiveModule('orcamento'); setActiveSubTask('orca_budgets'); setIdSolicitacaoSelecionada(null); }}
@@ -2051,6 +2055,7 @@ export default function App() {
             const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
+                data-testid="modulo-imoveis"
                 type="button"
                 title={bloqueado ? 'Acesso restrito para este perfil' : 'Patrimônio & Imóveis'}
                 onClick={bloqueado ? undefined : () => { setActiveModule('imoveis'); setActiveSubTask('blank_imoveis'); setIdSolicitacaoSelecionada(null); }}
@@ -2073,6 +2078,7 @@ export default function App() {
             const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
+                data-testid="modulo-abertura-chamados"
                 type="button"
                 title={bloqueado ? 'Acesso restrito para este perfil' : 'Abertura de Chamados'}
                 onClick={bloqueado ? undefined : () => { setActiveModule('abertura_chamados'); setActiveSubTask('blank_novo_chamado'); setIdSolicitacaoSelecionada(null); }}
@@ -2095,6 +2101,7 @@ export default function App() {
             const bloqueado = !(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'));
             return (
               <button
+                data-testid="modulo-central-logs"
                 type="button"
                 title={bloqueado ? 'Acesso restrito para este perfil' : 'Log do Sistema & Auditoria'}
                 onClick={bloqueado ? undefined : () => {
@@ -2134,6 +2141,7 @@ export default function App() {
 
               {/* DASHBOARD DIRECT LINK */}
               <button
+                data-testid="menu-visao_geral"
                 type="button"
                 onClick={() => {
                   setActiveSubTask('visao_geral');
@@ -2180,6 +2188,7 @@ export default function App() {
                           (item.id === 'aprovacao_regional' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'admin');
                         return (
                           <button
+                            data-testid={`menu-${item.id}`}
                             key={item.id}
                             disabled={bloqueado}
                             onClick={() => {
@@ -2239,6 +2248,7 @@ export default function App() {
                         const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && (item.id === 'analise' || item.id === 'analise_contratual'));
                         return (
                           <button
+                            data-testid={`menu-${item.id}`}
                             key={item.id}
                             disabled={bloqueado}
                             onClick={() => {
@@ -2298,6 +2308,7 @@ export default function App() {
                         const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore') && item.id === 'paf_autorizacao');
                         return (
                           <button
+                            data-testid={`menu-${item.id}`}
                             key={item.id}
                             disabled={bloqueado}
                             onClick={() => {
@@ -2350,7 +2361,7 @@ export default function App() {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
                         return (
-                          <button key={item.id} id={`subtask-${item.id}`}
+                          <button data-testid={`menu-${item.id}`} key={item.id} id={`subtask-${item.id}`}
                             onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
                             className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
                             <div className="flex items-center gap-1.5 w-full">
@@ -2377,7 +2388,7 @@ export default function App() {
                             const Icon = item.icon;
                             const isActive = activeSubTask === item.id;
                             return (
-                              <button key={item.id} id={`subtask-${item.id}`}
+                              <button data-testid={`menu-${item.id}`} key={item.id} id={`subtask-${item.id}`}
                                 onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
                                 className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
                                 <div className="flex items-center gap-1.5 w-full">
@@ -2399,7 +2410,7 @@ export default function App() {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
                         return (
-                          <button key={item.id} id={`subtask-${item.id}`}
+                          <button data-testid={`menu-${item.id}`} key={item.id} id={`subtask-${item.id}`}
                             onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
                             className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
                             <div className="flex items-center gap-1.5 w-full">
@@ -2439,6 +2450,7 @@ export default function App() {
                   const isActive = activeSubTask === item.id;
                   return (
                     <button
+                      data-testid={`menu-${item.id}`}
                       key={item.id}
                       onClick={() => {
                         setActiveSubTask(item.id);
@@ -2492,7 +2504,7 @@ export default function App() {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
                         return (
-                          <button key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                          <button data-testid={`menu-${item.id}`} key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
                             className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
                             <div className="flex items-center gap-1.5 w-full">
                               <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
@@ -2525,7 +2537,7 @@ export default function App() {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
                         return (
-                          <button key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                          <button data-testid={`menu-${item.id}`} key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
                             className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
                             <div className="flex items-center gap-1.5 w-full">
                               <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
@@ -2558,7 +2570,7 @@ export default function App() {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
                         return (
-                          <button key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
+                          <button data-testid={`menu-${item.id}`} key={item.id} onClick={() => { setActiveSubTask(item.id); setIdSolicitacaoSelecionada(null); }}
                             className={`w-full flex flex-col items-start gap-0.5 py-1.5 px-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${isActive ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-600 pl-1.5' : 'hover:bg-slate-50 text-slate-700 hover:text-slate-900'}`}>
                             <div className="flex items-center gap-1.5 w-full">
                               <Icon className={`w-3 h-3 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
@@ -2600,6 +2612,7 @@ export default function App() {
                   const isActive = activeSubTask === item.id;
                   return (
                     <button
+                      data-testid={`menu-${item.id}`}
                       key={item.id}
                       onClick={() => {
                         setActiveSubTask(item.id);
@@ -2647,6 +2660,7 @@ export default function App() {
                   const isActive = activeSubTask === item.id;
                   return (
                     <button
+                      data-testid={`menu-${item.id}`}
                       key={item.id}
                       onClick={() => {
                         setActiveSubTask(item.id);
@@ -2684,6 +2698,7 @@ export default function App() {
                 </h3>
               </div>
               <button
+                data-testid="menu-logs_auditoria"
                 onClick={() => { setActiveSubTask('logs_auditoria'); setIdSolicitacaoSelecionada(null); }}
                 className="w-full flex flex-col items-start px-3 py-2 rounded-lg text-left bg-blue-50 border border-blue-100 text-blue-800 cursor-default"
               >
@@ -2974,6 +2989,7 @@ export default function App() {
                                     {(perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) ? (
                                       <div className="flex items-center justify-center gap-1.5">
                                         <button
+                                          data-testid={`paf-autorizar-${sol.id}`}
                                           onClick={() => setConfirmingSolId(sol.id)}
                                           className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors shadow-3xs cursor-pointer"
                                         >
@@ -3098,6 +3114,7 @@ export default function App() {
                               Cancelar
                             </button>
                             <button
+                              data-testid="paf-autorizacao-confirmar"
                               onClick={() => {
                                 handleAutorizarPAF(activeConfirming);
                                 setConfirmingSolId(null);

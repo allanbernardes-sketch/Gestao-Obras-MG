@@ -1924,6 +1924,7 @@ export default function ProcessAnalysisPanel({
             {!somenteLeitura && (
               <div className="flex items-center gap-3 shrink-0">
                 <button
+                  data-testid="botao-reprovar-processo"
                   type="button"
                   disabled={!podeDevolver}
                   onClick={podeDevolver ? (enviarReprovacaoFinal || solicitarDevolucaoProcesso) : undefined}
@@ -1938,6 +1939,7 @@ export default function ProcessAnalysisPanel({
                   Enviar Reprovação
                 </button>
                 <button
+                  data-testid="botao-aprovar-processo"
                   type="button"
                   disabled={!podeAprovar}
                   onClick={podeAprovar ? (enviarAprovacaoFinal || finalizarAnaliseDore) : undefined}

@@ -71,6 +71,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 E-mail Institucional
               </label>
               <input
+                data-testid="login-email"
                 type="text"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -87,6 +88,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </label>
               <div className="relative">
                 <input
+                  data-testid="login-senha"
                   type={mostrarSenha ? 'text' : 'password'}
                   value={senha}
                   onChange={e => setSenha(e.target.value)}
@@ -106,13 +108,14 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             </div>
 
             {erro && (
-              <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs">
+              <div data-testid="login-erro" className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {erro}
               </div>
             )}
 
             <button
+              data-testid="login-entrar"
               type="submit"
               disabled={loading}
               className="w-full py-3 bg-[#13264d] hover:bg-[#1a3060] active:bg-[#0f1f3d] text-white font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer mt-2"

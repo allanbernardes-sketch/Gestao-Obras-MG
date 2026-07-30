@@ -1346,6 +1346,7 @@ ${totalPendencias > 0
             )}
             {(perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') && processoAindaModificavel(solicitacao) && solicitacao.etapaAtual !== 'cancelado' && (
               <button
+                data-testid="botao-cancelar-processo"
                 type="button"
                 onClick={handleAbrirCancelarProcesso}
                 className="px-2.5 py-1 text-[10.5px] font-bold text-rose-700 hover:text-rose-800 border border-rose-200 hover:bg-rose-50 rounded-lg flex items-center gap-1 cursor-pointer transition"
@@ -1468,6 +1469,7 @@ ${totalPendencias > 0
 
           <div className="flex items-center gap-2 shrink-0 select-none">
             <select
+              data-testid="botao-encaminhar-analista"
               value={solicitacao.analistaAtribuido || ''}
               onChange={(e) => {
                 const val = e.target.value;
@@ -1840,6 +1842,7 @@ ${totalPendencias > 0
                     </button>
 
                     <button
+                      data-testid="botao-aprovar-processo"
                       onClick={finalizarAnaliseDore}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer border ${
                         solicitacao.documentos.some(d => d.status === 'recusado')
@@ -1888,6 +1891,7 @@ ${totalPendencias > 0
                       </span>
                       {solicitacao.etapaAtual === 'analise' && (
                         <button
+                          data-testid="botao-aprovar-processo"
                           onClick={finalizarAnaliseDore}
                           className={`px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1 border border-emerald-500`}
                           title="Aprovar e Avançar para Autorização do PAF"
@@ -1974,6 +1978,7 @@ ${totalPendencias > 0
 
                 return (
                   <div
+                    data-testid={`doc-${doc.id}`}
                     key={doc.id}
                     className={`p-4 rounded-xl border transition-all ${
                       faltandoObrigatorio
@@ -2114,6 +2119,7 @@ ${totalPendencias > 0
                               ) : (
                                 <div>
                                   <input
+                                    data-testid={`doc-${doc.id}-anexar`}
                                     type="file"
                                     id={uploadRefId}
                                     ref={el => { fileInputRefs.current[doc.id] = el }}
@@ -2162,6 +2168,7 @@ ${totalPendencias > 0
                                   </button>
 
                                   <button
+                                    data-testid={`doc-${doc.id}-recusar`}
                                     onClick={() => setDocumentStatus(doc.id, 'recusado')}
                                     disabled={!isUploaded}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
@@ -2281,6 +2288,7 @@ ${totalPendencias > 0
                     )}
                     
                     <button
+                      data-testid="botao-aprovar-processo"
                       onClick={finalizarAnaliseDore}
                       className={`px-5 py-2.5 rounded-lg text-sm font-semibold shadow-xs transition-all flex items-center gap-2 ml-auto ${
                         solicitacao.documentos.some(d => d.status === 'recusado')
@@ -2366,6 +2374,7 @@ ${totalPendencias > 0
                           Número Oficial do PAF *
                         </label>
                         <input
+                          data-testid="paf-numero"
                           type="text"
                           placeholder="Ex: PAF-3320-2026"
                           value={numPAFInput}
@@ -2554,6 +2563,7 @@ ${totalPendencias > 0
                         Salvar Provisório (Manter na Etapa 4)
                       </button>
                       <button
+                        data-testid="botao-oficializar-paf"
                         type="button"
                         onClick={homologarEAvancarOrdemInicio}
                         className="w-full sm:w-auto px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-black transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider font-sans"
@@ -2646,6 +2656,7 @@ ${totalPendencias > 0
                   {solicitacao.etapaAtual === 'paf' ? (
                     <>
                       <button
+                        data-testid="botao-homologar-ordem-inicio"
                         type="button"
                         onClick={perfilUsuario === 'administrativo_dore' ? homologarEAvancarOrdemInicio : undefined}
                         disabled={perfilUsuario !== 'administrativo_dore' || !numPAFInput}
@@ -2733,6 +2744,7 @@ ${totalPendencias > 0
                           Data da Ordem de Início *
                         </label>
                         <input
+                          data-testid="ordem-inicio-data"
                           type="date"
                           value={dataOrdemInicioInput}
                           onChange={(e) => setDataOrdemInicioInput(e.target.value)}
@@ -2747,6 +2759,7 @@ ${totalPendencias > 0
                           Previsão de Término da Obra *
                         </label>
                         <input
+                          data-testid="ordem-inicio-previsao"
                           type="date"
                           value={previsaoTerminoInput}
                           onChange={(e) => setPrevisaoTerminoInput(e.target.value)}
@@ -2767,6 +2780,7 @@ ${totalPendencias > 0
                             <span className="text-neutral-500 text-xs">R$</span>
                           </div>
                           <input
+                            data-testid="ordem-inicio-valor"
                             type="number"
                             step="0.01"
                             placeholder="0,00"
@@ -2895,6 +2909,7 @@ ${totalPendencias > 0
                           <span className="block text-xs font-bold text-neutral-700">Anexar cronograma físico-financeiro</span>
                           <span className="text-[9px] text-neutral-400 block mt-0.5">Formatos: .pdf, .xls, .xlsx (Máx: 10MB)</span>
                           <input
+                            data-testid="ordem-inicio-cronograma"
                             ref={cronogramaInputRef}
                             type="file"
                             accept=".pdf,.xls,.xlsx"
@@ -2909,6 +2924,7 @@ ${totalPendencias > 0
                     <div className="pt-2 flex justify-end gap-2.5">
                       {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                         <button
+                          data-testid="ordem-inicio-salvar"
                           type="submit"
                           className="px-3.5 py-1.5 border border-blue-600 hover:bg-blue-50 text-blue-600 rounded-lg text-xs font-extrabold cursor-pointer transition-colors"
                         >
@@ -2918,6 +2934,7 @@ ${totalPendencias > 0
 
                       {solicitacao.etapaAtual === 'ordem_inicio' && (perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                         <button
+                          data-testid="botao-emitir-ordem-inicio"
                           type="button"
                           onClick={emitirOrdemEIniciarObra}
                           disabled={!solicitacao.dataOrdemInicio || !solicitacao.previsaoTerminoObra || !solicitacao.valorHomologadoContratacao || !solicitacao.cronogramaFisicoFinanceiroFileName}
@@ -4475,6 +4492,7 @@ ${totalPendencias > 0
                 </button>
               )}
               <button
+                data-testid="botao-confirmar-cancelamento"
                 onClick={handleConfirmarCancelamentoFinal}
                 disabled={!justificativaCancelamentoFinal.trim()}
                 className="px-5 py-2 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"

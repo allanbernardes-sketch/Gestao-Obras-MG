@@ -921,6 +921,7 @@ export function NovoAtendimentoPanel({
                     Nome da Escola Estadual *
                   </label>
                   <select
+                    data-testid="atendimento-busca-escola"
                     required
                     value={nomeEscola}
                     onChange={(e) => selecionarPorNomeEscola(e.target.value)}
@@ -928,7 +929,7 @@ export function NovoAtendimentoPanel({
                   >
                     <option value="">Selecione a escola...</option>
                     {escolasNoFiltro.map(item => (
-                      <option key={item.codesc} value={item.nome}>{item.nome}</option>
+                      <option data-testid={`atendimento-opcao-escola-${item.codesc}`} key={item.codesc} value={item.nome}>{item.nome}</option>
                     ))}
                   </select>
                 </div>
@@ -1398,6 +1399,7 @@ export function NovoAtendimentoPanel({
             {/* Ações */}
             <div className="flex justify-end items-center pt-4 border-t border-slate-100">
               <button
+                data-testid="atendimento-passo-seguinte"
                 type="submit"
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-lg shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-1.5"
               >
@@ -1732,6 +1734,7 @@ export function NovoAtendimentoPanel({
             )}
             <div className="flex justify-between items-center animate-none">
               <button
+                data-testid="atendimento-passo-anterior"
                 type="button"
                 onClick={() => { setTentouFinalizar(false); setCurrentView('form'); }}
                 className="px-4 py-2 border border-slate-200 text-slate-600 hover:text-slate-800 hover:bg-slate-50 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
@@ -1750,6 +1753,7 @@ export function NovoAtendimentoPanel({
                 </button>
 
                 <button
+                  data-testid="atendimento-salvar"
                   type="button"
                   onClick={() => {
                     setTentouFinalizar(true);
@@ -2332,6 +2336,7 @@ export function NovoAtendimentoPanel({
                 </button>
 
                 <button
+                  data-testid="atendimento-editar-enviar"
                   type="button"
                   onClick={() => {
                     if (!sol) return;
@@ -3515,6 +3520,7 @@ export function AtribuicaoPanel({
                               : analistasSgo;
                             return (
                               <select
+                                data-testid="atribuicao-selecionar-analista"
                                 value={currentAssignId}
                                 onChange={(e) => !somenteLeitura && !atribuidoOutroAnalista && handleAssignAnalyst(sol, e.target.value)}
                                 disabled={somenteLeitura || atribuidoOutroAnalista}
@@ -3701,6 +3707,7 @@ export function AprovacaoRegionalPanel({
 
               <div className="flex flex-col md:flex-row md:items-center gap-2 pt-2 border-t border-slate-100">
                 <input
+                  data-testid="aprovacao-regional-justificativa"
                   type="text"
                   value={justificativas[sol.id] || ''}
                   onChange={(e) => setJustificativas(prev => ({ ...prev, [sol.id]: e.target.value }))}
@@ -3709,6 +3716,7 @@ export function AprovacaoRegionalPanel({
                 />
                 <div className="flex items-center gap-2 shrink-0">
                   <button
+                    data-testid="aprovacao-regional-reprovar"
                     type="button"
                     onClick={() => handleReprovar(sol)}
                     className="px-3.5 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded-lg text-xs font-bold transition cursor-pointer"
@@ -3716,6 +3724,7 @@ export function AprovacaoRegionalPanel({
                     Reprovar
                   </button>
                   <button
+                    data-testid="aprovacao-regional-aprovar"
                     type="button"
                     onClick={() => handleAprovar(sol)}
                     className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"

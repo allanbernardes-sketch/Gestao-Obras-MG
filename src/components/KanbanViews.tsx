@@ -273,7 +273,8 @@ export default function KanbanViews({
     const ieeClasseCalc = sol.ieeClasse ?? calcularIEE(sol)?.classe;
 
     return (
-      <div 
+      <div
+        data-testid={`card-solicitacao-${sol.id}`}
         key={sol.id}
         onClick={() => onSelect(sol)}
         className="bg-white rounded-xl border border-slate-200 hover:border-blue-400 p-4 shadow-3xs hover:shadow-sm cursor-pointer transition select-none flex flex-col justify-between group space-y-3 shrink-0"
