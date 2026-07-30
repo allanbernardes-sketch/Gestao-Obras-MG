@@ -13,7 +13,7 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft, FileCheck } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, AtribuicaoHistoricoPanel, AprovacaoRegionalPanel } from './components/GestaoObrasViews';
@@ -21,6 +21,7 @@ import ExecucaoSubmodulos from './components/ExecucaoSubmodulos';
 import AcompanhamentoPaf from './components/AcompanhamentoPaf';
 import CentralNotificacoesLogs from './components/CentralNotificacoesLogs';
 import CentralNavegacaoObras from './components/CentralNavegacaoObras';
+import ValidacaoContratual from './components/ValidacaoContratual';
 import OrcamentoModule from './components/orcamento/OrcamentoModule';
 import PatrimonioModule from './components/patrimonio/PatrimonioModule';
 import { supabase } from './lib/supabase';
@@ -165,6 +166,7 @@ export default function App() {
   const [activeModule, setActiveModule] = useState<'seguranca' | 'orcamento' | 'gestao_obras' | 'imoveis' | 'abertura_chamados' | 'central_logs'>('gestao_obras');
   const [activeSubTask, setActiveSubTask] = useState<string>('visao_geral');
   const [selectedSchoolsPorSubtask, setSelectedSchoolsPorSubtask] = useState<{ [subtask: string]: string }>({});
+  const [itemContratualSelecionado, setItemContratualSelecionado] = useState<{ tipo: 'aditivo' | 'ajuste' | 'saldo'; itemId: string } | null>(null);
   const [schoolSearchQuery, setSchoolSearchQuery] = useState('');
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
 
@@ -636,6 +638,7 @@ export default function App() {
             coordenadorAprovador: row.coordenador_aprovador ?? undefined,
             dataAprovacaoRegional: row.data_aprovacao_regional ?? undefined,
             justificativaReprovacaoRegional: row.justificativa_reprovacao_regional ?? undefined,
+            fiscalObraAtribuidoId: row.fiscal_obra_atribuido_id ?? undefined,
             statusObra: statusObraDoBanco(row.status_obra),
             statusSecoes: {
               identificacao_escolar: { status: row.status_identificacao_escolar, motivo: row.motivo_identificacao_escolar ?? undefined },
@@ -1072,7 +1075,99 @@ export default function App() {
             });
           }
 
-          setSolicitacoes(comDocumentos);
+          // Carrega os reequilíbrios financeiros registrados de cada solicitação
+          let comReequilibrios = comDocumentos;
+          if (dbIds.length > 0) {
+            const { data: reequilibriosData, error: reequilibriosError } = await supabase
+              .from('reequilibrios_financeiros')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: false });
+
+            if (reequilibriosError) {
+              console.error('Erro ao carregar reequilíbrios financeiros:', reequilibriosError);
+            } else if (reequilibriosData) {
+              const statusReequilibrioDoBanco = (v: string | null): 'aguardando_analista' | 'aprovado' | 'reprovado' => {
+                if (v === 'aprovado') return 'aprovado';
+                if (v === 'recusado') return 'reprovado';
+                return 'aguardando_analista';
+              };
+
+              const porSolicitacaoReequilibrio = new Map<string, any[]>();
+              (reequilibriosData as any[]).forEach((row) => {
+                const lista = porSolicitacaoReequilibrio.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoReequilibrio.set(row.solicitacao_id, lista);
+              });
+
+              comReequilibrios = comDocumentos.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoReequilibrio.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  reequilibrios: linhas.map((row: any) => ({
+                    id: row.id,
+                    dataCriacao: row.created_at ? String(row.created_at).split('T')[0] : '',
+                    status: statusReequilibrioDoBanco(row.status),
+                    valorReequilibrado: row.valor_reequilibrio ?? undefined,
+                    dataReferenceSEE: row.data_referencia_see ? String(row.data_referencia_see) : undefined,
+                    descontoContratual: row.desconto_contratual ?? undefined,
+                    valorOriginal: row.valor_original ?? undefined,
+                    analistaAtribuido: row.analista_nome ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
+          // Carrega os saldos complementares registrados de cada solicitação
+          let comSaldos = comReequilibrios;
+          if (dbIds.length > 0) {
+            const { data: saldosData, error: saldosError } = await supabase
+              .from('saldos_complementares')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: false });
+
+            if (saldosError) {
+              console.error('Erro ao carregar saldos complementares:', saldosError);
+            } else if (saldosData) {
+              const statusSaldoDoBanco = (v: string | null): 'aguardando_analista' | 'aprovado' | 'reprovado' => {
+                if (v === 'aprovado') return 'aprovado';
+                if (v === 'recusado') return 'reprovado';
+                return 'aguardando_analista';
+              };
+
+              const porSolicitacaoSaldo = new Map<string, any[]>();
+              (saldosData as any[]).forEach((row) => {
+                const lista = porSolicitacaoSaldo.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoSaldo.set(row.solicitacao_id, lista);
+              });
+
+              comSaldos = comReequilibrios.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoSaldo.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  saldosComplementares: linhas.map((row: any) => ({
+                    id: row.id,
+                    dataCriacao: row.created_at ? String(row.created_at).split('T')[0] : '',
+                    status: statusSaldoDoBanco(row.status),
+                    valorTC: row.valor_tc ?? 0,
+                    valorLiberado: row.valor_liberado ?? 0,
+                    valorPago: row.valor_pago ?? 0,
+                    saldoEmConta: row.saldo_em_conta ?? 0,
+                    necessidadeAditivo: row.necessidade_aditivo ?? 0,
+                    analistaAtribuido: row.analista_nome ?? undefined,
+                    documentos: row.documentos_checklist ? JSON.parse(row.documentos_checklist) : [],
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comSaldos);
           return;
         }
       } catch (e) {
@@ -1256,7 +1351,8 @@ export default function App() {
           valor_contrato: sol.contratoValorInicial ?? null,
           status_obra: statusObraParaBanco(sol),
           analista_atribuido_id: resolverUsuarioIdPorNome(usuariosSeguranca, sol.analistaAtribuido),
-          fiscal_obra_atribuido_id: resolverUsuarioIdPorNome(usuariosSeguranca, sol.fiscalObraAtribuido),
+          // Preferência: id explícito escolhido na UI (main); fallback: resolução por nome
+          fiscal_obra_atribuido_id: sol.fiscalObraAtribuidoId ?? resolverUsuarioIdPorNome(usuariosSeguranca, sol.fiscalObraAtribuido),
           updated_at: new Date().toISOString()
         }, { onConflict: 'codigo_sgo' })
         .select('id')
@@ -2135,11 +2231,12 @@ export default function App() {
                     <div className="pl-3 border-l border-slate-100 ml-2 space-y-0.5 mt-0.5">
                       {[
                         { id: 'analise_atribuicao', label: 'Atribuição', icon: Users },
-                        { id: 'analise', label: 'Validação Técnica', icon: FileText }
+                        { id: 'analise', label: 'Validação Técnica', icon: FileText },
+                        { id: 'analise_contratual', label: 'Validação Contratual', icon: FileCheck }
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && item.id === 'analise');
+                        const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'gestor_paf') && (item.id === 'analise' || item.id === 'analise_contratual'));
                         return (
                           <button
                             key={item.id}
@@ -3838,6 +3935,11 @@ export default function App() {
                               setActiveSubTask('analise');
                               setSelectedSchoolsPorSubtask(prev => ({ ...prev, analise: sol.id }));
                             }}
+                            onNavToAnaliseContratual={(sol, tipo, itemId) => {
+                              setActiveSubTask('analise_contratual');
+                              setSelectedSchoolsPorSubtask(prev => ({ ...prev, analise_contratual: sol.id }));
+                              setItemContratualSelecionado({ tipo, itemId });
+                            }}
                           />
                         ) : (
                           <KanbanViews
@@ -3857,6 +3959,17 @@ export default function App() {
                           />
                         )}
                       </div>
+                    );
+                  })() : activeSubTask === 'analise_contratual' ? (() => {
+                    const solicitacaoAtiva = solicitacoesVisiveis.find(s => s.id === selectedSchoolsPorSubtask.analise_contratual) || null;
+                    return (
+                      <ValidacaoContratual
+                        solicitacao={solicitacaoAtiva}
+                        itemSelecionado={itemContratualSelecionado}
+                        perfilUsuario={perfilUsuario}
+                        usuariosSeguranca={usuariosSeguranca}
+                        onUpdate={handleUpdateSolicitacao}
+                      />
                     );
                   })() : activeSubTask === 'execucao_central' ? (
                     <CentralNavegacaoObras

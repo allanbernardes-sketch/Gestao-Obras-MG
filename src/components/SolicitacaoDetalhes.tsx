@@ -779,6 +779,7 @@ ${totalPendencias > 0
       // Limpa campos do cadastro de obras para chegarem em branco
       cadastroObraConfirmado: false,
       fiscalObraAtribuido: undefined,
+      fiscalObraAtribuidoId: undefined,
       dataOrdemInicio: undefined,
       previsaoTerminoObra: undefined,
       duracaoObraMeses: undefined,
@@ -998,6 +999,7 @@ ${totalPendencias > 0
       classeObra: comp.classe,
       pontuacaoComplexidade: comp.pontuacao,
       fiscalObraAtribuido: fiscalObraAtribuidoInput,
+      fiscalObraAtribuidoId: fiscais.find(u => u.nome === fiscalObraAtribuidoInput)?.id,
       cadastroObraConfirmado: true
     });
     alert('Dados da Ordem de Início salvos com sucesso!');
@@ -1014,6 +1016,7 @@ ${totalPendencias > 0
       etapaAtual: 'execucao',
       statusObra: 'Em Andamento',
       fiscalObraAtribuido: fiscalObraAtribuidoInput,
+      fiscalObraAtribuidoId: fiscais.find(u => u.nome === fiscalObraAtribuidoInput)?.id,
       historicoEtapas: [
         ...solicitacao.historicoEtapas,
         { 
@@ -1087,6 +1090,7 @@ ${totalPendencias > 0
       cronogramaFisicoFinanceiroFileSize: undefined,
       cronogramaFisicoFinanceiroUploadedAt: undefined,
       fiscalObraAtribuido: undefined,
+      fiscalObraAtribuidoId: undefined,
       duracaoObraMeses: undefined,
       classeObra: undefined,
       pontuacaoComplexidade: undefined,

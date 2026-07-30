@@ -783,6 +783,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
 
     const baseVal = parseFloat(valorInput) || 0;
     const finalVal = parseFloat(valorHomologadoInput) || baseVal;
+    const fiscalObraAtribuidoId = usuariosSeguranca.find(u => u.nome === fiscalObraAtribuido)?.id;
 
     // Is it based on an existing ticket/request, or creating fresh?
     if (vincularExistente && selectedAtendimentoId) {
@@ -796,6 +797,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           classeObra,
           pontuacaoComplexidade,
           fiscalObraAtribuido,
+          fiscalObraAtribuidoId,
           empresaContratada: empresaInput || 'Construtora do Estado S.A.',
           cnpjEmpresa: cnpjInput || '02.455.996/0001-34',
           statusContratoEmpresa: 'Ativa',
@@ -835,6 +837,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
         classeObra,
         pontuacaoComplexidade,
         fiscalObraAtribuido,
+        fiscalObraAtribuidoId,
         duracaoObraMeses: parseInt(duracaoMeses) || 6,
         statusObra: 'Não Iniciada',
         cadastroObraConfirmado: true,
@@ -926,7 +929,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                   type="button"
                   onClick={() => {
                     if (!podeAtribuirFiscal || !targetSol || !novoFiscalSelecionado) return;
-                    onUpdate({ ...targetSol, fiscalObraAtribuido: novoFiscalSelecionado });
+                    const novoFiscalId = usuariosSeguranca.find(u => u.nome === novoFiscalSelecionado)?.id;
+                    onUpdate({ ...targetSol, fiscalObraAtribuido: novoFiscalSelecionado, fiscalObraAtribuidoId: novoFiscalId });
                     setReatribuirFiscalSolId(null);
                   }}
                   disabled={!podeAtribuirFiscal}
@@ -1576,7 +1580,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                                 type="button"
                                 onClick={() => {
                                   setReatribuirFiscalSolId(sol.id);
-                                  setNovoFiscalSelecionado(sol.fiscalObraAtribuido || 'Eng. Roberto Mendes');
+                                  setNovoFiscalSelecionado(sol.fiscalObraAtribuido || '');
                                 }}
                                 className="px-2 py-1 text-[9.5px] font-extrabold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg cursor-pointer transition"
                               >
@@ -4751,6 +4755,7 @@ function SubContratos({
         dataOrdemInicio: undefined,
         previsaoTerminoObra: undefined,
         fiscalObraAtribuido: undefined,
+        fiscalObraAtribuidoId: undefined,
         cadastroObraConfirmado: false,
         classeObra: undefined,
         pontuacaoComplexidade: undefined,
@@ -7298,7 +7303,8 @@ function SubFiscalizacao({
     e.preventDefault();
     const updated = {
       ...currentSol,
-      fiscalObraAtribuido: fiscalInput
+      fiscalObraAtribuido: fiscalInput,
+      fiscalObraAtribuidoId: usuariosSeguranca.find(u => u.nome === fiscalInput)?.id
     };
     onUpdate(updated);
   };
@@ -7618,6 +7624,13 @@ function NoObraSelected() {
 // AJUSTES CONTRATUAIS — COMPONENTES
 // ==========================================================
 
+// Mapeia o status interno (4 valores) para o enum do banco (3 valores: pendente/aprovado/recusado)
+function statusParaBanco(status: 'aguardando_analista' | 'em_analise' | 'aprovado' | 'reprovado'): 'pendente' | 'aprovado' | 'recusado' {
+  if (status === 'aprovado') return 'aprovado';
+  if (status === 'reprovado') return 'recusado';
+  return 'pendente';
+}
+
 // --- REEQUILÍBRIO FINANCEIRO ---
 function SubReequilibrio({
   currentSol,
@@ -7669,14 +7682,55 @@ function SubReequilibrio({
     e.target.value = '';
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!planilhaFile) { alert('Anexe a Planilha de Reequilíbrio.'); return; }
     if (!dataRefSEE)   { alert('Informe a Data da Referência SEE.'); return; }
 
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        alert('Não foi possível localizar o registro da obra no banco para gravar o reequilíbrio.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const status: ReequilibrioItem['status'] = 'aguardando_analista';
+    const descontoNum = parseFloat(descontoContratual) || 0;
+    const valorReequilibradoNum = parseFloat(valorReequilibrado) || undefined;
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data: reequilibrioRow, error: reequilibrioError } = await supabase
+      .from('reequilibrios_financeiros')
+      .insert({
+        solicitacao_id: dbId,
+        valor_reequilibrio: valorReequilibradoNum ?? null,
+        motivo: null,
+        status: statusParaBanco(status),
+        data_referencia_see: dataRefSEE || null,
+        desconto_contratual: descontoNum ?? null,
+        valor_original: valorOriginal ?? null,
+        analista_nome: null,
+        usuario_id: userData.user?.id ?? null
+      })
+      .select('id')
+      .single();
+
+    if (reequilibrioError || !reequilibrioRow) {
+      console.error('Erro ao gravar reequilíbrio no Supabase:', reequilibrioError);
+      alert('Erro ao gravar a solicitação de reequilíbrio no banco de dados. Tente novamente.');
+      return;
+    }
+
     const novo: ReequilibrioItem = {
-      id: `REQ-${Date.now()}`,
+      id: reequilibrioRow.id,
       dataCriacao: new Date().toISOString().split('T')[0],
-      status: 'aguardando_analista',
+      status,
       justificativaFileName:   justificativaFile?.name,
       justificativaFileSize:   justificativaFile?.size,
       autorizacaoDIPCFileName: autorizacaoDIPCFile?.name,
@@ -7684,9 +7738,9 @@ function SubReequilibrio({
       planilhaFileName:        planilhaFile.name,
       planilhaFileSize:        planilhaFile.size,
       dataReferenceSEE:        dataRefSEE,
-      descontoContratual:      parseFloat(descontoContratual) || 0,
+      descontoContratual:      descontoNum,
       valorOriginal,
-      valorReequilibrado: parseFloat(valorReequilibrado) || undefined,
+      valorReequilibrado: valorReequilibradoNum,
     };
 
     onUpdate({ ...currentSol, reequilibrios: [...(currentSol.reequilibrios || []), novo] });
@@ -8030,7 +8084,7 @@ function SubSaldoComplementar({
     ));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!todosDocsMarcados) {
       alert('Todos os documentos são obrigatórios. Marque todos antes de enviar.');
       return;
@@ -8040,8 +8094,50 @@ function SubSaldoComplementar({
       return;
     }
 
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        alert('Não foi possível localizar o registro da obra no banco para gravar o saldo complementar.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const documentos = docs.map(d => ({ item: d.item, obrigatorio: true, checked: d.checked, fileName: d.fileName }));
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data: saldoRow, error: saldoError } = await supabase
+      .from('saldos_complementares')
+      .insert({
+        solicitacao_id: dbId,
+        valor_saldo: numSaldo,
+        descricao: null,
+        status: 'pendente',
+        valor_tc: numTC,
+        valor_liberado: numLib,
+        valor_pago: numPago,
+        saldo_em_conta: numSaldo,
+        necessidade_aditivo: numAditivo,
+        analista_nome: null,
+        documentos_checklist: JSON.stringify(documentos),
+        usuario_id: userData.user?.id ?? null
+      })
+      .select('id')
+      .single();
+
+    if (saldoError || !saldoRow) {
+      console.error('Erro ao gravar saldo complementar no Supabase:', saldoError);
+      alert('Erro ao gravar a solicitação de saldo complementar no banco de dados. Tente novamente.');
+      return;
+    }
+
     const novo: SaldoComplementarItem = {
-      id: `SC-${Date.now()}`,
+      id: saldoRow.id,
       dataCriacao: new Date().toISOString().split('T')[0],
       status: 'aguardando_analista',
       valorTC: numTC,
@@ -8049,7 +8145,7 @@ function SubSaldoComplementar({
       valorPago: numPago,
       saldoEmConta: numSaldo,
       necessidadeAditivo: numAditivo,
-      documentos: docs.map(d => ({ item: d.item, obrigatorio: true, checked: d.checked, fileName: d.fileName })),
+      documentos,
     };
 
     onUpdate({
