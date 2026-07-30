@@ -341,3 +341,16 @@ create policy "autenticados podem ler" on public.vistorias_obra for select to au
 create policy "autenticados podem deletar documentos" on public.documentos for delete to authenticated using (true);
 create policy "autenticados podem deletar historico etapas" on public.solicitacao_historico_etapas for delete to authenticated using (true);
 create policy "autenticados podem deletar solicitacoes" on public.solicitacoes for delete to authenticated using (true);
+
+-- ---------------------------------------------------------------------------
+-- 11. Grants (Data API) — no remoto existem via privilégios padrão da
+--     plataforma; localmente precisam ser explícitos. O acesso por linha
+--     continua governado pelo RLS acima.
+-- ---------------------------------------------------------------------------
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables in schema public to anon, authenticated, service_role;
+grant all on all sequences in schema public to anon, authenticated, service_role;
+grant all on all routines in schema public to anon, authenticated, service_role;
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant all on routines to anon, authenticated, service_role;

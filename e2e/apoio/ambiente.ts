@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 // Resolve as credenciais do stack Supabase LOCAL via `npx supabase status`.
 // Falha com mensagem clara se o stack não estiver de pé — nenhum teste deve
@@ -18,7 +19,7 @@ export function ambienteLocal(): AmbienteLocal {
   let saida: string;
   try {
     saida = execSync('npx supabase status -o env', {
-      cwd: new URL('../..', import.meta.url).pathname,
+      cwd: fileURLToPath(new URL('../..', import.meta.url)),
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
