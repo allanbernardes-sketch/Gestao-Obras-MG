@@ -20,7 +20,7 @@ npm run test:e2e:headed   # com navegador visível
 e2e/
   apoio/
     ambiente.ts    # resolve URL/anon key do stack local (npx supabase status)
-    banco.ts       # pool pg (porta 54322): truncate entre testes + asserções SQL
+    banco.ts       # pool pg (porta 55322): truncate entre testes + asserções SQL
     fixtures.ts    # test estendido: dialogs aceitos e registrados, banco e
                    # localStorage limpos a cada teste
     sessao.ts      # entrarComo(page, 'tecnico_infra') — login via UI

@@ -46,7 +46,7 @@ export function ambienteLocal(): AmbienteLocal {
   cache = {
     apiUrl,
     anonKey,
-    dbUrl: vars.get('DB_URL') ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
+    dbUrl: vars.get('DB_URL') ?? 'postgresql://postgres:postgres@127.0.0.1:55322/postgres',
   };
   return cache;
 }
