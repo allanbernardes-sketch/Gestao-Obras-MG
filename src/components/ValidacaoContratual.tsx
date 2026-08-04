@@ -573,8 +573,10 @@ Plataforma e-SGO - SEE-MG`;
                       nome={d.item}
                       obrigatorio
                       anexado={d.checked}
+                      fileName={d.fileName}
                       status={getDocStatus(adt.id, idx)}
                       podeValidar={podeValidar && adt.status === 'Pendente'}
+                      onDownload={d.fileName ? () => baixarDocumentoSimulado(d.fileName!, d.item) : undefined}
                       onValidar={() => setDocStatus(adt.id, idx, 'aprovado')}
                       onRecusar={() => setDocStatus(adt.id, idx, 'recusado')}
                     />
@@ -640,8 +642,10 @@ Plataforma e-SGO - SEE-MG`;
                       nome={d.item}
                       obrigatorio
                       anexado={d.checked}
+                      fileName={d.fileName}
                       status={getDocStatus(aju.id, idx)}
                       podeValidar={podeValidar && aju.status === 'analise_dore'}
+                      onDownload={d.fileName ? () => baixarDocumentoSimulado(d.fileName!, d.item) : undefined}
                       onValidar={() => setDocStatus(aju.id, idx, 'aprovado')}
                       onRecusar={() => setDocStatus(aju.id, idx, 'recusado')}
                     />

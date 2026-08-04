@@ -5915,7 +5915,7 @@ function SubAditivos({ currentSol, onUpdate, somenteLeitura = false }: { current
       status: 'Pendente',
       analistaAtribuido: undefined,
       numeroAditivo: String(numeroAditivoInt),
-      checklistDocs: checklist.map(c => ({ item: c.item, checked: c.checked })),
+      checklistDocs: checklist.map(c => ({ item: c.item, checked: c.checked, fileName: c.fileName || undefined })),
       parecerConsolidado: '',
       documentos: [
         { id: 'relatorio_tecnico', nome: 'Parecer Circunstanciado de Engenharia / Memorial Descritivo', desc: 'Justificativa técnica circunstanciada assinada por engenheiro.', status: 'pendente', obrigatorio: true },
@@ -6729,7 +6729,7 @@ function SubAjustes({
       saldoComplementar,
       valorAditivo: valorAditivoLiquido,
       percentualContrato: parseFloat(percentualContrato.toFixed(2)),
-      checklistDocs: checklist.map(c => ({ item: c.item, checked: c.checked })),
+      checklistDocs: checklist.map(c => ({ item: c.item, checked: c.checked, fileName: c.fileName || undefined })),
       parecerDore: ''
     };
 

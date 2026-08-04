@@ -26,6 +26,8 @@ const cnpjCaixaEscolarMap: Record<string, string> = {
   '154784': '76.543.210/0001-67',
 };
 
+const JUSTIFICATIVA_RECUSA_PADRAO = 'Ajuste ou complementação de documento técnica pendente.';
+
 const getValorScore = (valor: number): { score: number; label: string } => {
   if (valor > 2000000) return { score: 5, label: 'Acima de R$ 2.000.000 (Peso 5)' };
   if (valor >= 1000000) return { score: 4, label: 'R$ 1.000.000 a R$ 2.000.000 (Peso 4)' };
@@ -168,6 +170,11 @@ export default function SolicitacaoDetalhes({
   const [motivoSolicitarCancelamento, setMotivoSolicitarCancelamento] = useState('');
   const [cancelarProcessoModalAberto, setCancelarProcessoModalAberto] = useState(false);
   const [justificativaCancelamentoFinal, setJustificativaCancelamentoFinal] = useState('');
+
+  // Devolução da Planilha Orçamentária (doc_1) — exige justificativa + arquivo com as marcações do analista
+  const [devolucaoModalDocId, setDevolucaoModalDocId] = useState<string | null>(null);
+  const [devolucaoJustificativa, setDevolucaoJustificativa] = useState('');
+  const [devolucaoArquivo, setDevolucaoArquivo] = useState<{ fileName: string; fileSize: string; fileContent: string; fileType?: string } | null>(null);
 
   React.useEffect(() => {
     if (forcedTab) {
@@ -406,6 +413,64 @@ Plataforma e-SGO - SEE-MG`;
     fileInputRefs.current[docId]?.click();
   };
 
+  // Devolução da Planilha Orçamentária: justificativa + arquivo com as marcações do analista são obrigatórios
+  const abrirModalDevolucao = (docId: string) => {
+    setDevolucaoModalDocId(docId);
+    setDevolucaoJustificativa('');
+    setDevolucaoArquivo(null);
+  };
+
+  const cancelarDevolucao = () => {
+    setDevolucaoModalDocId(null);
+    setDevolucaoJustificativa('');
+    setDevolucaoArquivo(null);
+  };
+
+  const handleDevolucaoArquivoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const fileContent = ev.target?.result as string;
+      setDevolucaoArquivo({ fileName: file.name, fileSize: sizeFormatted, fileContent, fileType: file.type || undefined });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const confirmarDevolucao = () => {
+    const justificativa = devolucaoJustificativa.trim();
+    if (!devolucaoModalDocId || !devolucaoArquivo || !justificativa || justificativa === JUSTIFICATIVA_RECUSA_PADRAO) return;
+    const docId = devolucaoModalDocId;
+    const updatedDocs = solicitacao.documentos.map(doc => {
+      if (doc.id === docId) {
+        return {
+          ...doc,
+          status: 'recusado' as const,
+          justificativa,
+          arquivoDevolucaoFileName: devolucaoArquivo.fileName,
+          arquivoDevolucaoFileSize: devolucaoArquivo.fileSize,
+          arquivoDevolucaoFileContent: devolucaoArquivo.fileContent,
+          arquivoDevolucaoFileType: devolucaoArquivo.fileType,
+          arquivoDevolucaoUploadedAt: new Date().toISOString().split('T')[0],
+        };
+      }
+      return doc;
+    });
+    onUpdate({ ...solicitacao, documentos: updatedDocs });
+    cancelarDevolucao();
+  };
+
+  const handleDownloadArquivoDevolucao = (doc: DocumentoChecklist) => {
+    if (!doc.arquivoDevolucaoFileContent) return;
+    const link = document.createElement('a');
+    link.href = doc.arquivoDevolucaoFileContent;
+    link.setAttribute('download', doc.arquivoDevolucaoFileName || 'devolucao.xlsx');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const removerDocumento = (docId: string) => {
     const targetDoc = solicitacao.documentos.find(d => d.id === docId);
     if (targetDoc?.status === 'aprovado') {
@@ -578,6 +643,12 @@ ${totalPendencias > 0
   };
 
   const finalizarAnaliseDore = () => {
+    const planilhaOrcamentaria = solicitacao.documentos.find(d => d.id === 'doc_1');
+    if (planilhaOrcamentaria?.status === 'recusado' && !planilhaOrcamentaria.arquivoDevolucaoFileName) {
+      alert('Anexe o arquivo de devolução da Planilha Orçamentária antes de encaminhar');
+      return;
+    }
+
     // Determine if there are absolute rejections on uploaded/mandatory files
     const hasRejections = solicitacao.documentos.some(d => d.status === 'recusado');
     const currentCount = solicitacao.contadorAnalises || 1;
@@ -2070,6 +2141,15 @@ ${totalPendencias > 0
                               {doc.status === 'recusado' ? '❌ Pendência Técnica Identificada' : doc.status === 'aprovado' ? '✅ Nota de Validação do Analista' : 'ℹ️ Observação de Análise'}:
                             </span>
                             <p className="mt-1 font-sans leading-relaxed">{doc.justificativa}</p>
+                            {doc.id === 'doc_1' && doc.status === 'recusado' && doc.arquivoDevolucaoFileName && (
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadArquivoDevolucao(doc)}
+                                className="mt-2.5 inline-flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-wider text-red-700 hover:text-red-850 border border-red-300 bg-white hover:bg-red-50 rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors"
+                              >
+                                📥 Baixar arquivo com marcações do analista
+                              </button>
+                            )}
                           </div>
                         )}
 
@@ -2169,7 +2249,7 @@ ${totalPendencias > 0
 
                                   <button
                                     data-testid={`doc-${doc.id}-recusar`}
-                                    onClick={() => setDocumentStatus(doc.id, 'recusado')}
+                                    onClick={() => doc.id === 'doc_1' ? abrirModalDevolucao(doc.id) : setDocumentStatus(doc.id, 'recusado')}
                                     disabled={!isUploaded}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                                       doc.status === 'recusado'
@@ -4498,6 +4578,69 @@ ${totalPendencias > 0
                 className="px-5 py-2 rounded-lg text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 Confirmar Cancelamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Devolução da Planilha Orçamentária (doc_1) — justificativa + arquivo obrigatórios */}
+      {devolucaoModalDocId && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-205 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-5 space-y-4">
+              <h3 className="font-display font-bold text-neutral-800 text-base flex items-center gap-2">
+                <XCircle className="w-4.5 h-4.5 text-red-600" /> Devolver Planilha Orçamentária
+              </h3>
+              <p className="text-xs text-slate-500 -mt-2">
+                A devolução deste documento exige justificativa e o arquivo com as marcações do analista.
+              </p>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Justificativa da devolução *
+                </label>
+                <textarea
+                  rows={3}
+                  value={devolucaoJustificativa}
+                  onChange={(e) => setDevolucaoJustificativa(e.target.value)}
+                  placeholder="Descreva o que precisa ser corrigido na planilha orçamentária..."
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Arquivo de devolução (.xlsx/.xls) *
+                </label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleDevolucaoArquivoChange}
+                  className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-slate-200 file:text-xs file:font-bold file:bg-slate-50 hover:file:bg-slate-100 cursor-pointer"
+                />
+                {devolucaoArquivo && (
+                  <div className="mt-2 flex items-center gap-2 bg-slate-50 border border-slate-200/70 px-2.5 py-1.5 rounded-lg text-[11px]">
+                    <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                    <span className="font-mono text-slate-700 truncate flex-1">{devolucaoArquivo.fileName}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{devolucaoArquivo.fileSize}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 bg-slate-50/75 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelarDevolucao}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarDevolucao}
+                disabled={!devolucaoArquivo || !devolucaoJustificativa.trim() || devolucaoJustificativa.trim() === JUSTIFICATIVA_RECUSA_PADRAO}
+                className="px-5 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Confirmar Devolução
               </button>
             </div>
           </div>

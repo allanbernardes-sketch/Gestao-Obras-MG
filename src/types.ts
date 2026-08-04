@@ -20,6 +20,11 @@ export interface DocumentoChecklist {
   fileSize?: string;
   fileContent?: string;
   fileType?: string;
+  arquivoDevolucaoFileName?: string;
+  arquivoDevolucaoFileSize?: string;
+  arquivoDevolucaoFileContent?: string;
+  arquivoDevolucaoFileType?: string;
+  arquivoDevolucaoUploadedAt?: string;
   status: 'pendente' | 'aprovado' | 'recusado' | 'nao_se_aplica';
   justificativa?: string;
 }
@@ -63,7 +68,7 @@ export interface Aditivo {
   saldoComplementar?: 'Sim' | 'Não';
   valorAditivo?: number;  // Valor do aditivo líquido
   percentualContrato?: number;
-  checklistDocs?: { item: string; checked: boolean }[];
+  checklistDocs?: { item: string; checked: boolean; fileName?: string }[];
 }
 
 export interface AjustePlanilha {
@@ -93,7 +98,7 @@ export interface AjustePlanilha {
   saldoComplementar?: 'Sim' | 'Não';
   valorAditivo?: number; // Valor líquido do ajuste
   percentualContrato?: number;
-  checklistDocs?: { item: string; checked: boolean }[];
+  checklistDocs?: { item: string; checked: boolean; fileName?: string }[];
 }
 
 export interface ParcelaPAF {
