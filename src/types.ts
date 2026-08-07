@@ -149,7 +149,10 @@ export interface Solicitacao {
   tipoAtendimento?: string;
   numPaf?: string;
   anoEmenda?: string;
-  emendaImpositiva?: 'Sim' | 'Não'; // obrigatório quando tipoAtendimento = EMENDA — alimenta a etiqueta EMENDA_IMPOSITIVA
+  // Obrigatório quando tipoAtendimento = EMENDA. Só 'Impositiva' alimenta a etiqueta
+  // EMENDA_IMPOSITIVA e a pontuação de ranking (ver src/utils/prioridade.ts).
+  tipoEmenda?: 'Impositiva' | 'Parceria Por Escolas Melhores' | 'Federal';
+  numeroIndicacaoEmenda?: string; // obrigatório quando tipoAtendimento = EMENDA
   atendimentoOrgao?: string;
   formaAtendimento?: string;
   seiMinutaOcupacao?: string;
@@ -178,7 +181,7 @@ export interface Solicitacao {
   ieeComplexidade?: string; // 'Baixa' | 'Média' | 'Alta' | 'Muito Alta'
   descricaoFolhaRosto?: string;
   valorPlanilha?: number;
-  prazoEstimadoObra?: number; // dias — seção 4 da análise DORE (Referência e Dotação Orçamentária SGO), opcional
+  prazoEstimadoObra?: number; // meses — seção 4 da análise DORE (Referência e Dotação Orçamentária SGO), opcional
   prazoEstimadoMeses?: number; // meses — preenchido pelo técnico no Atendimento Inicial, obrigatório, critério do IEE
   iss?: string;
   responsavel?: string;
@@ -302,6 +305,17 @@ export interface Solicitacao {
   planilhaMedicaoFinalFileName?: string;
   planilhaMedicaoFinalFileSize?: string;
   planilhaMedicaoFinalUploadedAt?: string;
+  // Termo de Aceite Provisório — data informada é a que conta para a regra dos 90 dias
+  // (não a data de upload do arquivo, que pode ser posterior à emissão do termo)
+  termoAceiteProvisorioData?: string;
+  termoAceiteProvisorioFileName?: string;
+  termoAceiteProvisorioFileSize?: string;
+  termoAceiteProvisorioUploadedAt?: string;
+  // Termo de Aceite Definitivo — só pode ser anexado após 90 dias corridos da data do termo provisório
+  termoAceiteDefinitivoData?: string;
+  termoAceiteDefinitivoFileName?: string;
+  termoAceiteDefinitivoFileSize?: string;
+  termoAceiteDefinitivoUploadedAt?: string;
 
   // Modelo novo (Nível 1, por seção) — ver src/utils/validacaoTecnica.ts
   statusSecoes?: Record<SecaoDadosGerais, StatusSecao>;
@@ -311,6 +325,10 @@ export interface Solicitacao {
   observacoesAnalistaDadosGerais?: string;
   observacoesAnalistaChecklist?: string;
   outrosDocumentos?: DocumentoChecklist[];
+
+  // Checklist de documentos obrigatórios da GED (Execução → Documentações), anexados pelo
+  // fiscal da obra — ver montarChecklistGED. Itens obrigatórios bloqueiam a Conclusão de Obra.
+  documentosGED?: DocumentoChecklist[];
 
   // Submenu de Acompanhamento da Obra
   diariosObra?: {
@@ -340,6 +358,15 @@ export interface Solicitacao {
     resultado?: string;
     nomeRelatorio?: string;
     tamanhoRelatorio?: string;
+  }[];
+  // Lições aprendidas — preenchidas pelo engenheiro; pelo menos 1 é exigida para liberar o
+  // encerramento da obra (checklist de conclusão em SolicitacaoDetalhes)
+  licoesAprendidas?: {
+    id: string;
+    descricao: string;
+    categoria?: 'Técnica' | 'Gestão' | 'Cronograma' | 'Fornecedor' | 'Financeira' | 'Outros';
+    dataRegistro: string;
+    autor?: string;
   }[];
 
   // Saldo Complementar de Obra Distratada
@@ -377,7 +404,10 @@ export interface SaldoComplementarItem {
   valorLiberado: number;
   valorPago: number;
   saldoEmConta: number;
-  necessidadeAditivo: number;
+  // Legado — não é mais preenchida na criação (era uma estimativa manual; os demais campos
+  // acima já vêm do PAF/execução da empresa distratada). Mantida opcional só por compatibilidade
+  // com registros já gravados antes dessa mudança.
+  necessidadeAditivo?: number;
   // Documentos
   documentos: { item: string; obrigatorio: boolean; checked: boolean; fileName?: string }[];
 }
@@ -562,13 +592,39 @@ export function montarChecklistCanonico(
     herdar({ id: 'doc_4', nome: 'Parecer técnico', obrigatorio: true, desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada.' }, achar('doc_4')),
     herdar({ id: 'doc_ata', nome: 'Ata do Colegiado', obrigatorio: true, desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.' }, achar('doc_ata')),
     herdar({ id: 'doc_foto', nome: 'Relatório fotográfico', obrigatorio: true, desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.' }, achar('doc_foto')),
-    herdar({ id: 'doc_5', nome: 'Imposto ISS', obrigatorio: false, desc: 'Guia ou comprovante de recolhimento tributário aplicável.' }, achar('doc_5')),
+    herdar({ id: 'doc_5', nome: 'Imposto ISS', obrigatorio: true, desc: 'Guia ou comprovante de recolhimento tributário aplicável.' }, achar('doc_5')),
   ];
 
   // Documentos condicionais já existentes entram preservados; syncChecklistDocs
   // decide se ficam, saem ou precisam ser criados conforme os campos atuais.
   const condicionais = existentes.filter(d => d.id === 'doc_notificacao' || d.id === 'doc_recurso_sem_onus');
   return syncChecklistDocs([...canonicos, ...condicionais], origemOuNotificacao, formaAtendimento);
+}
+
+// Reconstrói o checklist obrigatório da GED (Execução → Documentações), preservando os dados
+// de upload dos já existentes. Anexado pelo fiscal da obra; itens obrigatórios bloqueiam a
+// liberação da Conclusão de Obra (ver checklist em SolicitacaoDetalhes.tsx).
+export function montarChecklistGED(existentes: DocumentoChecklist[] = []): DocumentoChecklist[] {
+  const achar = (id: string) => existentes.find(d => d.id === id);
+
+  const herdar = (
+    base: Pick<DocumentoChecklist, 'id' | 'nome' | 'obrigatorio' | 'desc'>,
+    doc?: DocumentoChecklist
+  ): DocumentoChecklist => ({
+    ...base,
+    fileName: doc?.fileName,
+    fileSize: doc?.fileSize,
+    uploadedAt: doc?.uploadedAt,
+    fileContent: doc?.fileContent,
+    fileType: doc?.fileType,
+    status: doc?.status || 'pendente',
+    justificativa: doc?.justificativa,
+  });
+
+  return [
+    herdar({ id: 'ged_art', nome: 'ART — Anotação de Responsabilidade Técnica', obrigatorio: true, desc: 'Anotação de Responsabilidade Técnica (CREA/CAU) do(s) profissional(is) responsável(is) pela execução da obra.' }, achar('ged_art')),
+    herdar({ id: 'ged_projetos', nome: 'Projetos de Execução do Objeto', obrigatorio: true, desc: 'Projetos técnicos necessários para a execução do objeto (arquitetônico, estrutural e complementares, conforme aplicável).' }, achar('ged_projetos')),
+  ];
 }
 
 export interface EmpresaSeguranca {

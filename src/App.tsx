@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, DocumentoChecklist, computeStatusObra, montarChecklistCanonico } from './types';
-import { recalcularPrioridade } from './utils/prioridade';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, DocumentoChecklist, computeStatusObra, montarChecklistCanonico, montarChecklistGED } from './types';
+import { recalcularPrioridade, calcularPontuacaoAutorizacaoPAF } from './utils/prioridade';
 import { recalcularIEE } from './utils/iee';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
 import Dashboard from './components/Dashboard';
@@ -29,6 +29,7 @@ import {
   resolverUsuarioIdPorNome,
   sincronizarDocumentosDaSolicitacao,
   sincronizarHistoricoEtapas,
+  sincronizarParcelasDaSolicitacao,
   normalizarSre,
   formatarTamanhoArquivo,
 } from './lib/persistencia';
@@ -445,7 +446,7 @@ export default function App() {
         { id: 'doc_4', nome: 'Parecer técnico', obrigatorio: true, desc: 'Parecer descritivo emitido pela equipe de engenharia habilitada.', status: 'pendente' },
         { id: 'doc_ata', nome: 'Ata do Colegiado', obrigatorio: true, desc: 'Ata de reunião do colegiado escolar aprovando a demanda de intervenção.', status: 'pendente' },
         { id: 'doc_foto', nome: 'Relatório fotográfico', obrigatorio: true, desc: 'Relatório com fotos nítidas dos locais que necessitam de reforma/intervenção, com legendas explicativas.', status: 'pendente' },
-        { id: 'doc_5', nome: 'Imposto ISS', obrigatorio: false, desc: 'Guia ou comprovante de recolhimento tributário aplicável.', status: 'pendente' }
+        { id: 'doc_5', nome: 'Imposto ISS', obrigatorio: true, desc: 'Guia ou comprovante de recolhimento tributário aplicável.', status: 'pendente' }
       ],
       medicoes: [],
       aditivos: []
@@ -499,10 +500,10 @@ export default function App() {
     setEmpIdEmEdicao(emp.id);
     setEmpNome(emp.nome);
     setEmpCnpj(emp.cnpj);
-    setEmpResp(emp.responsavelTecnico);
-    setEmpSit(emp.situacaoCadastral);
-    setEmpTel(emp.telefone);
-    setEmpMail(emp.email);
+    setEmpResp(emp.responsavelTecnico ?? '');
+    setEmpSit(emp.situacaoCadastral ?? 'Regular');
+    setEmpTel(emp.telefone ?? '');
+    setEmpMail(emp.email ?? '');
     setShowEditarEmpresaModal(true);
   };
 
@@ -599,7 +600,8 @@ export default function App() {
             origemDemanda: row.origem_demanda ?? undefined,
             numPaf: row.num_paf ?? undefined,
             anoEmenda: row.ano_emenda ?? undefined,
-            emendaImpositiva: row.emenda_impositiva ?? undefined,
+            tipoEmenda: row.tipo_emenda ?? undefined,
+            numeroIndicacaoEmenda: row.numero_indicacao_emenda ?? undefined,
             descricaoFolhaRosto: row.descricao_folha_rosto ?? undefined,
             valorHomologado: row.valor_homologado ?? undefined,
             numeroPAF: row.numero_paf ?? undefined,
@@ -639,6 +641,24 @@ export default function App() {
             dataAprovacaoRegional: row.data_aprovacao_regional ?? undefined,
             justificativaReprovacaoRegional: row.justificativa_reprovacao_regional ?? undefined,
             fiscalObraAtribuidoId: row.fiscal_obra_atribuido_id ?? undefined,
+            dataConclusao: row.data_conclusao ?? undefined,
+            laudoConclusivoFileName: row.laudo_conclusivo_file_name ?? undefined,
+            laudoConclusivoFileSize: row.laudo_conclusivo_file_size ?? undefined,
+            laudoConclusivoUploadedAt: row.laudo_conclusivo_uploaded_at ?? undefined,
+            relatorioFotograficoFileName: row.relatorio_fotografico_file_name ?? undefined,
+            relatorioFotograficoFileSize: row.relatorio_fotografico_file_size ?? undefined,
+            relatorioFotograficoUploadedAt: row.relatorio_fotografico_uploaded_at ?? undefined,
+            planilhaMedicaoFinalFileName: row.planilha_medicao_final_file_name ?? undefined,
+            planilhaMedicaoFinalFileSize: row.planilha_medicao_final_file_size ?? undefined,
+            planilhaMedicaoFinalUploadedAt: row.planilha_medicao_final_uploaded_at ?? undefined,
+            termoAceiteProvisorioData: row.termo_aceite_provisorio_data ?? undefined,
+            termoAceiteProvisorioFileName: row.termo_aceite_provisorio_file_name ?? undefined,
+            termoAceiteProvisorioFileSize: row.termo_aceite_provisorio_file_size ?? undefined,
+            termoAceiteProvisorioUploadedAt: row.termo_aceite_provisorio_uploaded_at ?? undefined,
+            termoAceiteDefinitivoData: row.termo_aceite_definitivo_data ?? undefined,
+            termoAceiteDefinitivoFileName: row.termo_aceite_definitivo_file_name ?? undefined,
+            termoAceiteDefinitivoFileSize: row.termo_aceite_definitivo_file_size ?? undefined,
+            termoAceiteDefinitivoUploadedAt: row.termo_aceite_definitivo_uploaded_at ?? undefined,
             statusObra: statusObraDoBanco(row.status_obra),
             statusSecoes: {
               identificacao_escolar: { status: row.status_identificacao_escolar, motivo: row.motivo_identificacao_escolar ?? undefined },
@@ -970,6 +990,42 @@ export default function App() {
             }
           }
 
+          // Carrega as lições aprendidas registradas de cada solicitação
+          let comLicoesAprendidas = comVistorias;
+          if (dbIds.length > 0) {
+            const { data: licoesData, error: licoesError } = await supabase
+              .from('licoes_aprendidas_obra')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: false });
+
+            if (licoesError) {
+              console.error('Erro ao carregar lições aprendidas de obra:', licoesError);
+            } else if (licoesData) {
+              const porSolicitacaoLicao = new Map<string, any[]>();
+              (licoesData as any[]).forEach((row) => {
+                const lista = porSolicitacaoLicao.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoLicao.set(row.solicitacao_id, lista);
+              });
+
+              comLicoesAprendidas = comVistorias.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoLicao.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  licoesAprendidas: linhas.map((row: any) => ({
+                    id: row.id,
+                    descricao: row.descricao ?? '',
+                    categoria: row.categoria ?? undefined,
+                    dataRegistro: row.created_at ? String(row.created_at).slice(0, 10) : '',
+                    autor: row.usuario_id ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
           // Carrega o checklist documental e o histórico de etapas; o que ainda não
           // existe no banco é hidratado do localStorage (recuperação da era pré-persistência)
           const localPorCodigo = new Map<string, Solicitacao>();
@@ -982,13 +1038,13 @@ export default function App() {
             console.warn('localStorage ilegível — carga segue sem recuperação local:', e);
           }
 
-          let comDocumentos = comVistorias;
+          let comDocumentos = comLicoesAprendidas;
           if (dbIds.length > 0) {
             const { data: docsData, error: docsError } = await supabase
               .from('documentos')
               .select('*')
               .in('solicitacao_id', dbIds)
-              .in('categoria', ['checklist_obrigatorio', 'checklist_outros']);
+              .in('categoria', ['checklist_obrigatorio', 'checklist_outros', 'ged_execucao']);
 
             const { data: histData, error: histError } = await supabase
               .from('solicitacao_historico_etapas')
@@ -1013,13 +1069,14 @@ export default function App() {
               histPorSolicitacao.set(row.solicitacao_id, lista);
             });
 
-            comDocumentos = comVistorias.map(sol => {
+            comDocumentos = comLicoesAprendidas.map(sol => {
               const solLocal = localPorCodigo.get(sol.id);
               const linhasDoc = sol._dbId ? docsPorSolicitacao.get(sol._dbId) : undefined;
               const linhasHist = sol._dbId ? histPorSolicitacao.get(sol._dbId) : undefined;
 
               let documentos: DocumentoChecklist[];
               let outrosDocumentos = sol.outrosDocumentos;
+              let documentosGED = sol.documentosGED;
 
               if (linhasDoc && linhasDoc.length > 0) {
                 // Banco é a fonte; base64 (fileContent) só existe no navegador que fez o upload
@@ -1056,11 +1113,31 @@ export default function App() {
                     uploadedAt: row.uploaded_at ? String(row.uploaded_at).split('T')[0] : undefined,
                     fileContent: solLocal?.outrosDocumentos?.find(d => d.nome === row.nome_logico && d.fileName === row.file_name)?.fileContent,
                   }));
+
+                const porNomeLogicoGED = new Map<string, any>(
+                  linhasDoc.filter(r => r.categoria === 'ged_execucao').map(r => [r.nome_logico, r])
+                );
+                documentosGED = montarChecklistGED([]).map(doc => {
+                  const row = porNomeLogicoGED.get(doc.id);
+                  if (!row) return doc;
+                  const docLocal = solLocal?.documentosGED?.find(d => d.id === doc.id);
+                  return {
+                    ...doc,
+                    status: row.status ?? doc.status,
+                    justificativa: row.justificativa ?? undefined,
+                    fileName: row.file_name ?? undefined,
+                    fileType: row.file_type ?? undefined,
+                    fileSize: formatarTamanhoArquivo(row.file_size_bytes),
+                    uploadedAt: row.uploaded_at ? String(row.uploaded_at).split('T')[0] : undefined,
+                    fileContent: docLocal && docLocal.fileName === row.file_name ? docLocal.fileContent : undefined,
+                  };
+                });
               } else {
                 // Recuperação: dados que o bug antigo descartava continuam no localStorage;
                 // serão persistidos no banco no próximo save desta solicitação
                 documentos = montarChecklistCanonico(solLocal?.documentos, sol.origemDemanda, sol.formaAtendimento);
                 outrosDocumentos = solLocal?.outrosDocumentos ?? undefined;
+                documentosGED = montarChecklistGED(solLocal?.documentosGED);
               }
 
               const historicoEtapas = (linhasHist && linhasHist.length > 0)
@@ -1071,7 +1148,7 @@ export default function App() {
                   }))
                 : (solLocal?.historicoEtapas ?? []);
 
-              return { ...sol, documentos, outrosDocumentos, historicoEtapas };
+              return { ...sol, documentos, outrosDocumentos, documentosGED, historicoEtapas };
             });
           }
 
@@ -1167,7 +1244,42 @@ export default function App() {
             }
           }
 
-          setSolicitacoes(comSaldos);
+          // Carrega as parcelas do PAF (recursos liberados) de cada solicitação
+          let comParcelas = comSaldos;
+          if (dbIds.length > 0) {
+            const { data: parcelasData, error: parcelasError } = await supabase
+              .from('parcelas_paf')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('data_pagamento', { ascending: true });
+
+            if (parcelasError) {
+              console.error('Erro ao carregar parcelas do PAF:', parcelasError);
+            } else if (parcelasData) {
+              const porSolicitacaoParcela = new Map<string, any[]>();
+              (parcelasData as any[]).forEach((row) => {
+                const lista = porSolicitacaoParcela.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoParcela.set(row.solicitacao_id, lista);
+              });
+
+              comParcelas = comSaldos.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoParcela.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                return {
+                  ...sol,
+                  parcelasPAF: linhas.map((row: any) => ({
+                    id: row.id,
+                    valor: row.valor ?? 0,
+                    dataPagamento: row.data_pagamento ?? '',
+                    ordemPagamento: row.ordem_pagamento ?? undefined,
+                  })),
+                };
+              });
+            }
+          }
+
+          setSolicitacoes(comParcelas);
           return;
         }
       } catch (e) {
@@ -1305,7 +1417,8 @@ export default function App() {
           origem_demanda: sol.origemDemanda ?? null,
           num_paf: sol.numPaf ?? null,
           ano_emenda: sol.anoEmenda ?? null,
-          emenda_impositiva: sol.emendaImpositiva ?? null,
+          tipo_emenda: sol.tipoEmenda ?? null,
+          numero_indicacao_emenda: sol.numeroIndicacaoEmenda ?? null,
           descricao_folha_rosto: sol.descricaoFolhaRosto ?? null,
           valor_planilha: sol.valorPlanilha ?? null,
           valor_homologado: sol.valorHomologado ?? null,
@@ -1353,6 +1466,26 @@ export default function App() {
           analista_atribuido_id: resolverUsuarioIdPorNome(usuariosSeguranca, sol.analistaAtribuido),
           // Preferência: id explícito escolhido na UI (main); fallback: resolução por nome
           fiscal_obra_atribuido_id: sol.fiscalObraAtribuidoId ?? resolverUsuarioIdPorNome(usuariosSeguranca, sol.fiscalObraAtribuido),
+          // Campos da aba Conclusão de Obra
+          data_conclusao: dataOuNull(sol.dataConclusao),
+          laudo_conclusivo_file_name: sol.laudoConclusivoFileName ?? null,
+          laudo_conclusivo_file_size: sol.laudoConclusivoFileSize ?? null,
+          laudo_conclusivo_uploaded_at: dataOuNull(sol.laudoConclusivoUploadedAt),
+          relatorio_fotografico_file_name: sol.relatorioFotograficoFileName ?? null,
+          relatorio_fotografico_file_size: sol.relatorioFotograficoFileSize ?? null,
+          relatorio_fotografico_uploaded_at: dataOuNull(sol.relatorioFotograficoUploadedAt),
+          planilha_medicao_final_file_name: sol.planilhaMedicaoFinalFileName ?? null,
+          planilha_medicao_final_file_size: sol.planilhaMedicaoFinalFileSize ?? null,
+          planilha_medicao_final_uploaded_at: dataOuNull(sol.planilhaMedicaoFinalUploadedAt),
+          // Termo de Aceite Provisório/Definitivo — regra dos 90 dias entre os dois
+          termo_aceite_provisorio_data: dataOuNull(sol.termoAceiteProvisorioData),
+          termo_aceite_provisorio_file_name: sol.termoAceiteProvisorioFileName ?? null,
+          termo_aceite_provisorio_file_size: sol.termoAceiteProvisorioFileSize ?? null,
+          termo_aceite_provisorio_uploaded_at: dataOuNull(sol.termoAceiteProvisorioUploadedAt),
+          termo_aceite_definitivo_data: dataOuNull(sol.termoAceiteDefinitivoData),
+          termo_aceite_definitivo_file_name: sol.termoAceiteDefinitivoFileName ?? null,
+          termo_aceite_definitivo_file_size: sol.termoAceiteDefinitivoFileSize ?? null,
+          termo_aceite_definitivo_uploaded_at: dataOuNull(sol.termoAceiteDefinitivoUploadedAt),
           updated_at: new Date().toISOString()
         }, { onConflict: 'codigo_sgo' })
         .select('id')
@@ -1363,6 +1496,7 @@ export default function App() {
 
     await sincronizarDocumentosDaSolicitacao(dbId, sol, usuarioId);
     await sincronizarHistoricoEtapas(dbId, sol, usuarioId);
+    await sincronizarParcelasDaSolicitacao(dbId, sol);
     return dbId;
   };
 
@@ -1422,7 +1556,7 @@ export default function App() {
           { id: 'doc_2', nome: 'Planilha de Orçamentos SGO', obrigatorio: true, desc: 'Orçamento quantitativo detalhado com bdi.', status: 'pendente' },
           { id: 'doc_3', nome: 'Cronograma Físico-Financeiro', obrigatorio: true, desc: 'Planejamento de evolução temporal.', status: 'pendente' },
           { id: 'doc_4', nome: 'Parecer técnico', obrigatorio: true, desc: 'Parecer descritivo emitido pela equipe.', status: 'pendente' },
-          { id: 'doc_5', nome: 'Imposto ISS', obrigatorio: false, desc: 'Comprovante tributário aplicável.', status: 'pendente' }
+          { id: 'doc_5', nome: 'Imposto ISS', obrigatorio: true, desc: 'Comprovante tributário aplicável.', status: 'pendente' }
         ],
         medicoes: [],
         aditivos: []
@@ -1445,7 +1579,7 @@ export default function App() {
           { id: 'doc_2', nome: 'Planilha de Orçamentos SGO', obrigatorio: true, desc: 'Orçamento quantitativo.', fileName: 'orcamento_Drummond.xlsx', fileSize: '2.5 MB', uploadedAt: new Date().toISOString().split('T')[0], status: 'pendente' },
           { id: 'doc_3', nome: 'Cronograma Físico-Financeiro', obrigatorio: true, desc: 'Planejamento de evolução temporal.', fileName: 'cronograma_Drummond.xlsx', fileSize: '1.1 MB', uploadedAt: new Date().toISOString().split('T')[0], status: 'pendente' },
           { id: 'doc_4', nome: 'Parecer técnico', obrigatorio: true, desc: 'Parecer descritivo.', fileName: 'parecer_Drummond.pdf', fileSize: '1.8 MB', uploadedAt: new Date().toISOString().split('T')[0], status: 'pendente' },
-          { id: 'doc_5', nome: 'Imposto ISS', obrigatorio: false, desc: 'Comprovante tributário aplicável.', status: 'pendente' }
+          { id: 'doc_5', nome: 'Imposto ISS', obrigatorio: true, desc: 'Comprovante tributário aplicável.', status: 'pendente' }
         ],
         medicoes: [],
         aditivos: []
@@ -2731,6 +2865,7 @@ export default function App() {
                 }
               }}
               perfilUsuario={perfilUsuario}
+              onUpdate={handleUpdateSolicitacao}
             />
           ) : activeModule === 'gestao_obras' && activeSubTask === 'paf_autorizacao' && !idSolicitacaoSelecionada ? (
             (() => {
@@ -2742,13 +2877,18 @@ export default function App() {
               const uniqueMunicipio = Array.from(new Set(schoolsInAutorizacao.map(s => s.municipio).filter(Boolean)));
               const uniqueEscola = Array.from(new Set(schoolsInAutorizacao.map(s => s.nomeEscola).filter(Boolean)));
 
-              const filteredSchoolsInAutorizacao = schoolsInAutorizacao.filter(s => {
-                if (filterCodesc && s.codesc !== filterCodesc) return false;
-                if (filterSre && s.sre !== filterSre) return false;
-                if (filterMunicipio && s.municipio !== filterMunicipio) return false;
-                if (filterEscola && s.nomeEscola !== filterEscola) return false;
-                return true;
-              });
+              // Ranking técnico da fila: quanto maior a pontuação, maior a prioridade sugerida
+              // para o subsecretário autorizar primeiro. Ver critérios em calcularPontuacaoAutorizacaoPAF.
+              const filteredSchoolsInAutorizacao = schoolsInAutorizacao
+                .filter(s => {
+                  if (filterCodesc && s.codesc !== filterCodesc) return false;
+                  if (filterSre && s.sre !== filterSre) return false;
+                  if (filterMunicipio && s.municipio !== filterMunicipio) return false;
+                  if (filterEscola && s.nomeEscola !== filterEscola) return false;
+                  return true;
+                })
+                .map(s => ({ sol: s, ranking: calcularPontuacaoAutorizacaoPAF(s) }))
+                .sort((a, b) => b.ranking.pontos - a.ranking.pontos);
 
               const handleAutorizarPAF = (s: Solicitacao) => {
                 const updated: Solicitacao = {
@@ -2919,6 +3059,7 @@ export default function App() {
                         <table className="w-full text-left border-collapse font-sans text-xs">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 font-bold uppercase tracking-wider text-[10px] h-11">
+                              <th className="py-3 px-4 w-16 text-center" title="Ranking técnico sugerido — quanto maior a pontuação, maior a prioridade de autorização">Rank</th>
                               <th className="py-3 px-4 w-28">Obra ID</th>
                               <th className="py-3 px-4">Escola</th>
                               <th className="py-3 px-4">SRE</th>
@@ -2930,10 +3071,23 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {filteredSchoolsInAutorizacao.map((sol) => {
+                            {filteredSchoolsInAutorizacao.map(({ sol, ranking }, index) => {
                               const valorObra = sol.valorPlanilha || sol.valorHomologado || 0;
+                              const tituloRanking = ranking.criterios
+                                .filter(c => c.pontos > 0)
+                                .map(c => `${c.criterio}: +${c.pontos}`)
+                                .join('\n') || 'Sem pontuação adicional';
                               return (
                                 <tr key={sol.id} className="hover:bg-slate-50/50 transition-colors group">
+                                  {/* Rank técnico */}
+                                  <td className="py-4 px-4 text-center" title={tituloRanking}>
+                                    <span className="inline-flex flex-col items-center gap-0.5">
+                                      <span className="text-[10px] font-black text-slate-400 font-mono">#{index + 1}</span>
+                                      <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-[10px] font-extrabold font-mono">
+                                        {ranking.pontos} pts
+                                      </span>
+                                    </span>
+                                  </td>
                                   {/* ID da Obra */}
                                   <td className="py-4 px-4 font-mono font-bold text-blue-800">
                                     <button 
@@ -3813,10 +3967,7 @@ export default function App() {
                   {activeSubTask === 'novo_atendimento' ? (
                     <NovoAtendimentoPanel
                       solicitacoes={solicitacoesVisiveis}
-                      onSolicitacaoCriada={(nova) => {
-                        handleNovaSolicitacao(nova);
-                        setActiveSubTask('cadastro');
-                      }}
+                      onSolicitacaoCriada={handleNovaSolicitacao}
                       onUpdateSolicitacao={handleUpdateSolicitacao}
                       usuariosSeguranca={usuariosSeguranca}
                       onEdit={setSolicitacaoEmEdicao}
@@ -3824,6 +3975,7 @@ export default function App() {
                       sreDoTecnico={sreDoTecnico}
                       atendimentoEmEdicaoDirect={atendimentoEmEdicaoDirect}
                       onLimparEdicaoDirect={() => setAtendimentoEmEdicaoDirect(null)}
+                      onFinalizarCriacao={() => setActiveSubTask('cadastro')}
                     />
                   ) : activeSubTask === 'aprovacao_regional' ? (
                     <AprovacaoRegionalPanel
@@ -3831,6 +3983,7 @@ export default function App() {
                       onUpdateSolicitacao={handleUpdateSolicitacao}
                       regionaisDoCoordenador={regionaisDoTecnico}
                       nomeCoordenador={nomeCoordenadorLogado}
+                      onVisualizarProcesso={handleEditarAtendimento}
                     />
                   ) : activeSubTask === 'analise_atribuicao' ? (() => {
                     const filaAtivaCount = solicitacoesVisiveis.filter(s => s.etapaAtual === 'analise' || s.etapaAtual === 'correcao').length;

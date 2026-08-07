@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, UsuarioSistema, ParcelaPAF } from '../types';
+import { Solicitacao, EtapaProcesso, PerfilUsuario, DocumentoChecklist, UsuarioSistema, ParcelaPAF, montarChecklistGED } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { supabase } from '../lib/supabase';
 import { gerarParecerIA } from './GeradorParecerIA';
@@ -10,7 +10,7 @@ import {
   ArrowLeft, Calendar, FileText, CheckCircle, XCircle, AlertCircle, AlertTriangle, TrendingUp,
   UploadCloud, Sparkles, DollarSign, Building, Plus, Trash2,
   ChevronRight, RefreshCw, Layers, Shield, FileCheck, HardHat, Info, UserCheck, User, History, Paperclip, Play,
-  Download, Undo2, Ban
+  Download, Undo2, Ban, Lock
 } from 'lucide-react';
 
 const cnpjCaixaEscolarMap: Record<string, string> = {
@@ -919,6 +919,8 @@ ${totalPendencias > 0
   const laudoConclusivoInputRef = useRef<HTMLInputElement | null>(null);
   const relatorioFotograficoInputRef = useRef<HTMLInputElement | null>(null);
   const planilhaMedicaoFinalInputRef = useRef<HTMLInputElement | null>(null);
+  const termoAceiteProvisorioInputRef = useRef<HTMLInputElement | null>(null);
+  const termoAceiteDefinitivoInputRef = useRef<HTMLInputElement | null>(null);
 
   const [dataConclusaoInput, setDataConclusaoInput] = useState(solicitacao.dataConclusao || '');
   const [laudoConclusivoFileName, setLaudoConclusivoFileName] = useState(solicitacao.laudoConclusivoFileName || '');
@@ -932,6 +934,38 @@ ${totalPendencias > 0
   const [planilhaMedicaoFinalFileName, setPlanilhaMedicaoFinalFileName] = useState(solicitacao.planilhaMedicaoFinalFileName || '');
   const [planilhaMedicaoFinalFileSize, setPlanilhaMedicaoFinalFileSize] = useState(solicitacao.planilhaMedicaoFinalFileSize || '');
   const [planilhaMedicaoFinalUploadedAt, setPlanilhaMedicaoFinalUploadedAt] = useState(solicitacao.planilhaMedicaoFinalUploadedAt || '');
+
+  const [termoAceiteProvisorioDataInput, setTermoAceiteProvisorioDataInput] = useState(solicitacao.termoAceiteProvisorioData || '');
+  const [termoAceiteProvisorioFileName, setTermoAceiteProvisorioFileName] = useState(solicitacao.termoAceiteProvisorioFileName || '');
+  const [termoAceiteProvisorioFileSize, setTermoAceiteProvisorioFileSize] = useState(solicitacao.termoAceiteProvisorioFileSize || '');
+  const [termoAceiteProvisorioUploadedAt, setTermoAceiteProvisorioUploadedAt] = useState(solicitacao.termoAceiteProvisorioUploadedAt || '');
+
+  const [termoAceiteDefinitivoDataInput, setTermoAceiteDefinitivoDataInput] = useState(solicitacao.termoAceiteDefinitivoData || '');
+  const [termoAceiteDefinitivoFileName, setTermoAceiteDefinitivoFileName] = useState(solicitacao.termoAceiteDefinitivoFileName || '');
+  const [termoAceiteDefinitivoFileSize, setTermoAceiteDefinitivoFileSize] = useState(solicitacao.termoAceiteDefinitivoFileSize || '');
+  const [termoAceiteDefinitivoUploadedAt, setTermoAceiteDefinitivoUploadedAt] = useState(solicitacao.termoAceiteDefinitivoUploadedAt || '');
+
+  // Regra dos 90 dias: o Termo de Aceite Definitivo só pode ser emitido após 90 dias corridos
+  // da data do Termo de Aceite Provisório (não a data de upload do arquivo)
+  const diasDesdeTermoProvisorio = termoAceiteProvisorioDataInput
+    ? Math.floor((Date.now() - new Date(`${termoAceiteProvisorioDataInput}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const dataLimiteTermoDefinitivo = termoAceiteProvisorioDataInput
+    ? (() => {
+        const d = new Date(`${termoAceiteProvisorioDataInput}T00:00:00`);
+        d.setDate(d.getDate() + 90);
+        return d;
+      })()
+    : null;
+  const checkTermoAceiteProvisorio = !!termoAceiteProvisorioFileName && !!termoAceiteProvisorioDataInput;
+  const prazo90DiasTermoProvisorioCumprido = checkTermoAceiteProvisorio && (diasDesdeTermoProvisorio ?? 0) >= 90;
+  const checkTermoAceiteDefinitivo = prazo90DiasTermoProvisorioCumprido && !!termoAceiteDefinitivoFileName;
+
+  // Documentos obrigatórios da GED (Execução → Documentações, ex.: ART, Projetos) — anexados
+  // pelo fiscal na aba GED; bloqueiam a Conclusão de Obra enquanto pendentes.
+  const documentosGEDConclusao = montarChecklistGED(solicitacao.documentosGED);
+  const documentosGEDPendentes = documentosGEDConclusao.filter(d => d.obrigatorio && !d.fileName);
+  const checkDocumentosGED = documentosGEDPendentes.length === 0;
 
   const parsedValor = valorHomologadoContratacaoInput ? parseFloat(valorHomologadoContratacaoInput) : 0;
   const parsedMeses = calcularDuracaoMeses(dataOrdemInicioInput, previsaoTerminoInput);
@@ -986,6 +1020,16 @@ ${totalPendencias > 0
     setPlanilhaMedicaoFinalFileSize(solicitacao.planilhaMedicaoFinalFileSize || '');
     setPlanilhaMedicaoFinalUploadedAt(solicitacao.planilhaMedicaoFinalUploadedAt || '');
 
+    setTermoAceiteProvisorioDataInput(solicitacao.termoAceiteProvisorioData || '');
+    setTermoAceiteProvisorioFileName(solicitacao.termoAceiteProvisorioFileName || '');
+    setTermoAceiteProvisorioFileSize(solicitacao.termoAceiteProvisorioFileSize || '');
+    setTermoAceiteProvisorioUploadedAt(solicitacao.termoAceiteProvisorioUploadedAt || '');
+
+    setTermoAceiteDefinitivoDataInput(solicitacao.termoAceiteDefinitivoData || '');
+    setTermoAceiteDefinitivoFileName(solicitacao.termoAceiteDefinitivoFileName || '');
+    setTermoAceiteDefinitivoFileSize(solicitacao.termoAceiteDefinitivoFileSize || '');
+    setTermoAceiteDefinitivoUploadedAt(solicitacao.termoAceiteDefinitivoUploadedAt || '');
+
     // Sync PAF related fields
     setNumPAFInput(solicitacao.numeroPAF || '');
     const initialDataCreation = solicitacao.dataHomologacao || new Date().toISOString().split('T')[0];
@@ -1020,7 +1064,11 @@ ${totalPendencias > 0
     solicitacao.dataConclusao,
     solicitacao.laudoConclusivoFileName,
     solicitacao.relatorioFotograficoFileName,
-    solicitacao.planilhaMedicaoFinalFileName
+    solicitacao.planilhaMedicaoFinalFileName,
+    solicitacao.termoAceiteProvisorioData,
+    solicitacao.termoAceiteProvisorioFileName,
+    solicitacao.termoAceiteDefinitivoData,
+    solicitacao.termoAceiteDefinitivoFileName
   ]);
 
   const handleCronogramaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1265,6 +1313,26 @@ ${totalPendencias > 0
       alert("Por favor, anexe a Planilha de Medição Acumulada Final.");
       return;
     }
+    if ((solicitacao.licoesAprendidas || []).length === 0) {
+      alert("Registre pelo menos 1 lição aprendida na aba \"Lições Aprendidas\" de Acompanhamento da Obra antes de encerrar.");
+      return;
+    }
+    if (!checkTermoAceiteProvisorio) {
+      alert("Por favor, informe a data e anexe o Termo de Aceite Provisório.");
+      return;
+    }
+    if (!prazo90DiasTermoProvisorioCumprido) {
+      alert(`Ainda não decorreram 90 dias da data do Termo de Aceite Provisório (${new Date(termoAceiteProvisorioDataInput + 'T00:00:00').toLocaleDateString('pt-BR')}). O Termo de Aceite Definitivo só pode ser emitido a partir de ${dataLimiteTermoDefinitivo?.toLocaleDateString('pt-BR')}.`);
+      return;
+    }
+    if (!termoAceiteDefinitivoFileName) {
+      alert("Por favor, anexe o Termo de Aceite Definitivo.");
+      return;
+    }
+    if (!checkDocumentosGED) {
+      alert(`Anexe os documentos obrigatórios pendentes na aba "Documentações (GED)" de Execução: ${documentosGEDPendentes.map(d => d.nome).join(', ')}.`);
+      return;
+    }
 
     onUpdate({
       ...solicitacao,
@@ -1278,7 +1346,15 @@ ${totalPendencias > 0
       relatorioFotograficoUploadedAt,
       planilhaMedicaoFinalFileName,
       planilhaMedicaoFinalFileSize,
-      planilhaMedicaoFinalUploadedAt
+      planilhaMedicaoFinalUploadedAt,
+      termoAceiteProvisorioData: termoAceiteProvisorioDataInput,
+      termoAceiteProvisorioFileName,
+      termoAceiteProvisorioFileSize,
+      termoAceiteProvisorioUploadedAt,
+      termoAceiteDefinitivoData: termoAceiteDefinitivoDataInput,
+      termoAceiteDefinitivoFileName,
+      termoAceiteDefinitivoFileSize,
+      termoAceiteDefinitivoUploadedAt
     });
 
     alert("Conclusão de Obra salva e protocolada com sucesso! O status da obra foi atualizado para 'Concluída'.");
@@ -2430,16 +2506,6 @@ ${totalPendencias > 0
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Left Column: Form Info */}
               <div className="lg:col-span-2 space-y-6">
-                {perfilUsuario !== 'administrativo_dore' && (
-                  <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs space-y-1.5 text-left font-sans flex items-start gap-2.5">
-                    <span className="text-base select-none leading-none mt-0.5">⚠️</span>
-                    <div className="space-y-0.5">
-                      <strong className="font-extrabold block text-amber-955">Ação Restrita: Controle Exclusivo da Área Administrativa DORE</strong>
-                      <span>O seu perfil de simulação atual é <strong>{perfilUsuario.toUpperCase()}</strong>. Para preencher, alterar ou oficializar as informações de Geração do PAF nesta Etapa 4, por favor altere seu perfil para <strong>Rui Lages (Administrativo DORE)</strong> no seletor de usuários no cabeçalho.</span>
-                    </div>
-                  </div>
-                )}
-
                 <form onSubmit={salvarPAF} className="space-y-6">
                   {/* Bloco 1: Acompanhamento do PAF */}
                   <div className="bg-neutral-50 p-6 rounded-xl border border-neutral-200 space-y-4 text-left font-sans">
@@ -2706,11 +2772,6 @@ ${totalPendencias > 0
                       </span>
                     </div>
                   </div>
-                </div>
-
-                <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl text-[11px] text-orange-800">
-                  <span className="font-bold block text-xs mb-1">Acesso do Perfil:</span>
-                  Para editar essa aba, simule o perfil de <strong>Administrativo DORE</strong> (usuário Rui Lages) na barra superior.
                 </div>
               </div>
             </div>
@@ -3967,7 +4028,9 @@ ${totalPendencias > 0
 
           const checkOutrosProcessos = !!solicitacao.numeroPAF && solicitacao.statusPAF === 'Pago e Liberado';
 
-          const todosItensOk = checkContratoEncerrado && checkMedicoesAprovadas && checkFiscalizacaoOk && checkAditivosConcluidos && checkAjustesConcluidos && checkOutrosProcessos;
+          const checkLicoesAprendidas = (solicitacao.licoesAprendidas || []).length > 0;
+
+          const todosItensOk = checkContratoEncerrado && checkMedicoesAprovadas && checkFiscalizacaoOk && checkAditivosConcluidos && checkAjustesConcluidos && checkOutrosProcessos && checkLicoesAprendidas && checkTermoAceiteProvisorio && checkTermoAceiteDefinitivo && checkDocumentosGED;
 
           const ChecklistItem = ({ ok, label, desc }: { ok: boolean; label: string; desc: string }) => (
             <div className={`flex items-start gap-3 p-3 rounded-lg border ${ok ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
@@ -4038,6 +4101,40 @@ ${totalPendencias > 0
                   desc={checkOutrosProcessos
                     ? `PAF ${solicitacao.numeroPAF} — pago e liberado.`
                     : !solicitacao.numeroPAF ? 'PAF não gerado para esta obra.' : `PAF ${solicitacao.numeroPAF} — status: ${solicitacao.statusPAF || 'não informado'}. Aguardando pagamento e liberação.`}
+                />
+                <ChecklistItem
+                  ok={checkLicoesAprendidas}
+                  label="Lições aprendidas"
+                  desc={checkLicoesAprendidas
+                    ? `${(solicitacao.licoesAprendidas || []).length} lição(ões) aprendida(s) registrada(s) pelo engenheiro.`
+                    : 'Nenhuma lição aprendida registrada. Registre pelo menos 1 na aba "Lições Aprendidas" de Acompanhamento da Obra.'}
+                />
+                <ChecklistItem
+                  ok={checkTermoAceiteProvisorio}
+                  label="Termo de Aceite Provisório"
+                  desc={checkTermoAceiteProvisorio
+                    ? `Termo emitido em ${new Date(termoAceiteProvisorioDataInput + 'T00:00:00').toLocaleDateString('pt-BR')}.`
+                    : 'Termo de Aceite Provisório ainda não registrado. Informe a data de emissão e anexe o arquivo.'}
+                />
+                <ChecklistItem
+                  ok={checkTermoAceiteDefinitivo}
+                  label="Termo de Aceite Definitivo (90 dias do provisório)"
+                  desc={
+                    !checkTermoAceiteProvisorio
+                      ? 'Aguardando o registro do Termo de Aceite Provisório.'
+                      : !prazo90DiasTermoProvisorioCumprido
+                        ? `Aguardando o prazo de 90 dias corridos do Termo Provisório — faltam ${90 - (diasDesdeTermoProvisorio ?? 0)} dia(s), liberado em ${dataLimiteTermoDefinitivo?.toLocaleDateString('pt-BR')}.`
+                        : checkTermoAceiteDefinitivo
+                          ? `Termo emitido em ${new Date(termoAceiteDefinitivoDataInput + 'T00:00:00').toLocaleDateString('pt-BR')}.`
+                          : 'Prazo de 90 dias cumprido — anexe o Termo de Aceite Definitivo.'
+                  }
+                />
+                <ChecklistItem
+                  ok={checkDocumentosGED}
+                  label="Documentos obrigatórios da execução (GED)"
+                  desc={checkDocumentosGED
+                    ? `${documentosGEDConclusao.length} documento(s) obrigatório(s) anexado(s).`
+                    : `Pendente(s): ${documentosGEDPendentes.map(d => d.nome).join(', ')}. Anexe na aba "Documentações (GED)" em Execução.`}
                 />
               </div>
               {!todosItensOk && (
@@ -4323,6 +4420,204 @@ ${totalPendencias > 0
                         </div>
                       )}
                     </div>
+
+                    {/* 4. TERMO DE ACEITE PROVISÓRIO */}
+                    <div className="p-4 bg-slate-50/50 border border-slate-200 rounded-lg space-y-3">
+                      <div className="flex justify-between items-start flex-wrap gap-2 text-xs">
+                        <div>
+                          <span className="font-bold text-neutral-800 text-xs block">4. Termo de Aceite Provisório *</span>
+                          <span className="text-[10.5px] text-neutral-500 block leading-tight mt-0.5">
+                            Termo assinado que registra o aceite provisório da obra. A data informada abaixo é o marco inicial dos 90 dias corridos exigidos para o Termo de Aceite Definitivo.
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
+                          Data de Emissão do Termo Provisório *
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
+                          value={termoAceiteProvisorioDataInput}
+                          onChange={(e) => setTermoAceiteProvisorioDataInput(e.target.value)}
+                          className="w-full sm:w-56 text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white disabled:opacity-60"
+                        />
+                      </div>
+
+                      {termoAceiteProvisorioFileName ? (
+                        <div className="p-3 bg-white border border-neutral-200 rounded-lg flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-md shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="truncate">
+                              <span className="block text-xs font-bold text-neutral-800 break-all">{termoAceiteProvisorioFileName}</span>
+                              <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">
+                                Tamanho: {termoAceiteProvisorioFileSize} • Enviado em: {termoAceiteProvisorioUploadedAt ? new Date(termoAceiteProvisorioUploadedAt + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDocument(termoAceiteProvisorioFileName, "Termo de Aceite Provisório")}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 hover:bg-blue-50 rounded transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Baixar
+                            </button>
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTermoAceiteProvisorioFileName('');
+                                  setTermoAceiteProvisorioFileSize('');
+                                  setTermoAceiteProvisorioUploadedAt('');
+                                }}
+                                className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                              >
+                                Remover
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            ref={termoAceiteProvisorioInputRef}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+                              setTermoAceiteProvisorioFileName(file.name);
+                              setTermoAceiteProvisorioFileSize(sizeFormatted);
+                              setTermoAceiteProvisorioUploadedAt(new Date().toISOString().split('T')[0]);
+                            }}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => termoAceiteProvisorioInputRef.current?.click()}
+                            disabled={perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf'}
+                            className="px-3.5 py-2 border border-dashed border-slate-350 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                          >
+                            <UploadCloud className="w-4 h-3.5 text-neutral-500 animate-bounce" />
+                            Selecionar Termo de Aceite Provisório
+                          </button>
+                          <span className="text-[10px] text-neutral-400 font-sans">
+                            Aceita PDF, DOCX ou DOC.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5. TERMO DE ACEITE DEFINITIVO */}
+                    <div className={`p-4 border rounded-lg space-y-3 ${prazo90DiasTermoProvisorioCumprido ? 'bg-slate-50/50 border-slate-200' : 'bg-neutral-100/60 border-neutral-200'}`}>
+                      <div className="flex justify-between items-start flex-wrap gap-2 text-xs">
+                        <div>
+                          <span className="font-bold text-neutral-800 text-xs block">5. Termo de Aceite Definitivo *</span>
+                          <span className="text-[10.5px] text-neutral-500 block leading-tight mt-0.5">
+                            Termo assinado que formaliza o aceite definitivo da obra. Só pode ser emitido após 90 dias corridos da data do Termo de Aceite Provisório.
+                          </span>
+                        </div>
+                      </div>
+
+                      {!prazo90DiasTermoProvisorioCumprido && (
+                        <p className="text-[10.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 font-medium flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 shrink-0" />
+                          {!checkTermoAceiteProvisorio
+                            ? 'Registre primeiro o Termo de Aceite Provisório acima.'
+                            : `Liberado em ${dataLimiteTermoDefinitivo?.toLocaleDateString('pt-BR')} — faltam ${90 - (diasDesdeTermoProvisorio ?? 0)} dia(s).`}
+                        </p>
+                      )}
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1">
+                          Data de Emissão do Termo Definitivo *
+                        </label>
+                        <input
+                          type="date"
+                          required
+                          disabled={!prazo90DiasTermoProvisorioCumprido || (perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf')}
+                          min={dataLimiteTermoDefinitivo ? dataLimiteTermoDefinitivo.toISOString().split('T')[0] : undefined}
+                          value={termoAceiteDefinitivoDataInput}
+                          onChange={(e) => setTermoAceiteDefinitivoDataInput(e.target.value)}
+                          className="w-full sm:w-56 text-xs p-2.5 border border-neutral-300 rounded-lg focus:outline-hidden bg-white disabled:opacity-60 disabled:cursor-not-allowed"
+                        />
+                      </div>
+
+                      {termoAceiteDefinitivoFileName ? (
+                        <div className="p-3 bg-white border border-neutral-200 rounded-lg flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="p-2 bg-emerald-100 text-emerald-700 rounded-md shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="truncate">
+                              <span className="block text-xs font-bold text-neutral-800 break-all">{termoAceiteDefinitivoFileName}</span>
+                              <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">
+                                Tamanho: {termoAceiteDefinitivoFileSize} • Enviado em: {termoAceiteDefinitivoUploadedAt ? new Date(termoAceiteDefinitivoUploadedAt + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadDocument(termoAceiteDefinitivoFileName, "Termo de Aceite Definitivo")}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 hover:bg-blue-50 rounded transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Baixar
+                            </button>
+                            {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTermoAceiteDefinitivoFileName('');
+                                  setTermoAceiteDefinitivoFileSize('');
+                                  setTermoAceiteDefinitivoUploadedAt('');
+                                }}
+                                className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer shrink-0"
+                              >
+                                Remover
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            ref={termoAceiteDefinitivoInputRef}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+                              setTermoAceiteDefinitivoFileName(file.name);
+                              setTermoAceiteDefinitivoFileSize(sizeFormatted);
+                              setTermoAceiteDefinitivoUploadedAt(new Date().toISOString().split('T')[0]);
+                            }}
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => termoAceiteDefinitivoInputRef.current?.click()}
+                            disabled={!prazo90DiasTermoProvisorioCumprido || (perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'gestor_paf')}
+                            className="px-3.5 py-2 border border-dashed border-slate-350 bg-white hover:bg-neutral-50 text-neutral-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                          >
+                            <UploadCloud className="w-4 h-3.5 text-neutral-500 animate-bounce" />
+                            Selecionar Termo de Aceite Definitivo
+                          </button>
+                          <span className="text-[10px] text-neutral-400 font-sans">
+                            Aceita PDF, DOCX ou DOC.
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
@@ -4399,6 +4694,7 @@ ${totalPendencias > 0
                   <p>1. Verifique rigorosamente se o total acumulado das medições financeiras corresponde ao teto reajustado do contrato.</p>
                   <p>2. O <strong>Laudo Conclusivo</strong> deve atestar a aceitação definitiva do empreendimento sem ressalvas.</p>
                   <p>3. Envie fotos nítidas que facilitem o processo de auditoria de obras e prestação de contas governamentais.</p>
+                  <p>4. O <strong>Termo de Aceite Definitivo</strong> só pode ser emitido 90 dias corridos após a data do <strong>Termo de Aceite Provisório</strong>.</p>
                 </div>
               </div>
             </div>

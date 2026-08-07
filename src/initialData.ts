@@ -53,7 +53,7 @@ export const CHECKLIST_PADRAO: DocumentoChecklist[] = [
   {
     id: 'doc_5',
     nome: 'Imposto ISS',
-    obrigatorio: false,
+    obrigatorio: true,
     desc: 'Guia ou comprovante de recolhimento tributário aplicável. Anexar apenas no formato .pdf.',
     status: 'pendente'
   }

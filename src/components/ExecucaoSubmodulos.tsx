@@ -5,10 +5,11 @@ import {
   Trash2, AlertCircle, Sparkles, User, FileText, ChevronRight, Scale, Clock,
   FileCheck, FileUp, Zap, HelpCircle, History, Info, Trash, RefreshCw, Eye,
   TrendingUp, Edit, ClipboardCheck, Wrench, ArrowRight, Lock, Filter, X,
-  BarChart2, Coins,
+  BarChart2, Coins, Lightbulb, Download,
 } from 'lucide-react';
-import { Solicitacao, Medicao, Aditivo, AjustePlanilha, SaldoComplementarItem, ReequilibrioItem, PerfilUsuario, EmpresaSeguranca, UsuarioSistema, computeStatusObra } from '../types';
+import { Solicitacao, Medicao, Aditivo, AjustePlanilha, SaldoComplementarItem, ReequilibrioItem, PerfilUsuario, EmpresaSeguranca, UsuarioSistema, DocumentoChecklist, ParcelaPAF, computeStatusObra, montarChecklistGED } from '../types';
 import { supabase } from '../lib/supabase';
+import { useEscolas } from '../hooks/useEscolas';
 
 interface ExecucaoSubmodulosProps {
   activeSubTask: string;
@@ -631,13 +632,87 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
   const [vincularExistente, setVincularExistente] = useState(true);
   const [selectedAtendimentoId, setSelectedAtendimentoId] = useState('');
 
+  // Base de escolas/endereços (mesma fonte usada na tela de Atendimento Inicial) para a
+  // Identificação Escolar do Cadastro Manual do Zero — substitui os campos digitáveis por listas.
+  const { escolas, enderecos, carregando: carregandoEscolas } = useEscolas();
+
   // Form states - Technical & Administrative info
   const [escolaInput, setEscolaInput] = useState('');
   const [codEscInput, setCodEscInput] = useState('');
   const [municipioInput, setMunicipioInput] = useState('');
-  const [sreInput, setSreInput] = useState('SRE METROPOLITANA A');
+  const [sreInput, setSreInput] = useState('');
+  const [codigoEnderecoInput, setCodigoEnderecoInput] = useState('');
   const [valorInput, setValorInput] = useState('');
   const [tipoObraInput, setTipoObraInput] = useState('REFORMA');
+
+  // Opções de SRE/Município respeitando o nível já escolhido acima (SRE > Município > Escola > Endereço)
+  const sresDisponiveis = useMemo(() => [...new Set(escolas.map(item => item.sre))].sort(), [escolas]);
+  const municipiosDisponiveis = useMemo(() => [...new Set(
+    (sreInput ? escolas.filter(item => item.sre === sreInput) : escolas).map(item => item.municipio)
+  )].sort(), [escolas, sreInput]);
+
+  // Escolas visíveis nos seletores de CODESC/Nome, restritas à SRE e ao Município já escolhidos
+  const escolasNoFiltroCadastro = useMemo(() => escolas.filter(item =>
+    (!sreInput || item.sre === sreInput) && (!municipioInput || item.municipio === municipioInput)
+  ), [escolas, sreInput, municipioInput]);
+
+  // Endereços disponíveis: restritos ao CODESC já escolhido, ou às escolas do filtro de SRE/Município
+  const enderecosParaSelecaoCadastro = useMemo(() => (codEscInput
+    ? enderecos.filter(e => e.codesc === codEscInput)
+    : enderecos.filter(e => escolasNoFiltroCadastro.some(item => item.codesc === e.codesc))
+  ).sort((a, b) => {
+    const na = Number(a.codigoEndereco);
+    const nb = Number(b.codigoEndereco);
+    return !Number.isNaN(na) && !Number.isNaN(nb) ? na - nb : a.codigoEndereco.localeCompare(b.codigoEndereco);
+  }), [codEscInput, enderecos, escolasNoFiltroCadastro]);
+
+  // Preenche município/SRE a partir de uma escola já resolvida
+  const aplicarEscolaCadastro = (match?: { municipio: string; sre: string }) => {
+    setMunicipioInput(match?.municipio || '');
+    setSreInput(match?.sre || '');
+  };
+
+  const selecionarPorSreCadastro = (val: string) => {
+    setSreInput(val);
+    setMunicipioInput('');
+    setCodEscInput('');
+    setEscolaInput('');
+    setCodigoEnderecoInput('');
+  };
+
+  const selecionarPorMunicipioCadastro = (val: string) => {
+    setMunicipioInput(val);
+    setCodEscInput('');
+    setEscolaInput('');
+    setCodigoEnderecoInput('');
+    const match = escolas.find(item => item.municipio === val);
+    setSreInput(match?.sre || '');
+  };
+
+  const selecionarPorCodescCadastro = (val: string) => {
+    setCodEscInput(val);
+    setCodigoEnderecoInput('');
+    const match = escolasNoFiltroCadastro.find(item => item.codesc === val) || escolas.find(item => item.codesc === val);
+    setEscolaInput(match?.nome || '');
+    aplicarEscolaCadastro(match);
+  };
+
+  const selecionarPorNomeEscolaCadastro = (val: string) => {
+    setEscolaInput(val);
+    setCodigoEnderecoInput('');
+    const match = escolasNoFiltroCadastro.find(item => item.nome === val) || escolas.find(item => item.nome === val);
+    setCodEscInput(match?.codesc || '');
+    aplicarEscolaCadastro(match);
+  };
+
+  const selecionarPorCodigoEnderecoCadastro = (val: string) => {
+    setCodigoEnderecoInput(val);
+    const enderecoMatch = enderecosParaSelecaoCadastro.find(e => e.codigoEndereco === val);
+    const escolaMatch = enderecoMatch ? escolas.find(item => item.codesc === enderecoMatch.codesc) : undefined;
+    setCodEscInput(enderecoMatch?.codesc || '');
+    setEscolaInput(escolaMatch?.nome || '');
+    aplicarEscolaCadastro(escolaMatch);
+  };
   
   // Complementary Obra fields
   const [classeObra, setClasseObra] = useState('Pequeno Porte');
@@ -646,6 +721,14 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
   const [empresaInput, setEmpresaInput] = useState('');
   const [cnpjInput, setCnpjInput] = useState('');
   const [valorHomologadoInput, setValorHomologadoInput] = useState('');
+
+  // PAF do processo — obra cadastrada do zero nunca passa pela geração de PAF da Análise DORE
+  // (SolicitacaoDetalhes), então esses dados precisam ser capturados aqui. Mesmo modelo de
+  // parcelasPAF/statusPAF usado lá, para não quebrar o Acompanhamento de PAF.
+  const [numeroPAFInput, setNumeroPAFInput] = useState('');
+  const [dataHomologacaoInput, setDataHomologacaoInput] = useState(new Date().toISOString().split('T')[0]);
+  const [valorLiberadoInput, setValorLiberadoInput] = useState('');
+  const [dataLiberacaoInput, setDataLiberacaoInput] = useState(new Date().toISOString().split('T')[0]);
 
   // Schedule fields
   const [dataInicioInput, setDataInicioInput] = useState('');
@@ -762,7 +845,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
       setEscolaInput(selected.nomeEscola);
       setCodEscInput(selected.codesc);
       setMunicipioInput(selected.municipio || '');
-      setSreInput(selected.sre || 'SRE METROPOLITANA A');
+      setSreInput(selected.sre || '');
+      setCodigoEnderecoInput(selected.codigoEndereco || '');
       const val = selected.valorPlanilha || selected.valorHomologado || 0;
       setValorInput(val.toString());
       setValorHomologadoInput(val.toString());
@@ -779,11 +863,34 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
       alert('Selecione um atendimento técnico aprovado para importar.');
       return;
     }
+    if (!vincularExistente && (!sreInput || !municipioInput || !codEscInput || !escolaInput)) {
+      alert('Selecione a SRE, o Município, o CODESC e a Escola para identificar a unidade de ensino.');
+      return;
+    }
+    if (!vincularExistente && !numeroPAFInput.trim()) {
+      alert('Informe o número do PAF deste processo.');
+      return;
+    }
+    if (!vincularExistente && parseFloat(valorLiberadoInput) > 0 && !dataLiberacaoInput) {
+      alert('Informe a data de liberação do valor já liberado.');
+      return;
+    }
     if (!escolaInput || !codEscInput || !valorInput) return;
 
     const baseVal = parseFloat(valorInput) || 0;
     const finalVal = parseFloat(valorHomologadoInput) || baseVal;
     const fiscalObraAtribuidoId = usuariosSeguranca.find(u => u.nome === fiscalObraAtribuido)?.id;
+
+    // PAF do processo (obra do zero não passa pela geração de PAF da Análise DORE) — o valor já
+    // liberado vira a 1ª parcela real de parcelasPAF, com statusPAF derivado do mesmo jeito que
+    // salvarPAF em SolicitacaoDetalhes.tsx, para o Acompanhamento de PAF refletir corretamente.
+    const valorLiberadoNum = parseFloat(valorLiberadoInput) || 0;
+    const parcelasPAFIniciais: ParcelaPAF[] = valorLiberadoNum > 0
+      ? [{ id: `parcela_${Date.now()}`, valor: valorLiberadoNum, dataPagamento: dataLiberacaoInput }]
+      : [];
+    const statusPAFInicial: Solicitacao['statusPAF'] = valorLiberadoNum === 0
+      ? 'Aguardando Pagamento'
+      : valorLiberadoNum >= baseVal ? 'Pago e Liberado' : 'Pago Parcialmente';
 
     // Is it based on an existing ticket/request, or creating fresh?
     if (vincularExistente && selectedAtendimentoId) {
@@ -798,9 +905,11 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
           pontuacaoComplexidade,
           fiscalObraAtribuido,
           fiscalObraAtribuidoId,
-          empresaContratada: empresaInput || 'Construtora do Estado S.A.',
-          cnpjEmpresa: cnpjInput || '02.455.996/0001-34',
-          statusContratoEmpresa: 'Ativa',
+          // Preserva empresa/CNPJ/status já existentes no atendimento importado (se houver);
+          // não gera fictícios quando o ticket ainda não tem contratação registrada — segue
+          // para a aba Contratos como qualquer obra sem contrato.
+          ...(empresaInput ? { empresaContratada: empresaInput } : {}),
+          ...(cnpjInput ? { cnpjEmpresa: cnpjInput } : {}),
           valorHomologadoContratacao: finalVal,
           valorPlanilha: baseVal,
           duracaoObraMeses: parseInt(duracaoMeses) || 6,
@@ -822,18 +931,19 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
         id: `sol_${Date.now()}`,
         nomeEscola: escolaInput,
         codesc: codEscInput,
+        codigoEndereco: codigoEnderecoInput || undefined,
         tipo: tipoObraInput,
         tipoObra: tipoObraInput,
-        municipio: municipioInput || 'Município SGO',
+        municipio: municipioInput,
         sre: sreInput,
         dataCriacao: new Date().toISOString().split('T')[0],
         etapaAtual: 'execucao',
         historicoEtapas: [{ etapa: 'execucao', data: new Date().toISOString().split('T')[0], responsavel: 'Gestor Operacional DORE' }],
         valorPlanilha: baseVal,
         valorHomologadoContratacao: finalVal,
-        empresaContratada: empresaInput || 'Construtora do Estado S.A.',
-        cnpjEmpresa: cnpjInput || '02.455.996/0001-34',
-        statusContratoEmpresa: 'Ativa',
+        // Empresa/CNPJ/contrato NÃO são definidos aqui — obra nasce sem contratação e segue
+        // para a aba Contratos (SubContratos), onde o fiscal registra a empresa real, CNPJ,
+        // data de assinatura e vigência. Evita gravar dados fictícios de placeholder.
         classeObra,
         pontuacaoComplexidade,
         fiscalObraAtribuido,
@@ -845,7 +955,11 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
         medicoes: [],
         aditivos: [],
         ajustes: [],
-        numeroPAF: `PAF-${Math.floor(1000 + Math.random() * 9000)}/2026`,
+        numeroPAF: numeroPAFInput.trim(),
+        valorHomologado: baseVal,
+        dataHomologacao: dataHomologacaoInput,
+        parcelasPAF: parcelasPAFIniciais,
+        statusPAF: statusPAFInicial,
       };
       onUpdate(novaObra);
       setFocoObra(novaObra.id);
@@ -857,10 +971,16 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
     setEscolaInput('');
     setCodEscInput('');
     setMunicipioInput('');
+    setSreInput('');
+    setCodigoEnderecoInput('');
     setValorInput('');
     setValorHomologadoInput('');
     setEmpresaInput('');
     setCnpjInput('');
+    setNumeroPAFInput('');
+    setDataHomologacaoInput(new Date().toISOString().split('T')[0]);
+    setValorLiberadoInput('');
+    setDataLiberacaoInput(new Date().toISOString().split('T')[0]);
   };
 
   return (
@@ -906,6 +1026,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                   disabled={!podeAtribuirFiscal}
                   className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-slate-800 font-bold focus:outline-hidden cursor-pointer disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                 >
+                  <option value="">Selecione o fiscal...</option>
                   {usuariosSeguranca
                     .filter(u => u.perfil === 'tecnico_infra')
                     .map(u => (
@@ -951,7 +1072,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
             <ClipboardCheck className="w-4.5 h-4.5 text-blue-600" />
             Obras Oficializadas (SGO Ativo)
           </h2>
-          <p className="text-[10px] text-slate-500">Listagem de escolas com convênio ou execução técnica cadastrada em largura cheia</p>
+          <p className="text-[10px] text-slate-500">Listagem de Obras com execução técnica em andamento</p>
         </div>
         {!somenteLeitura && (
         <button
@@ -1006,6 +1127,8 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                   setEscolaInput('');
                   setCodEscInput('');
                   setMunicipioInput('');
+                  setSreInput('');
+                  setCodigoEnderecoInput('');
                   setValorInput('');
                 }}
                 className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${
@@ -1049,62 +1172,91 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
               <h4 className="text-[10px] font-black uppercase text-slate-600 flex items-center gap-1 pb-1 border-b border-slate-100">
                 <FileText className="w-3.5 h-3.5 text-blue-500" />
                 {vincularExistente ? 'Dados Importados da Análise Técnica' : 'Informações da Escola e Base Técnica'}
+                {!vincularExistente && carregandoEscolas && (
+                  <span className="text-[10px] text-slate-400 normal-case font-normal ml-1">(carregando escolas...)</span>
+                )}
               </h4>
 
+              {/* Identificação Escolar por listas — mesma base e hierarquia (SRE > Município > CODESC/Nome > Endereço) da tela de Atendimento Inicial */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className={vincularExistente ? "col-span-1 md:col-span-2" : "col-span-1 md:col-span-2"}>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Nome Completo da Unidade de Ensino</label>
-                  <input
-                    type="text"
-                    required
-                    disabled={vincularExistente}
-                    value={escolaInput}
-                    onChange={(e) => setEscolaInput(e.target.value)}
-                    placeholder="Ex. EE Professor João Guimarães"
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 focus:outline-hidden"
-                  />
-                </div>
-
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Código da Escola (CODESC)</label>
-                  <input
-                    type="text"
-                    required
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Superintendência Regional (SRE)</label>
+                  <select
+                    required={!vincularExistente}
                     disabled={vincularExistente}
-                    value={codEscInput}
-                    onChange={(e) => setCodEscInput(e.target.value)}
-                    placeholder="Ex: 19020"
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 focus:outline-hidden"
-                  />
+                    value={sreInput}
+                    onChange={(e) => selecionarPorSreCadastro(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="">Selecione a SRE...</option>
+                    {sresDisponiveis.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 block mb-1">Município</label>
-                  <input
-                    type="text"
+                  <select
+                    required={!vincularExistente}
                     disabled={vincularExistente}
                     value={municipioInput}
-                    onChange={(e) => setMunicipioInput(e.target.value)}
-                    placeholder="Ex: Belo Horizonte"
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 focus:outline-hidden"
-                  />
+                    onChange={(e) => selecionarPorMunicipioCadastro(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="">Selecione o município...</option>
+                    {municipiosDisponiveis.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Superintendência Regional (SRE)</label>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Código da Escola (CODESC)</label>
+                  <select
+                    required={!vincularExistente}
+                    disabled={vincularExistente}
+                    value={codEscInput}
+                    onChange={(e) => selecionarPorCodescCadastro(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 font-mono focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="">Selecione o CODESC...</option>
+                    {escolasNoFiltroCadastro.map(item => (
+                      <option key={item.codesc} value={item.codesc}>{item.codesc}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Nome Completo da Unidade de Ensino</label>
+                  <select
+                    required={!vincularExistente}
+                    disabled={vincularExistente}
+                    value={escolaInput}
+                    onChange={(e) => selecionarPorNomeEscolaCadastro(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="">Selecione a escola...</option>
+                    {escolasNoFiltroCadastro.map(item => (
+                      <option key={item.codesc} value={item.nome}>{item.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Código do Endereço</label>
                   <select
                     disabled={vincularExistente}
-                    value={sreInput}
-                    onChange={(e) => setSreInput(e.target.value)}
-                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 focus:outline-hidden"
+                    value={codigoEnderecoInput}
+                    onChange={(e) => selecionarPorCodigoEnderecoCadastro(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 font-mono focus:outline-hidden cursor-pointer"
                   >
-                    <option value="SRE METROPOLITANA A">SRE METROPOLITANA A</option>
-                    <option value="SRE METROPOLITANA B">SRE METROPOLITANA B</option>
-                    <option value="SRE METROPOLITANA C">SRE METROPOLITANA C</option>
-                    <option value="SRE OURO PRETO">SRE OURO PRETO</option>
-                    <option value="SRE IPATINGA">SRE IPATINGA</option>
-                    <option value="SRE PATOS DE MINAS">SRE PATOS DE MINAS</option>
-                    <option value="SRE DIAMANTINA">SRE DIAMANTINA</option>
+                    <option value="">Selecione o endereço...</option>
+                    {enderecosParaSelecaoCadastro.map(e => (
+                      <option key={`${e.codesc}-${e.codigoEndereco}`} value={e.codigoEndereco}>
+                        {e.codigoEndereco} — {e.descricao}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1141,6 +1293,69 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
                 </div>
               </div>
             </div>
+
+            {/* PAF do processo — obra do zero não passa pela Geração de PAF da Análise DORE, então
+                esses dados precisam ser capturados aqui (mesmo modelo de parcelasPAF/statusPAF). */}
+            {!vincularExistente && (
+              <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+                <h4 className="text-[10px] font-black uppercase text-slate-600 flex items-center gap-1 pb-1 border-b border-slate-100">
+                  <FileCheck className="w-3.5 h-3.5 text-blue-500" />
+                  PAF do Processo
+                </h4>
+                <p className="text-[10.5px] text-slate-500 leading-relaxed">
+                  Esta obra não passou pela Geração de PAF da Análise DORE — informe aqui o número do PAF já existente e, se houver, o valor já liberado até o momento deste cadastro.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Número do PAF *</label>
+                    <input
+                      type="text"
+                      required
+                      value={numeroPAFInput}
+                      onChange={(e) => setNumeroPAFInput(e.target.value)}
+                      placeholder="Ex: PAF-5510-2026"
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-800 font-mono font-bold focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Data de Homologação do PAF</label>
+                    <input
+                      type="date"
+                      value={dataHomologacaoInput}
+                      onChange={(e) => setDataHomologacaoInput(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-800 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">Valor Já Liberado (R$)</label>
+                    <input
+                      type="number"
+                      value={valorLiberadoInput}
+                      onChange={(e) => setValorLiberadoInput(e.target.value)}
+                      placeholder="Ex: 150000 (deixe em branco se nada foi liberado ainda)"
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-slate-800 font-mono font-bold focus:outline-hidden text-emerald-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 block mb-1">
+                      Data de Liberação {parseFloat(valorLiberadoInput) > 0 && '*'}
+                    </label>
+                    <input
+                      type="date"
+                      required={parseFloat(valorLiberadoInput) > 0}
+                      disabled={!(parseFloat(valorLiberadoInput) > 0)}
+                      value={dataLiberacaoInput}
+                      onChange={(e) => setDataLiberacaoInput(e.target.value)}
+                      className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-slate-50/50 disabled:bg-slate-100/80 text-slate-800 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Complementary information fields - REQUIREMENT CONSTRAINT */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-4">
@@ -1745,7 +1960,7 @@ function SubCadastro({ solicitacoes, todasSolicitacoes, currentSol, onUpdate, on
 
 // --- 2. SUB ACOMPANHAMENTO DE EXECUÇÃO ---
 function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void; somenteLeitura?: boolean }) {
-  const [activeTab, setActiveTab2] = useState<'dashboard' | 'ordem_inicio' | 'vistorias' | 'restricoes'>('dashboard');
+  const [activeTab, setActiveTab2] = useState<'dashboard' | 'ordem_inicio' | 'vistorias' | 'restricoes' | 'licoes_aprendidas'>('dashboard');
 
   // Ordem de Início states
   const [ordemDataInicio, setOrdemDataInicio] = useState('');
@@ -1782,6 +1997,10 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
   const [restricaoPrevisao, setRestricaoPrevisao] = useState('');
   const [parecerResolucaoTxt, setParecerResolucaoTxt] = useState('');
   const [resolvendoId, setResolvendoId] = useState<string | null>(null);
+
+  // Lições Aprendidas states
+  const [licaoDesc, setLicaoDesc] = useState('');
+  const [licaoCategoria, setLicaoCategoria] = useState<'Técnica' | 'Gestão' | 'Cronograma' | 'Fornecedor' | 'Financeira' | 'Outros'>('Técnica');
 
   if (!currentSol) return <NoObraSelected />;
 
@@ -1828,6 +2047,8 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
   const listVistorias = currentSol.vistoriasObra || [];
 
   const listRestricoes = currentSol.restricoesObra || [];
+
+  const listLicoesAprendidas = currentSol.licoesAprendidas || [];
 
   // Action handlers
   const updateObraStatus = () => {
@@ -2117,6 +2338,75 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
     onUpdate(updated);
   };
 
+  const adicNovaLicaoAprendida = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!licaoDesc.trim()) return;
+
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        alert('Não foi possível localizar o registro da obra no banco para gravar a lição aprendida.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const dataRegistro = new Date().toISOString().split('T')[0];
+    const { data: userData } = await supabase.auth.getUser();
+
+    const { data: licaoRow, error: licaoError } = await supabase
+      .from('licoes_aprendidas_obra')
+      .insert({
+        solicitacao_id: dbId,
+        descricao: licaoDesc,
+        categoria: licaoCategoria ?? null,
+        usuario_id: userData.user?.id ?? null
+      })
+      .select('id')
+      .single();
+
+    if (licaoError || !licaoRow) {
+      console.error('Erro ao gravar lição aprendida no Supabase:', licaoError);
+      alert('Erro ao gravar a lição aprendida no banco de dados. Tente novamente.');
+      return;
+    }
+
+    const novoReg = {
+      id: licaoRow.id,
+      descricao: licaoDesc,
+      categoria: licaoCategoria,
+      dataRegistro
+    };
+
+    const updated = {
+      ...currentSol,
+      licoesAprendidas: [novoReg, ...listLicoesAprendidas]
+    };
+
+    onUpdate(updated);
+    setLicaoDesc('');
+  };
+
+  const deletarLicaoAprendida = async (id: string) => {
+    const { error } = await supabase.from('licoes_aprendidas_obra').delete().eq('id', id);
+    if (error) {
+      console.error('Erro ao excluir lição aprendida no Supabase:', error);
+      alert('Erro ao excluir a lição aprendida no banco de dados. Tente novamente.');
+      return;
+    }
+
+    const updated = {
+      ...currentSol,
+      licoesAprendidas: listLicoesAprendidas.filter(l => l.id !== id)
+    };
+    onUpdate(updated);
+  };
+
   // Filter diaries based on text search
   const filteredDiarios = listDiarios.filter(d => {
     const term = diarioBusca.toLowerCase();
@@ -2176,10 +2466,28 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
           }`}
         >
           <AlertCircle className="w-4 h-4" />
-          Restrições
+          Não Conformidades
           {listRestricoes.filter(r => r.status === 'Ativa').length > 0 && (
             <span className="px-1.5 py-0.2 text-[9px] bg-rose-600 text-white rounded-full font-mono font-black animate-pulse">
               {listRestricoes.filter(r => r.status === 'Ativa').length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab2('licoes_aprendidas')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+            activeTab === 'licoes_aprendidas'
+              ? 'bg-blue-600 text-white shadow-3xs'
+              : 'text-slate-600 hover:text-slate-800 hover:bg-slate-100'
+          }`}
+        >
+          <Lightbulb className="w-4 h-4" />
+          Lições Aprendidas
+          {listLicoesAprendidas.length === 0 && (
+            <span className="px-1.5 py-0.2 text-[9px] bg-amber-500 text-white rounded-full font-mono font-black">
+              !
             </span>
           )}
         </button>
@@ -3307,13 +3615,13 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-4 border-b border-slate-50 pb-3">
-                Restrições Ativas e Histórico de Pendências de Campo
+                Não Conformidades Ativas e Histórico de Pendências de Campo
               </h3>
 
               {listRestricoes.length === 0 ? (
                 <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
                   <CheckCircle className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
-                  <p className="text-xs font-bold text-slate-600">Obra sem restrições ou entraves ativos!</p>
+                  <p className="text-xs font-bold text-slate-600">Obra sem não conformidades ou entraves ativos!</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -3354,7 +3662,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                               type="button"
                               onClick={() => deletarRestricao(r.id)}
                               className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 cursor-pointer ml-1"
-                              title="Excluir restrição"
+                              title="Excluir não conformidade"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -3426,7 +3734,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                                 onClick={() => setResolvendoId(r.id)}
                                 className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black uppercase rounded-lg self-end cursor-pointer tracking-wider shadow-3xs transition-shadow"
                               >
-                                Resolver Restrição da Obra
+                                Resolver Não Conformidade da Obra
                               </button>
                             )}
                           </div>
@@ -3443,7 +3751,7 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
           <div className="space-y-4">
             <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs text-left">
               <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2.5 mb-3">
-                <AlertCircle className="w-4 h-4 text-rose-500 animate-pulse" /> Reportar Nova Restrição
+                <AlertCircle className="w-4 h-4 text-rose-500 animate-pulse" /> Reportar Nova Não Conformidade
               </h3>
 
               <form onSubmit={adicNovaRestricao} className="space-y-4">
@@ -3510,7 +3818,107 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                   type="submit"
                   className="w-full py-2.5 text-xs text-white font-black uppercase tracking-wider bg-rose-600 hover:bg-rose-700 rounded-xl cursor-pointer shadow-3xs"
                 >
-                  Registrar Entrave / Restrição
+                  Registrar Entrave / Não Conformidade
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIÇÕES APRENDIDAS TAB CONTENT */}
+      {activeTab === 'licoes_aprendidas' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn text-left">
+          {/* List of lessons learned */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+              <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-4 border-b border-slate-50 pb-3">
+                Lições Aprendidas Registradas
+              </h3>
+
+              {listLicoesAprendidas.length === 0 ? (
+                <div className="p-8 text-center bg-amber-50 rounded-xl border border-dashed border-amber-200">
+                  <Lightbulb className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-600">Nenhuma lição aprendida registrada ainda.</p>
+                  <p className="text-[10.5px] text-slate-500 mt-1">É necessário registrar pelo menos 1 lição aprendida para liberar o encerramento da obra.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {listLicoesAprendidas.map((l) => (
+                    <div key={l.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {l.categoria && (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                              {l.categoria}
+                            </span>
+                          )}
+                          <span className="text-[10.5px] font-bold text-slate-400">Registrada em: {l.dataRegistro}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deletarLicaoAprendida(l.id)}
+                          className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 cursor-pointer"
+                          title="Excluir lição aprendida"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700 font-sans leading-relaxed">
+                        {l.descricao}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* New lesson learned form */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs text-left">
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2.5 mb-3">
+                <Lightbulb className="w-4 h-4 text-amber-500" /> Registrar Nova Lição Aprendida
+              </h3>
+
+              <form onSubmit={adicNovaLicaoAprendida} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                    Categoria
+                  </label>
+                  <select
+                    value={licaoCategoria}
+                    onChange={(e) => setLicaoCategoria(e.target.value as any)}
+                    className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 cursor-pointer"
+                  >
+                    <option value="Técnica">Técnica</option>
+                    <option value="Gestão">Gestão</option>
+                    <option value="Cronograma">Cronograma</option>
+                    <option value="Fornecedor">Fornecedor</option>
+                    <option value="Financeira">Financeira</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                    Descrição da Lição Aprendida *
+                  </label>
+                  <textarea
+                    required
+                    rows={4}
+                    placeholder="Descreva o que aconteceu, o que foi aprendido e como isso pode ajudar em obras futuras..."
+                    value={licaoDesc}
+                    onChange={(e) => setLicaoDesc(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 text-xs text-white font-black uppercase tracking-wider bg-amber-600 hover:bg-amber-700 rounded-xl cursor-pointer shadow-3xs"
+                >
+                  Registrar Lição Aprendida
                 </button>
               </form>
             </div>
@@ -7463,156 +7871,159 @@ function SubFiscalizacao({
   );
 }
 
+// Simula o download de um documento anexado (mesmo padrão usado em SolicitacaoDetalhes.tsx:
+// gera um arquivo de texto placeholder, já que o app ainda não integra um storage real).
+function simularDownloadDocumento(fileName: string, label: string) {
+  const textContent = `--- Governo do Estado de Minas Gerais ---
+Secretaria de Estado de Educação (SEE-MG)
+
+DOCUMENTO: ${label}
+ARQUIVO ORIGEM: ${fileName}
+DATA DE CONSULTA: ${new Date().toLocaleDateString('pt-BR')}
+
+Este é um arquivo auxiliar gerado dinamicamente para simulação do processo físico-financeiro de obras e faturamento de dotação do PAF e SGO. Todas as validações foram formalizadas eletronicamente via fluxo de trabalho.
+
+----------------------------------------
+Plataforma e-SGO - SEE-MG`;
+
+  const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 // --- 8. SUB DOCUMENTOS (GED) ---
+// Checklist de documentos obrigatórios da execução (ART, Projetos…) — anexado pelo fiscal
+// da obra e persistido em public.documentos (categoria 'ged_execucao'). Itens obrigatórios
+// pendentes bloqueiam o checklist de Conclusão de Obra (ver SolicitacaoDetalhes.tsx).
 function SubDocumentos({ currentSol, onUpdate, somenteLeitura = false }: { currentSol: Solicitacao | null; onUpdate: (sol: Solicitacao) => void; somenteLeitura?: boolean }) {
-  const [documentosSalvos, setDocumentosSalvos] = useState<{ name: string; size: string; type: string; date: string }[]>([
-    { name: 'Planilha_Completa_Original_Assinada.pdf', size: '2.5 MB', type: 'Planilha Orçamentária', date: '2026-05-15' },
-    { name: 'Cronograma_Geral_Instalacoes.xlsx', size: '1.2 MB', type: 'Planejamento', date: '2026-05-16' },
-    { name: 'ART_Projeto_Futu_Estrutural.pdf', size: '150 KB', type: 'Certidão & ART', date: '2026-05-18' }
-  ]);
-
-  const [documentoSelecionado, setDocumentoSelecionado] = useState('Planilha Orçamentária');
-  const [docNameLocal, setDocNameLocal] = useState('');
-
   if (!currentSol) return <NoObraSelected />;
 
-  const dragOverFake = (e: React.DragEvent) => {
-    e.preventDefault();
+  const documentosGED = montarChecklistGED(currentSol.documentosGED);
+  const pendentesObrigatorios = documentosGED.filter(d => d.obrigatorio && !d.fileName);
+
+  const handleUpload = (docId: string, file: File) => {
+    const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    const atualizados = documentosGED.map(d => d.id === docId
+      ? { ...d, fileName: file.name, fileSize: sizeFormatted, uploadedAt: new Date().toISOString().split('T')[0], status: 'aprovado' as const }
+      : d);
+    onUpdate({ ...currentSol, documentosGED: atualizados });
   };
 
-  const uploadFake = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!docNameLocal) return;
-
-    const novoDoc = {
-      name: docNameLocal.endsWith('.pdf') ? docNameLocal : `${docNameLocal}.pdf`,
-      size: `${Math.floor(100 + Math.random() * 800)} KB`,
-      type: documentoSelecionado,
-      date: new Date().toISOString().split('T')[0]
-    };
-
-    setDocumentosSalvos([novoDoc, ...documentosSalvos]);
-    setDocNameLocal('');
+  const handleRemover = (docId: string) => {
+    const atualizados = documentosGED.map(d => d.id === docId
+      ? { ...d, fileName: undefined, fileSize: undefined, uploadedAt: undefined, status: 'pendente' as const }
+      : d);
+    onUpdate({ ...currentSol, documentosGED: atualizados });
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
-      
-      {/* File tree browser */}
-      <div className="lg:col-span-2 space-y-4">
-        
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
-          <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 mb-4 border-b border-slate-50 pb-2 flex items-center gap-1">
+    <div className="grid grid-cols-1 gap-6 animate-fadeIn">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+        <div className="flex justify-between items-center border-b border-slate-50 pb-3 mb-1">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
             <UploadCloud className="w-4 h-4 text-indigo-500" />
-            Central de Arquivos da Obra Escolar
+            Documentos Obrigatórios da Execução
           </h3>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${pendentesObrigatorios.length === 0 ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+            {pendentesObrigatorios.length === 0 ? 'TUDO ANEXADO' : `${pendentesObrigatorios.length} PENDENTE(S)`}
+          </span>
+        </div>
+        <p className="text-[11px] text-slate-500 mb-4 mt-2">
+          Estes documentos são exigidos pelo checklist de Conclusão de Obra — a obra não pode ser encerrada enquanto houver item obrigatório pendente aqui.
+        </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-            {/* Folder 1 */}
-            <div className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-2.5 transition-colors cursor-pointer">
-              <span className="text-xl">📂</span>
-              <div className="text-left">
-                <span className="text-[11px] font-bold text-slate-700 block">Planilhas Físicas</span>
-                <span className="text-[9px] text-slate-400 font-mono block">3 arquivos salvos</span>
-              </div>
-            </div>
+        <div className="space-y-3">
+          {documentosGED.map(doc => (
+            <GEDDocRow
+              key={doc.id}
+              doc={doc}
+              somenteLeitura={somenteLeitura}
+              onUpload={(file) => handleUpload(doc.id, file)}
+              onRemover={() => handleRemover(doc.id)}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            {/* Folder 2 */}
-            <div className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-2.5 transition-colors cursor-pointer">
-              <span className="text-xl">📂</span>
-              <div className="text-left">
-                <span className="text-[11px] font-bold text-slate-700 block">Fotografia Geral</span>
-                <span className="text-[9px] text-slate-400 font-mono block">6 fotos anexas</span>
-              </div>
-            </div>
+// Linha de upload de um documento obrigatório da GED — mesmo padrão visual dos uploads da
+// aba Conclusão de Obra em SolicitacaoDetalhes.tsx (fileName/fileSize/uploadedAt), sem o
+// fluxo de aprovação do analista DORE (aqui quem anexa é o próprio fiscal responsável).
+function GEDDocRow({ doc, somenteLeitura, onUpload, onRemover }: {
+  doc: DocumentoChecklist;
+  somenteLeitura: boolean;
+  onUpload: (file: File) => void;
+  onRemover: () => void;
+}) {
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const isUploaded = !!doc.fileName;
 
-            {/* Folder 3 */}
-            <div className="p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center gap-2.5 transition-colors cursor-pointer text-left">
-              <span className="text-xl">📂</span>
-              <div className="text-left">
-                <span className="text-[11px] font-bold text-slate-700 block">Certidões e ART</span>
-                <span className="text-[9px] text-slate-400 font-mono block">2 arquivos salvos</span>
-              </div>
-            </div>
+  return (
+    <div className={`p-4 rounded-xl border ${isUploaded ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-200 bg-slate-50/50'}`}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-slate-800 text-xs">{doc.nome}</span>
+            {doc.obrigatorio && (
+              <span className="text-[9px] font-black text-red-500 uppercase tracking-wide">Obrigatório</span>
+            )}
           </div>
-
-          <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">Histórico GED Consolidade</h4>
-          <div className="space-y-2">
-            {documentosSalvos.map((d, index) => (
-              <div key={index} className="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-blue-500" />
-                  <div className="text-left">
-                    <span className="font-bold text-slate-800 break-all">{d.name}</span>
-                    <span className="text-[10px] text-slate-405 block">{d.type} • Upload {d.date}</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="font-mono text-[10px] text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded">{d.size}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="text-[10.5px] text-slate-500 mt-0.5 leading-tight">{doc.desc}</p>
+          {isUploaded && (
+            <p className="text-[10px] text-slate-400 font-mono mt-1 break-all">
+              {doc.fileName} • {doc.fileSize} • Enviado em {doc.uploadedAt ? new Date(doc.uploadedAt + 'T00:00:00').toLocaleDateString('pt-BR') : 'Não informado'}
+            </p>
+          )}
         </div>
 
+        <div className="flex items-center gap-2 shrink-0">
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.dwg"
+            ref={inputRef}
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onUpload(file);
+              e.target.value = '';
+            }}
+          />
+          {isUploaded ? (
+            <>
+              <button
+                type="button"
+                onClick={() => simularDownloadDocumento(doc.fileName!, doc.nome)}
+                className="text-blue-600 hover:text-blue-800 text-xs font-bold px-2 py-1 hover:bg-blue-50 rounded transition-all cursor-pointer flex items-center gap-1"
+              >
+                <Download className="w-3.5 h-3.5" /> Baixar
+              </button>
+              {!somenteLeitura && (
+                <button type="button" onClick={onRemover} className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 hover:bg-red-50 rounded transition-all cursor-pointer flex items-center gap-1">
+                  <Trash2 className="w-3.5 h-3.5" /> Remover
+                </button>
+              )}
+            </>
+          ) : (
+            !somenteLeitura && (
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="px-3 py-1.5 border border-dashed border-slate-350 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <UploadCloud className="w-3.5 h-3.5 text-slate-500" /> Anexar
+              </button>
+            )
+          )}
+        </div>
       </div>
-
-      {/* Upload files drawer */}
-      {!somenteLeitura && (
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-3xs ">
-        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2.5 mb-4">
-          <FileUp className="w-4 h-4 text-blue-500" /> Upload de Novo Documento
-        </h3>
-
-        <form onSubmit={uploadFake} className="space-y-4">
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 block mb-1">Selecione a Pasta Destino</label>
-            <select
-              id="documentos-tipo-select"
-              value={documentoSelecionado}
-              onChange={(e) => setDocumentoSelecionado(e.target.value)}
-              className="w-full text-xs font-bold p-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-hidden"
-            >
-              <option value="Planilha Orçamentária">Planilha Orçamentária</option>
-              <option value="Planejamento">Planejamento</option>
-              <option value="Diário do Dia">Diário do Dia</option>
-              <option value="Certidão & ART">Certidão & ART</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-[10px] font-bold text-slate-500 block mb-1">Nome Amigável do Arquivo*</label>
-            <input
-              id="documentos-nome-input"
-              type="text"
-              required
-              placeholder="Ex: Planilha_Medicao_Fisica_Aprovada"
-              value={docNameLocal}
-              onChange={(e) => setDocNameLocal(e.target.value)}
-              className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800 focus:outline-hidden"
-            />
-          </div>
-
-          {/* Simulated drag zone */}
-          <div 
-            onDragOver={dragOverFake}
-            className="border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-50"
-          >
-            <p className="text-xs font-semibold text-slate-500">Arraste novos documentos aqui</p>
-            <p className="text-[10px] text-slate-400 mt-1">Formatos suportados: PDF, XLS, JPG (Max 15MB)</p>
-          </div>
-
-          <button
-            id="btn-upload-ged"
-            type="submit"
-            className="w-full py-2.5 text-xs text-white font-black uppercase bg-blue-600 hover:bg-blue-700 rounded-xl cursor-pointer transition-colors"
-          >
-            Anexar Eletronicamente
-          </button>
-        </form>
-      </div>
-      )}
-
     </div>
   );
 }
@@ -8030,16 +8441,9 @@ function SubSaldoComplementar({
 }) {
   const [activeTab, setActiveTab] = useState<'dados' | 'documentos'>('dados');
 
-  // Dados financeiros
-  const [valorTC,            setValorTC]            = useState('');
-  const [valorLiberado,      setValorLiberado]      = useState('');
-  const [valorPago,          setValorPago]          = useState('');
-  const [saldoEmConta,       setSaldoEmConta]       = useState('');
-  const [necessidadeAditivo, setNecessidadeAditivo] = useState('');
-
   // Documentos
   const [docs, setDocs] = useState(
-    DOCS_SALDO_COMPLEMENTAR.map(item => ({ item, checked: false, fileName: '' }))
+    DOCS_SALDO_COMPLEMENTAR.map(item => ({ item, fileName: '', fileSize: '' }))
   );
 
   const [saved, setSaved] = useState(false);
@@ -8070,37 +8474,43 @@ function SubSaldoComplementar({
     (currentSol.statusContratoEmpresa === 'Distratada' ? currentSol.empresaContratada : '') ||
     '—';
 
-  // Cálculos
-  const numTC       = parseFloat(valorTC)            || 0;
-  const numLib      = parseFloat(valorLiberado)      || 0;
-  const numPago     = parseFloat(valorPago)          || 0;
-  const numSaldo    = parseFloat(saldoEmConta)       || 0;
-  const numAditivo  = parseFloat(necessidadeAditivo) || 0;
+  // Dados financeiros — vêm do próprio sistema, não são digitados aqui:
+  // Valor TC = valor homologado do PAF; Valor Liberado = soma das parcelas já pagas do PAF;
+  // Valor Pago = valor executado (medido) pela empresa distratada; Saldo em Conta = Liberado − Pago.
+  const numTC    = currentSol.valorHomologado || currentSol.valorPlanilha || 0;
+  const numLib   = (currentSol.parcelasPAF || []).reduce((s, p) => s + (p.valor || 0), 0);
+  const numPago  = currentSol.empresasAnteriores?.slice(-1)[0]?.valorExecutado || 0;
+  const numSaldo = Math.max(0, numLib - numPago);
 
   const valorDisponivel        = numSaldo;
   const valorAindaNaoLiberado  = Math.max(0, numTC - numLib);
-  const valorTotalDisponivel   = valorDisponivel + valorAindaNaoLiberado + numAditivo;
+  const valorTotalDisponivel   = valorDisponivel + valorAindaNaoLiberado;
 
   const fmtBRL = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  const todosDocsMarcados = docs.every(d => d.checked);
+  const todosDocsAnexados = docs.every(d => !!d.fileName);
 
-  const toggleDoc = (idx: number) => {
+  const handleUploadDoc = (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
     setDocs(prev => prev.map((d, i) =>
-      i === idx
-        ? { ...d, checked: !d.checked, fileName: !d.checked ? `${d.item.replace(/\s/g, '_')}.pdf` : '' }
-        : d
+      i === idx ? { ...d, fileName: file.name, fileSize: `${(file.size / 1024).toFixed(0)} KB` } : d
     ));
+    e.target.value = '';
+  };
+
+  const handleRemoveDoc = (idx: number) => {
+    setDocs(prev => prev.map((d, i) => (i === idx ? { ...d, fileName: '', fileSize: '' } : d)));
   };
 
   const handleSubmit = async () => {
-    if (!todosDocsMarcados) {
-      alert('Todos os documentos são obrigatórios. Marque todos antes de enviar.');
+    if (!todosDocsAnexados) {
+      alert('Todos os documentos são obrigatórios. Anexe todos antes de enviar.');
       return;
     }
-    if (!valorTC || !saldoEmConta) {
-      alert('Preencha ao menos o Valor TC e o Saldo em Conta.');
+    if (!numTC) {
+      alert('Não foi encontrado PAF homologado para esta obra. Registre o PAF antes de solicitar o saldo complementar.');
       return;
     }
 
@@ -8118,7 +8528,7 @@ function SubSaldoComplementar({
       dbId = solRow.id;
     }
 
-    const documentos = docs.map(d => ({ item: d.item, obrigatorio: true, checked: d.checked, fileName: d.fileName }));
+    const documentos = docs.map(d => ({ item: d.item, obrigatorio: true, checked: !!d.fileName, fileName: d.fileName || undefined }));
     const { data: userData } = await supabase.auth.getUser();
 
     const { data: saldoRow, error: saldoError } = await supabase
@@ -8132,7 +8542,6 @@ function SubSaldoComplementar({
         valor_liberado: numLib,
         valor_pago: numPago,
         saldo_em_conta: numSaldo,
-        necessidade_aditivo: numAditivo,
         analista_nome: null,
         documentos_checklist: JSON.stringify(documentos),
         usuario_id: userData.user?.id ?? null
@@ -8154,7 +8563,6 @@ function SubSaldoComplementar({
       valorLiberado: numLib,
       valorPago: numPago,
       saldoEmConta: numSaldo,
-      necessidadeAditivo: numAditivo,
       documentos,
     };
 
@@ -8168,7 +8576,6 @@ function SubSaldoComplementar({
     alert('Solicitação de Saldo Complementar enviada! Aguardando atribuição de analista.');
   };
 
-  const inputCls = 'w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white text-slate-800 font-mono focus:outline-none focus:ring-2 focus:ring-teal-500/20';
   const labelCls = 'block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1';
   const autoCls  = 'px-3 py-2 text-xs border border-emerald-200 bg-emerald-50/40 rounded-xl font-semibold text-slate-800';
 
@@ -8243,23 +8650,27 @@ function SubSaldoComplementar({
             </div>
           </div>
 
-          {/* Dados Financeiros */}
+          {/* Dados Financeiros — vêm do próprio sistema (PAF homologado e execução da empresa
+              distratada), não são digitados aqui. */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
             <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 border-b border-slate-100 pb-2 flex items-center gap-1.5">
               <DollarSign className="w-4 h-4 text-teal-500" /> Dados Financeiros
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {numTC === 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800">
+                ⚠️ Nenhum PAF homologado encontrado para esta obra. Os valores abaixo ficarão zerados até o PAF ser registrado.
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: 'Valor TC (R$)',               val: valorTC,            set: setValorTC,            ph: '500000' },
-                { label: 'Valor Liberado (R$)',          val: valorLiberado,      set: setValorLiberado,      ph: '300000' },
-                { label: 'Valor Pago (R$)',              val: valorPago,          set: setValorPago,          ph: '200000' },
-                { label: 'Saldo em Conta (R$)',          val: saldoEmConta,       set: setSaldoEmConta,       ph: '100000' },
-                { label: 'Necessidade de Aditivo (R$)', val: necessidadeAditivo, set: setNecessidadeAditivo, ph: '50000' },
+                { label: 'Valor TC (R$)',      val: numTC },
+                { label: 'Valor Liberado (R$)', val: numLib },
+                { label: 'Valor Pago (R$)',     val: numPago },
+                { label: 'Saldo em Conta (R$)', val: numSaldo },
               ].map(f => (
                 <div key={f.label}>
                   <label className={labelCls}>{f.label}</label>
-                  <input type="number" placeholder={f.ph} value={f.val}
-                    onChange={e => f.set(e.target.value)} className={inputCls} />
+                  <div className={autoCls}>{fmtBRL(f.val)}</div>
                 </div>
               ))}
             </div>
@@ -8274,7 +8685,6 @@ function SubSaldoComplementar({
               {[
                 { label: 'Valor Disponível (Saldo em Conta)',  value: valorDisponivel,       sign: '' },
                 { label: 'Valor Ainda Não Liberado',           value: valorAindaNaoLiberado,  sign: '+' },
-                { label: 'Necessidade de Aditivo',             value: numAditivo,             sign: '+' },
               ].map(r => (
                 <div key={r.label} className="flex items-center justify-between gap-4 text-xs">
                   <span className="text-teal-700 font-semibold flex items-center gap-1.5">
@@ -8312,44 +8722,64 @@ function SubSaldoComplementar({
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                 <UploadCloud className="w-4 h-4 text-teal-500" /> Documentação Obrigatória
               </h3>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${todosDocsMarcados ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'}`}>
-                {docs.filter(d => d.checked).length}/{docs.length} anexados
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${todosDocsAnexados ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600'}`}>
+                {docs.filter(d => d.fileName).length}/{docs.length} anexados
               </span>
             </div>
             <p className="text-[10px] text-slate-500">
               Todos os documentos são obrigatórios para envio da solicitação.
             </p>
             <div className="space-y-2">
-              {docs.map((doc, idx) => (
-                <div key={doc.item}
-                  className={`flex items-center justify-between gap-3 p-3 rounded-xl border text-xs transition-colors ${
-                    doc.checked ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50/30 border-rose-200'
-                  }`}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    {doc.checked
-                      ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                      : <FileText className="w-4 h-4 text-rose-400 shrink-0" />
-                    }
-                    <div className="min-w-0">
-                      <span className={`font-bold block truncate ${doc.checked ? 'text-emerald-700' : 'text-rose-700'}`}>
-                        ☑ {doc.item}
-                        <span className="ml-1.5 text-[8px] bg-rose-100 text-rose-600 px-1 rounded font-black uppercase">Obrigatório</span>
-                      </span>
-                      {doc.fileName && (
-                        <span className="text-[9px] text-slate-400 font-mono">{doc.fileName}</span>
+              {docs.map((doc, idx) => {
+                const isUploaded = !!doc.fileName;
+                const inputId = `file-saldo-comp-${idx}`;
+                return (
+                  <div key={doc.item}
+                    className={`flex items-center justify-between gap-3 p-3 rounded-xl border text-xs transition-colors ${
+                      isUploaded ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50/30 border-rose-200'
+                    }`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      {isUploaded
+                        ? <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                        : <FileText className="w-4 h-4 text-rose-400 shrink-0" />
+                      }
+                      <div className="min-w-0">
+                        <span className={`font-bold block truncate ${isUploaded ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {doc.item}
+                          <span className="ml-1.5 text-[8px] bg-rose-100 text-rose-600 px-1 rounded font-black uppercase">Obrigatório</span>
+                        </span>
+                        {isUploaded && (
+                          <span className="text-[9px] text-slate-400 font-mono block truncate">{doc.fileName} · {doc.fileSize}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <input
+                        type="file"
+                        id={inputId}
+                        className="hidden"
+                        onChange={(e) => handleUploadDoc(idx, e)}
+                      />
+                      {isUploaded && (
+                        <button type="button" onClick={() => handleRemoveDoc(idx)}
+                          className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="Remover arquivo">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
+                      <label htmlFor={inputId}
+                        className={`flex items-center gap-1 px-3 py-1 text-[10px] font-black rounded-lg border transition cursor-pointer ${
+                          isUploaded
+                            ? 'bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                            : 'bg-white border-rose-300 text-rose-600 hover:bg-rose-50'
+                        }`}>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        {isUploaded ? 'Substituir' : 'Anexar'}
+                      </label>
                     </div>
                   </div>
-                  <button type="button" onClick={() => toggleDoc(idx)}
-                    className={`shrink-0 px-3 py-1 text-[10px] font-black rounded-lg border transition cursor-pointer ${
-                      doc.checked
-                        ? 'bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                        : 'bg-white border-rose-300 text-rose-600 hover:bg-rose-50'
-                    }`}>
-                    {doc.checked ? '✓ Anexado' : '+ Marcar Anexado'}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -8360,7 +8790,7 @@ function SubSaldoComplementar({
               ← Voltar
             </button>
             <button type="button" onClick={handleSubmit}
-              disabled={!todosDocsMarcados}
+              disabled={!todosDocsAnexados}
               className="flex items-center gap-1.5 px-5 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-black rounded-xl shadow-sm transition cursor-pointer">
               <CheckCircle className="w-4 h-4" /> Enviar Solicitação
             </button>
@@ -8379,7 +8809,7 @@ function SubSaldoComplementar({
             <div key={sc.id} className="flex items-start justify-between gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
               <div>
                 <p className="font-bold text-slate-700">{sc.id} — {sc.dataCriacao}</p>
-                <p className="text-slate-500 mt-0.5">Valor Total: {fmtBRL(sc.saldoEmConta + Math.max(0, sc.valorTC - sc.valorLiberado) + sc.necessidadeAditivo)}</p>
+                <p className="text-slate-500 mt-0.5">Valor Total: {fmtBRL(sc.saldoEmConta + Math.max(0, sc.valorTC - sc.valorLiberado))}</p>
               </div>
               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
                 sc.status === 'aguardando_analista' ? 'bg-amber-100 text-amber-700' :

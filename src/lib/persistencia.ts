@@ -64,12 +64,12 @@ export async function sincronizarDocumentosDaSolicitacao(
   sol: Solicitacao,
   usuarioId: string | null
 ): Promise<void> {
-  const paraLinha = (doc: DocumentoChecklist, categoria: 'checklist_obrigatorio' | 'checklist_outros') => ({
+  const paraLinha = (doc: DocumentoChecklist, categoria: 'checklist_obrigatorio' | 'checklist_outros' | 'ged_execucao') => ({
     solicitacao_id: dbId,
     categoria,
-    // Checklist padrão: nome_logico = id canônico ('doc_1'…). Outros documentos:
-    // nome_logico = nome digitado (o id local 'doc_custom_<ts>' é descartável).
-    nome_logico: categoria === 'checklist_obrigatorio' ? doc.id : doc.nome,
+    // Checklist padrão e GED: nome_logico = id canônico ('doc_1', 'ged_art'…). Outros
+    // documentos: nome_logico = nome digitado (o id local 'doc_custom_<ts>' é descartável).
+    nome_logico: categoria === 'checklist_outros' ? doc.nome : doc.id,
     obrigatorio: doc.obrigatorio,
     status: doc.status,
     justificativa: doc.justificativa ?? null,
@@ -83,6 +83,7 @@ export async function sincronizarDocumentosDaSolicitacao(
   const linhas = [
     ...(sol.documentos ?? []).map(d => paraLinha(d, 'checklist_obrigatorio')),
     ...(sol.outrosDocumentos ?? []).map(d => paraLinha(d, 'checklist_outros')),
+    ...(sol.documentosGED ?? []).map(d => paraLinha(d, 'ged_execucao')),
   ];
 
   let idsInseridos: string[] = [];
@@ -96,7 +97,44 @@ export async function sincronizarDocumentosDaSolicitacao(
     .from('documentos')
     .delete()
     .eq('solicitacao_id', dbId)
-    .in('categoria', ['checklist_obrigatorio', 'checklist_outros']);
+    .in('categoria', ['checklist_obrigatorio', 'checklist_outros', 'ged_execucao']);
+  if (idsInseridos.length > 0) {
+    remover = remover.not('id', 'in', `(${idsInseridos.join(',')})`);
+  }
+  const { error: erroDelete } = await remover;
+  if (erroDelete) throw erroDelete;
+}
+
+// Parcelas do PAF (recursos liberados) — mesmo padrão replace-set dos documentos acima.
+// A tabela parcelas_paf existe desde a baseline mas nunca era sincronizada pelo front-end;
+// parcelasPAF só vivia em React state + localStorage antes desta função existir.
+export async function sincronizarParcelasDaSolicitacao(
+  dbId: string,
+  sol: Solicitacao
+): Promise<void> {
+  // Linhas com valor <= 0 (parcela em edição, ainda não preenchida no formulário) são
+  // ignoradas aqui — a tabela tem CHECK (valor > 0) e um insert em lote falharia por inteiro
+  // por causa de uma única linha incompleta.
+  const linhas = (sol.parcelasPAF ?? [])
+    .filter(p => (p.valor ?? 0) > 0)
+    .map(p => ({
+      solicitacao_id: dbId,
+      valor: p.valor,
+      data_pagamento: DATA_ISO_RE.test(p.dataPagamento || '') ? p.dataPagamento : null,
+      ordem_pagamento: p.ordemPagamento ?? null,
+    }));
+
+  let idsInseridos: string[] = [];
+  if (linhas.length > 0) {
+    const { data, error } = await supabase.from('parcelas_paf').insert(linhas).select('id');
+    if (error) throw error;
+    idsInseridos = (data ?? []).map((r: any) => r.id);
+  }
+
+  let remover = supabase
+    .from('parcelas_paf')
+    .delete()
+    .eq('solicitacao_id', dbId);
   if (idsInseridos.length > 0) {
     remover = remover.not('id', 'in', `(${idsInseridos.join(',')})`);
   }

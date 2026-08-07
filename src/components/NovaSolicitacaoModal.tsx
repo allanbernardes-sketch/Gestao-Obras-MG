@@ -508,7 +508,7 @@ export default function NovaSolicitacaoModal({ onClose, onSave, perfilUsuario, u
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
               <div className="sm:col-span-2">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  Este atendimento utiliza saldo de PAF anterior cancelado? *
+                  Este Atendimento Precisará de liberação financeira? *
                 </label>
                 <div className="flex gap-4">
                   {(['Não', 'Sim'] as const).map(op => (

@@ -1341,12 +1341,13 @@ export default function ProcessAnalysisPanel({
                     type="number"
                     min={1}
                     step={1}
+                    placeholder="Ex: 6"
                     value={solicitacao.prazoEstimadoObra ?? ''}
                     onChange={(e) => handleUpdateReferencia('prazoEstimadoObra', e.target.value ? parseInt(e.target.value, 10) : undefined)}
                     disabled={!isMyAssignment}
-                    className="w-full px-3 py-2 pr-10 text-xs border border-slate-200 rounded-lg font-mono font-bold text-slate-800"
+                    className="w-full px-3 py-2 pr-14 text-xs border border-slate-200 rounded-lg font-mono font-bold text-slate-800"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">dias</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">meses</span>
                 </div>
               </div>
 
@@ -1574,7 +1575,7 @@ export default function ProcessAnalysisPanel({
 
                           {doc.status === 'recusado' && isUploaded && (
                             <textarea
-                              rows={1.5}
+                              rows={4}
                               value={doc.justificativa || ''}
                               onChange={(e) => handleSetDocValidation(doc.id, 'recusado', e.target.value)}
                               placeholder="Digite aqui o motivo do erro para correção..."
@@ -1600,115 +1601,7 @@ export default function ProcessAnalysisPanel({
             </div>
           </div>
 
-          {/* 2. DOCUMENTOS OPCIONAIS / NÃO OBRIGATÓRIOS */}
-          <div className="space-y-3 pt-4">
-            <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-widest font-mono flex items-center gap-1.5 border-b border-slate-100 pb-2">
-              <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-              📂 Documentos Não-Obrigatórios ({solicitacao.documentos.filter(d => !d.obrigatorio).length})
-            </h3>
-
-            <div className="space-y-3">
-              {solicitacao.documentos.filter(d => !d.obrigatorio).map((doc) => {
-                const isUploaded = doc.fileName !== undefined;
-                return (
-                  <div key={doc.id} className={`p-4 rounded-xl border transition-all ${
-                    doc.status === 'recusado'
-                      ? 'border-red-300 bg-red-50/20'
-                      : doc.status === 'aprovado'
-                        ? 'border-emerald-300 bg-emerald-50/20'
-                        : 'border-amber-300 bg-amber-50/20'
-                  }`}>
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      
-                      {/* Left: Info details */}
-                      <div className="max-w-xl">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h5 className="font-extrabold text-slate-800 text-xs font-sans">{doc.nome}</h5>
-                          <span className="text-[9px] bg-slate-105 border border-slate-200 rounded px-1.5 py-0.5 uppercase text-slate-600 font-medium tracking-wider font-mono">Opcional</span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1 font-sans">{doc.desc}</p>
-
-                        {/* File element */}
-                        {isUploaded ? (
-                          <div className="mt-2.5 flex items-center gap-2.5 bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono">
-                            <FileText className="w-4 h-4 text-blue-500 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <span className="font-bold text-slate-800 block truncate">{doc.fileName}</span>
-                              <span className="text-[10px] text-slate-500 block">Anexado em: {doc.uploadedAt} | {doc.fileSize}</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadDoc(doc)}
-                              className="text-blue-600 hover:text-blue-800 border border-blue-200 hover:bg-blue-50 px-2 py-1 rounded transition text-[10px] uppercase font-bold shrink-0 cursor-pointer"
-                            >
-                              Baixar
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] font-mono text-slate-500 block mt-2 italic">
-                            ⚠️ Nenhum anexo complementar enviado para este item facultativo.
-                          </span>
-                        )}
-
-                        {/* Reason selection if recusado */}
-                        {doc.status === 'recusado' && (
-                          <div className="mt-2.5 p-3 bg-red-50/75 border border-red-200/60 rounded-lg text-xs space-y-1">
-                            <span className="font-bold text-red-800 block text-[9.5px] uppercase tracking-wide">Motivo da Recusa</span>
-                            <p className="text-slate-700">{doc.justificativa || 'Nenhum parecer digitado.'}</p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Right: Validation Controls — documento opcional: pode ser validado mesmo sem anexo, já que não é imprescindível */}
-                      {isMyAssignment && (
-                        <div className="flex flex-col items-end gap-2 shrink-0">
-                          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                            <button
-                              type="button"
-                              onClick={() => handleSetDocValidation(doc.id, 'aprovado')}
-                              className={`px-3 py-1.5 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer ${
-                                doc.status === 'aprovado'
-                                  ? 'bg-emerald-600 text-white shadow-3xs'
-                                  : 'text-slate-600 hover:bg-slate-200'
-                              }`}
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              Validado
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSetDocValidation(doc.id, 'recusado')}
-                              disabled={!isUploaded}
-                              className={`px-3 py-1.5 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer ${
-                                doc.status === 'recusado'
-                                  ? 'bg-red-600 text-white shadow-3xs'
-                                  : 'text-slate-600 hover:bg-slate-200'
-                              } ${!isUploaded ? 'opacity-40 cursor-not-allowed' : ''}`}
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                              Não Validado
-                            </button>
-                          </div>
-
-                          {doc.status === 'recusado' && isUploaded && (
-                            <textarea
-                              rows={1.5}
-                              value={doc.justificativa || ''}
-                              onChange={(e) => handleSetDocValidation(doc.id, 'recusado', e.target.value)}
-                              placeholder="Digite aqui o motivo do erro para correção..."
-                              className="w-full text-xs p-2 border border-slate-250 bg-white rounded-lg focus:outline-hidden text-slate-800"
-                            />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 3. OUTROS DOCUMENTOS */}
+          {/* 2. OUTROS DOCUMENTOS */}
           <div className="space-y-3 pt-4 font-sans">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-2">
               <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-widest font-mono flex items-center gap-1.5">
@@ -1841,7 +1734,7 @@ export default function ProcessAnalysisPanel({
 
                             {doc.status === 'recusado' && isUploaded && (
                               <textarea
-                                rows={1.5}
+                                rows={4}
                                 value={doc.justificativa || ''}
                                 onChange={(e) => handleSetCustomDocValidation(doc.id, 'recusado', e.target.value)}
                                 placeholder="Digite aqui o motivo do erro para correção..."

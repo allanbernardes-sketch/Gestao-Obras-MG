@@ -694,7 +694,6 @@ Plataforma e-SGO - SEE-MG`;
                 <CampoLeitura label="Valor Liberado" value={fmtBRL(sal.valorLiberado)} />
                 <CampoLeitura label="Valor Pago" value={fmtBRL(sal.valorPago)} />
                 <CampoLeitura label="Saldo em Conta" value={fmtBRL(sal.saldoEmConta)} />
-                <CampoLeitura label="Necessidade de Aditivo" value={fmtBRL(sal.necessidadeAditivo)} />
                 <CampoLeitura label="Data de Criação" value={sal.dataCriacao} />
               </div>
               {(sal.documentos || []).length > 0 && (

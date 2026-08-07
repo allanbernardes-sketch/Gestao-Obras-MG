@@ -36,7 +36,7 @@ export const REGRAS_ETIQUETA: RegraEtiqueta[] = [
   {
     codigo: 'EMENDA_IMPOSITIVA',
     pontos: 20,
-    condicao: (sol) => (sol.tipoAtendimento || '').toUpperCase() === 'EMENDA' && sol.emendaImpositiva === 'Sim',
+    condicao: (sol) => (sol.tipoAtendimento || '').toUpperCase() === 'EMENDA' && sol.tipoEmenda === 'Impositiva',
     label: () => 'EMENDA IMPOSITIVA',
     corClassName: 'border border-blue-400 text-blue-700 bg-blue-50/40'
   },
@@ -109,6 +109,63 @@ export function compararPorPrioridade(a: Solicitacao, b: Solicitacao): number {
   if (scoreB !== scoreA) return scoreB - scoreA;
 
   return (a.dataCriacao || '').localeCompare(b.dataCriacao || '');
+}
+
+export interface CriterioPontuacaoAutorizacao {
+  criterio: string;
+  pontos: number;
+}
+
+export interface PontuacaoAutorizacaoPAF {
+  pontos: number;
+  criterios: CriterioPontuacaoAutorizacao[];
+}
+
+// Ranking técnico específico da fila de Autorização do PAF (Etapa 3, subsecretário) — ajuda a
+// priorizar entre processos já homologados na análise técnica, todos aguardando dotação orçamentária.
+// Não reaproveita calcularPrioridade/compararPorPrioridade acima de propósito: aquele mecanismo
+// serve a fila de Aprovação Regional (Etapa 1) e usa a data só como desempate — aqui a antiguidade
+// é, por pedido explícito, um critério que soma pontos.
+//
+// Critérios iniciais (a discutir/ajustar):
+//   1. Antiguidade — processos parados há mais tempo somam mais pontos (+1 a cada 5 dias, até 40).
+//   2. Tipo de atendimento — Emergencial > Emenda Impositiva / Notificação de órgão externo > Normal.
+//   3. Prioridade manual — sinalização explícita de um gestor (mesma flag usada em calcularPrioridade).
+//
+// Candidatos para incorporar depois (não implementados ainda): valor da obra, aditivo/ajuste
+// pendente vinculado, concentração de processos por SRE, classe/complexidade IEE da obra.
+export function calcularPontuacaoAutorizacaoPAF(sol: Solicitacao): PontuacaoAutorizacaoPAF {
+  const criterios: CriterioPontuacaoAutorizacao[] = [];
+
+  const dias = sol.dataCriacao
+    ? Math.max(0, Math.floor((Date.now() - new Date(`${sol.dataCriacao}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
+  const pontosIdade = Math.min(40, Math.floor(dias / 5));
+  criterios.push({ criterio: `Antiguidade (${dias} dia${dias === 1 ? '' : 's'} desde o cadastro)`, pontos: pontosIdade });
+
+  const tipo = (sol.tipoAtendimento || '').toUpperCase();
+  let pontosTipo = 0;
+  let labelTipo = 'Tipo de atendimento normal';
+  if (tipo === 'EMERGENCIAL') {
+    pontosTipo = 50;
+    labelTipo = 'Atendimento Emergencial';
+  } else if (tipo === 'EMENDA' && sol.tipoEmenda === 'Impositiva') {
+    pontosTipo = 25;
+    labelTipo = 'Emenda Impositiva';
+  } else if (sol.orgaoEmissorNotificacao) {
+    pontosTipo = 20;
+    labelTipo = `Notificação — ${sol.orgaoEmissorNotificacao}`;
+  }
+  criterios.push({ criterio: labelTipo, pontos: pontosTipo });
+
+  if (sol.prioridadeManual) {
+    criterios.push({ criterio: 'Prioridade manual (gestor)', pontos: 15 });
+  }
+
+  return {
+    pontos: criterios.reduce((soma, c) => soma + c.pontos, 0),
+    criterios
+  };
 }
 
 // Aplica calcularPrioridade/calcularEstrelas e grava o resultado nos campos do processo.
