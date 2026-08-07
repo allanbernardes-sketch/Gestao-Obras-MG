@@ -243,6 +243,7 @@ export interface Solicitacao {
     data: string;
     motivos: { label: string; campo: string; motivo: string }[];
     docsRecusados: { nome: string; id: string; justificativa: string }[];
+    justificativaAdicional?: string;
   }[];
   statusPAF?: 'Aguardando Geração' | 'Aguardando Pagamento' | 'Pago Parcialmente' | 'Pago e Liberado';
 
@@ -322,7 +323,6 @@ export interface Solicitacao {
   // Snapshot dos valores enviados pelo técnico ao entrar em "Em Análise DORE" — usado para detectar EDITADO por diff real
   valoresOriginaisTecnico?: Record<string, any>;
 
-  observacoesAnalistaDadosGerais?: string;
   observacoesAnalistaChecklist?: string;
   outrosDocumentos?: DocumentoChecklist[];
 

@@ -207,6 +207,17 @@ export default function App() {
   const [rejectionJustification, setRejectionJustification] = useState('');
   const [confirmingSolId, setConfirmingSolId] = useState<string | null>(null);
 
+  // SELEÇÃO MÚLTIPLA E AUTORIZAÇÃO EM LOTE PARA "3. AUTORIZAÇÃO DO PAF"
+  const [selectedAutorizacaoIds, setSelectedAutorizacaoIds] = useState<Set<string>>(new Set());
+  const [modalLoteAutorizacaoAberto, setModalLoteAutorizacaoAberto] = useState(false);
+  const [modalLoteSucessoCount, setModalLoteSucessoCount] = useState<number | null>(null);
+
+  // Limpa a seleção em lote sempre que os filtros da tela de Autorização do PAF mudam,
+  // para não autorizar por engano itens que saíram da lista filtrada visível
+  useEffect(() => {
+    setSelectedAutorizacaoIds(new Set());
+  }, [filterCodesc, filterSre, filterMunicipio, filterEscola]);
+
   // REGISTROS DE SEGURANÇA (INTERACTIVE STATE MODEL)
   const [usuariosSeguranca, setUsuariosSeguranca] = useState<UsuarioSistema[]>([
     { id: 'USR-01', nome: 'João Paulo Penfield', email: 'joao.paulo@sre.mg.gov.br', perfil: 'tecnico_infra', departamento: 'SRE Patos de Minas' },
@@ -2918,6 +2929,27 @@ export default function App() {
                 setRejectionJustification('');
               };
 
+              // Autorização em lote — aplica todas as atualizações num único setSolicitacoes.
+              // handleAutorizarPAF chama handleUpdateSolicitacao, que lê `solicitacoes` do
+              // closure e não usa updater funcional; chamá-la N vezes em sequência faria cada
+              // chamada partir do mesmo array desatualizado e só a última sobreviveria.
+              const handleAutorizarLote = (selecionadas: Solicitacao[]) => {
+                const hoje = new Date().toISOString().split('T')[0];
+                const idsSelecionados = new Set(selecionadas.map(s => s.id));
+                const atualizadas = solicitacoes
+                  .filter(s => idsSelecionados.has(s.id))
+                  .map(s => ({
+                    ...s,
+                    etapaAtual: 'paf' as const,
+                    historicoEtapas: [
+                      ...s.historicoEtapas,
+                      { etapa: 'paf' as const, data: hoje, responsavel: 'Gestor (Autorização do PAF em Lote)' }
+                    ]
+                  }));
+                const novas = solicitacoes.map(s => atualizadas.find(a => a.id === s.id) || s);
+                atualizarEGuardarSolicitacoes(novas, atualizadas);
+              };
+
               return (
                 <div id="paf-autorizacao-workspace" className="w-full flex-grow flex flex-col space-y-6">
                   {/* Banner superior de dotação de recursos */}
@@ -3024,6 +3056,42 @@ export default function App() {
                     )}
                   </div>
 
+                  {/* BARRA DE SELEÇÃO MÚLTIPLA E AUTORIZAÇÃO EM LOTE */}
+                  {(perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') && filteredSchoolsInAutorizacao.length > 0 && (
+                    <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-3xs text-left flex flex-wrap items-center justify-between gap-3 font-sans">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAutorizacaoIds(new Set(filteredSchoolsInAutorizacao.map(({ sol }) => sol.id)))}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          ☑ Selecionar tudo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAutorizacaoIds(new Set())}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          ☐ Limpar seleção
+                        </button>
+                        {selectedAutorizacaoIds.size > 0 && (
+                          <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 border border-blue-150 font-extrabold rounded-full text-[10px] font-mono">
+                            {selectedAutorizacaoIds.size} demanda{selectedAutorizacaoIds.size > 1 ? 's' : ''} selecionada{selectedAutorizacaoIds.size > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                      {selectedAutorizacaoIds.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setModalLoteAutorizacaoAberto(true)}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-[10.5px] uppercase tracking-wider transition-colors shadow-3xs cursor-pointer"
+                        >
+                          ✅ Autorizar {selectedAutorizacaoIds.size} demanda{selectedAutorizacaoIds.size > 1 ? 's' : ''} selecionada{selectedAutorizacaoIds.size > 1 ? 's' : ''}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {perfilUsuario !== 'gestor_paf' && (
                     <div className="p-4 bg-amber-50 border border-amber-205 text-neutral-900 rounded-xl text-xs space-y-1.5 text-left font-sans flex items-start gap-2.5">
                       <span className="text-base select-none leading-none mt-0.5">⚠️</span>
@@ -3059,6 +3127,7 @@ export default function App() {
                         <table className="w-full text-left border-collapse font-sans text-xs">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 font-bold uppercase tracking-wider text-[10px] h-11">
+                              <th className="py-3 px-4 w-10"></th>
                               <th className="py-3 px-4 w-16 text-center" title="Ranking técnico sugerido — quanto maior a pontuação, maior a prioridade de autorização">Rank</th>
                               <th className="py-3 px-4 w-28">Obra ID</th>
                               <th className="py-3 px-4">Escola</th>
@@ -3079,6 +3148,23 @@ export default function App() {
                                 .join('\n') || 'Sem pontuação adicional';
                               return (
                                 <tr key={sol.id} className="hover:bg-slate-50/50 transition-colors group">
+                                  {/* Checkbox de seleção em lote */}
+                                  <td className="py-4 px-4 text-center">
+                                    {(perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') && (
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedAutorizacaoIds.has(sol.id)}
+                                        onChange={() => {
+                                          setSelectedAutorizacaoIds(prev => {
+                                            const next = new Set(prev);
+                                            next.has(sol.id) ? next.delete(sol.id) : next.add(sol.id);
+                                            return next;
+                                          });
+                                        }}
+                                        className="w-3.5 h-3.5 cursor-pointer accent-emerald-600"
+                                      />
+                                    )}
+                                  </td>
                                   {/* Rank técnico */}
                                   <td className="py-4 px-4 text-center" title={tituloRanking}>
                                     <span className="inline-flex flex-col items-center gap-0.5">
@@ -3282,6 +3368,79 @@ export default function App() {
                       </div>
                     );
                   })()}
+
+                  {/* MODAL DE CONFIRMAÇÃO DE AUTORIZAÇÃO EM LOTE */}
+                  {modalLoteAutorizacaoAberto && (() => {
+                    const selecionadas = schoolsInAutorizacao.filter(s => selectedAutorizacaoIds.has(s.id));
+                    return (
+                      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center z-50 p-4 font-sans">
+                        <div className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-150">
+                          <div className="bg-emerald-50 border-b border-emerald-100 p-4">
+                            <h3 className="text-sm font-extrabold text-emerald-800 uppercase tracking-wider flex items-center gap-2">
+                              ✓ Autorizar {selecionadas.length} demandas em lote
+                            </h3>
+                          </div>
+
+                          <div className="p-4 space-y-3">
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              As seguintes demandas serão autorizadas oficialmente:
+                            </p>
+                            <ul className="max-h-60 overflow-y-auto space-y-1.5 text-xs">
+                              {selecionadas.map(s => (
+                                <li key={s.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+                                  <span className="font-bold text-slate-800 truncate">{s.nomeEscola}</span>
+                                  <span className="text-[10px] font-mono text-slate-400 shrink-0">{s.id}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2 text-xs">
+                            <button
+                              onClick={() => setModalLoteAutorizacaoAberto(false)}
+                              className="px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-lg cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => {
+                                const total = selecionadas.length;
+                                handleAutorizarLote(selecionadas);
+                                setSelectedAutorizacaoIds(new Set());
+                                setModalLoteAutorizacaoAberto(false);
+                                setModalLoteSucessoCount(total);
+                              }}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg cursor-pointer"
+                            >
+                              Confirmar Autorização em Lote
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* MODAL DE SUCESSO DA AUTORIZAÇÃO EM LOTE */}
+                  {modalLoteSucessoCount !== null && (
+                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center z-50 p-4 font-sans">
+                      <div className="bg-white rounded-xl shadow-xl max-w-sm w-full border border-slate-200 overflow-hidden text-center animate-in fade-in zoom-in-95 duration-150">
+                        <div className="p-6 space-y-2">
+                          <span className="text-3xl block">✅</span>
+                          <p className="text-sm font-black text-slate-800">
+                            {modalLoteSucessoCount} demanda{modalLoteSucessoCount > 1 ? 's foram autorizadas' : ' foi autorizada'} com sucesso
+                          </p>
+                        </div>
+                        <div className="px-5 py-4 border-t border-slate-100">
+                          <button
+                            onClick={() => setModalLoteSucessoCount(null)}
+                            className="w-full px-4 py-2 text-xs font-black text-white bg-slate-800 hover:bg-slate-900 rounded-lg transition cursor-pointer"
+                          >
+                            OK
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()

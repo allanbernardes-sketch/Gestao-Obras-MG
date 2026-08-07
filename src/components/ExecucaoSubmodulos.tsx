@@ -2032,6 +2032,9 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
   // registrados na Autorização do PAF — distinto de sumMedicoes, que é o avanço físico homologado (nem
   // sempre já pago).
   const sumPagamentosLiberados = (currentSol.parcelasPAF || []).reduce((s, p) => s + (p.valor || 0), 0);
+  // Alerta de saldo liberado quase esgotado — mesmo limiar usado em Acompanhamento de PAF
+  const percentGastoLiberado = sumPagamentosLiberados > 0 ? (sumMedicoes / sumPagamentosLiberados) * 100 : 0;
+  const precisaProximaParcela = sumPagamentosLiberados > 0 && percentGastoLiberado >= 90;
   // Orçamento fixo da obra (PAF) — não soma contratos, pois cada nova empresa contrata pelo saldo restante
   const originalBudget = currentSol.valorPlanilha || currentSol.valorHomologado
     || (currentSol.empresasAnteriores?.[0]?.contratoValorInicial ?? 0)
@@ -2496,7 +2499,18 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
       {/* DASHBOARD TAB CONTENT */}
       {activeTab === 'dashboard' && (
         <div className="space-y-6">
-          
+
+          {/* Alerta de saldo liberado pelo PAF quase esgotado */}
+          {precisaProximaParcela && (
+            <div className="flex items-start gap-2 p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-800">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                <strong>Atenção:</strong> já foi gasto {percentGastoLiberado.toFixed(1)}% do valor liberado até agora.
+                Solicite a liberação da próxima parcela para não interromper a execução da obra.
+              </span>
+            </div>
+          )}
+
           {/* Top Status and Progress KPIs */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
@@ -3999,6 +4013,12 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
   // Disponível para medição da empresa atual (até atingir 100% do seu contrato)
   const fisicoDisponivel = Math.max(0, 100 - fisicoEmpresaAtual);
 
+  // Saldo liberado pelo PAF (todas as parcelas pagas pela SEE) vs. total já medido na obra
+  // (todas as empresas) — controle financeiro independente do limite contratual acima.
+  const totalLiberadoPAF = (currentSol.parcelasPAF || []).reduce((acc, p) => acc + (p.valor || 0), 0);
+  const totalMedidoPAF = (currentSol.medicoes || []).reduce((acc, m) => acc + (m.valor || 0), 0);
+  const saldoDisponivelPAF = totalLiberadoPAF - totalMedidoPAF;
+
   // Sync state on school/project change or when measurements list size changes
   useEffect(() => {
     if (currentSol) {
@@ -4075,6 +4095,23 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
     if (v + sumMedicoesEmpresaAtual > contratoEmpresaAtual) {
       setErrorMessage(
         `Impossível Registrar: O valor desta medição (R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) somado ao total medido por esta empresa (R$ ${sumMedicoesEmpresaAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o valor do contrato desta empresa de R$ ${contratoEmpresaAtual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+      );
+      return;
+    }
+
+    // Valida contra o saldo já liberado pelo PAF — só quando há ao menos uma parcela
+    // registrada (obras ainda sem parcelas lançadas não ficam travadas por este limite)
+    if (totalLiberadoPAF > 0 && v > saldoDisponivelPAF) {
+      setErrorMessage(
+        `Impossível Registrar: o valor desta medição (R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o saldo liberado disponível (R$ ${saldoDisponivelPAF.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Solicite a liberação de mais uma parcela do PAF antes de registrar esta medição.`
+      );
+      return;
+    }
+
+    // Valida a data fim do período da medição contra a vigência do contrato
+    if (currentSol.contratoFimVigencia && periodoMFim > currentSol.contratoFimVigencia) {
+      setErrorMessage(
+        `A data fim da medição (${new Date(periodoMFim + 'T12:00:00').toLocaleDateString('pt-BR')}) é posterior ao fim da vigência do contrato (${new Date(currentSol.contratoFimVigencia + 'T12:00:00').toLocaleDateString('pt-BR')}). Verifique as datas antes de continuar.`
       );
       return;
     }
@@ -4448,6 +4485,28 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
           </div>
         )}
 
+        {/* Saldo liberado pelo PAF — controle financeiro independente do limite contratual */}
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-left">
+            <span className="text-[9px] uppercase font-bold text-slate-400 block">Total Liberado (SEE)</span>
+            <span className="text-xs font-black text-slate-800 font-mono block mt-0.5 truncate">
+              R$ {totalLiberadoPAF.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-left">
+            <span className="text-[9px] uppercase font-bold text-slate-400 block">Total Já Medido</span>
+            <span className="text-xs font-black text-slate-800 font-mono block mt-0.5 truncate">
+              R$ {totalMedidoPAF.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className={`p-2.5 border rounded-xl text-left ${saldoDisponivelPAF >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <span className={`text-[9px] uppercase font-bold block ${saldoDisponivelPAF >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>Saldo Disponível p/ Medir</span>
+            <span className={`text-xs font-black font-mono block mt-0.5 truncate ${saldoDisponivelPAF >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+              R$ {saldoDisponivelPAF.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+
         <form onSubmit={registrarNovaMedicao} className="space-y-3.5">
           
           <div className="grid grid-cols-3 gap-2">
@@ -4615,19 +4674,7 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
             <div className={`border p-2.5 rounded-xl transition-colors ${
               attemptedSubmit && !relatorioFileName ? 'border-rose-300 bg-rose-50/20' : 'border-slate-200 bg-slate-50/50'
             }`}>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[9.5px] font-extrabold text-slate-700 block">1. Relatório de Fiscalização*</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRelatorioFileName(`Relatorio_Fiscalizacao_Med_${numeroM || '01'}.pdf`);
-                    setErrorMessage(null);
-                  }}
-                  className="text-[9px] font-black text-blue-600 hover:underline cursor-pointer"
-                >
-                  [Auto-Preencher Mock]
-                </button>
-              </div>
+              <span className="text-[9.5px] font-extrabold text-slate-700 block mb-1">1. Relatório de Fiscalização*</span>
               <label className="border border-dashed border-slate-300 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer bg-white hover:bg-slate-50 transition-colors">
                 <input
                   type="file"
@@ -4656,19 +4703,7 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
             <div className={`border p-2.5 rounded-xl transition-colors ${
               attemptedSubmit && !boletimFileName ? 'border-rose-300 bg-rose-50/20' : 'border-slate-200 bg-slate-50/50'
             }`}>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[9.5px] font-extrabold text-slate-700 block">2. Boletim de Medição*</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBoletimFileName(`Boletim_Medicao_Med_${numeroM || '01'}.xlsx`);
-                    setErrorMessage(null);
-                  }}
-                  className="text-[9px] font-black text-blue-600 hover:underline cursor-pointer"
-                >
-                  [Auto-Preencher Mock]
-                </button>
-              </div>
+              <span className="text-[9.5px] font-extrabold text-slate-700 block mb-1">2. Boletim de Medição*</span>
               <label className="border border-dashed border-slate-300 rounded-lg p-3 flex flex-col items-center justify-center cursor-pointer bg-white hover:bg-slate-50 transition-colors">
                 <input
                   type="file"

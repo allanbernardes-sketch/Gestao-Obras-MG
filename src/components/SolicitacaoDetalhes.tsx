@@ -699,7 +699,22 @@ ${totalPendencias > 0
     });
   };
 
-  const enviarReprovacaoFinal = async () => {
+  // Validação com ressalvas — mesmo destino final da aprovação (PAF), mas registra a
+  // observação técnica do analista no parecer consolidado e no histórico de etapas.
+  const enviarValidacaoComRessalvas = (ressalvas: string) => {
+    const parecerTudo = gerarParecerConsolidadoTudo(solicitacao.documentos, solicitacao.contadorAnalises || 1);
+    onUpdate({
+      ...solicitacao,
+      etapaAtual: 'paf_autorizacao',
+      parecerConsolidado: `${parecerTudo}\n\n[VALIDADO COM RESSALVAS] ${ressalvas.trim()}`.trim(),
+      historicoEtapas: [
+        ...solicitacao.historicoEtapas,
+        { etapa: 'paf_autorizacao', data: new Date().toISOString().split('T')[0], responsavel: `${currentUserNome || perfilUsuario} (Validado com Ressalvas)` }
+      ]
+    });
+  };
+
+  const enviarReprovacaoFinal = async (justificativaAdicional?: string) => {
     const contador = (solicitacao.historicoCorrecoes?.length || 0) + 1;
     const hoje = new Date().toISOString().split('T')[0];
     const statusSecoes = getStatusSecoes(solicitacao);
@@ -709,7 +724,7 @@ ${totalPendencias > 0
     const docsRecusados = (solicitacao.documentos || [])
       .filter(d => d.status === 'recusado' && d.justificativa)
       .map(d => ({ nome: d.nome, id: d.id, justificativa: d.justificativa || '' }));
-    const novaEntrada = { contador, data: hoje, motivos: motivosAtivos, docsRecusados };
+    const novaEntrada = { contador, data: hoje, motivos: motivosAtivos, docsRecusados, justificativaAdicional: justificativaAdicional || undefined };
     onUpdate({
       ...solicitacao,
       etapaAtual: 'correcao',
@@ -1957,6 +1972,7 @@ ${totalPendencias > 0
             removerDocumento={removerDocumento}
             enviarAprovacaoFinal={enviarAprovacaoFinal}
             enviarReprovacaoFinal={enviarReprovacaoFinal}
+            enviarValidacaoComRessalvas={enviarValidacaoComRessalvas}
             somenteLeitura={somenteLeitura}
           />
         )}

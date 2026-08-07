@@ -27,13 +27,14 @@ import {
   Eye,
   FileClock,
   XCircle,
-  Paperclip
+  Paperclip,
+  Lock
 } from 'lucide-react';
 import { Solicitacao, EtapaProcesso, DocumentoChecklist, SecaoDadosGerais, syncChecklistDocs } from '../types';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { calcularPrioridade, calcularEstrelas, getInfoEtiqueta, compararPorPrioridade, CodigoEtiqueta } from '../utils/prioridade';
 import { calcularIEE, CLASSE_IEE_INFO, getPontosIEEDisponiveis } from '../utils/iee';
-import { getStatusSecao, getStatusSecoes, tecnicoCorrigiuSecao } from '../utils/validacaoTecnica';
+import { getStatusSecao, getStatusSecoes, tecnicoCorrigiuSecao, capturarSnapshotTecnico } from '../utils/validacaoTecnica';
 import { useEscolas, type EnderecoEscola } from '../hooks/useEscolas';
 
 // Extensões aceitas para anexos do checklist (documentos técnicos, plantas e comprovantes escaneados)
@@ -2229,18 +2230,28 @@ export function NovoAtendimentoPanel({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">
-                      <label className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-150 rounded text-[11px] font-extrabold hover:bg-blue-100 cursor-pointer transition-colors">
-                        {doc.fileName ? 'Substituir Documento' : 'Anexar Documento'}
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleUploadDocReal(doc.id, file);
-                            e.target.value = '';
-                          }}
-                        />
-                      </label>
+                      {isCorrecao && doc.status === 'aprovado' ? (
+                        <span
+                          title="Documento já validado pelo analista — não pode ser substituído"
+                          className="px-2 py-1 bg-slate-100 text-slate-400 border border-slate-200 rounded text-[11px] font-extrabold cursor-not-allowed flex items-center gap-1"
+                        >
+                          <Lock className="w-3 h-3" />
+                          Substituir Documento
+                        </span>
+                      ) : (
+                        <label className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-150 rounded text-[11px] font-extrabold hover:bg-blue-100 cursor-pointer transition-colors">
+                          {doc.fileName ? 'Substituir Documento' : 'Anexar Documento'}
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadDocReal(doc.id, file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
                   );
@@ -2309,6 +2320,10 @@ export function NovoAtendimentoPanel({
                           ...sol,
                           etapaAtual: 'analise' as const,
                           analistaAtribuido: sol.analistaAtribuido,
+                          // Recaptura o snapshot com os valores já corrigidos pelo técnico —
+                          // se não recapturar aqui, o diff de 'editado' continuaria comparando
+                          // contra a submissão original (pré-correção), gerando falsos positivos
+                          valoresOriginaisTecnico: capturarSnapshotTecnico(sol),
                           historicoEtapas: [
                             ...sol.historicoEtapas,
                             {
@@ -3690,6 +3705,10 @@ export function AprovacaoRegionalPanel({
       statusAprovacaoRegional: 'aprovado',
       coordenadorAprovador: nomeCoordenador,
       dataAprovacaoRegional: hoje,
+      // Snapshot dos campos de Dados Gerais no momento em que chegam à DORE — usado por
+      // aplicarEdicaoSecao para detectar automaticamente o status 'editado' quando o
+      // analista altera um valor (ver src/utils/validacaoTecnica.ts)
+      valoresOriginaisTecnico: capturarSnapshotTecnico(sol),
       historicoEtapas: [
         ...sol.historicoEtapas,
         { etapa: 'analise', data: hoje, responsavel: `${nomeCoordenador} (Aprovação Regional)` }

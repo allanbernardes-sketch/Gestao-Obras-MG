@@ -419,7 +419,7 @@ export default function AcompanhamentoPaf({
                   const totalLiberado = (sol.parcelasPAF || []).reduce((s, p) => s + (p.valor || 0), 0);
                   const totalGasto = (sol.medicoes || []).reduce((s, m) => s + (m.valor || 0), 0);
                   const percentGasto = totalLiberado > 0 ? (totalGasto / totalLiberado) * 100 : 0;
-                  const precisaProximaParcela = totalLiberado > 0 && percentGasto >= 80;
+                  const precisaProximaParcela = totalLiberado > 0 && percentGasto >= 90;
                   const percentLiberado = valorObra > 0 ? (totalLiberado / valorObra) * 100 : 0;
                   const liberacaoInfo = !temPAF
                     ? { label: 'Aguardando PAF', barra: 'bg-slate-200', texto: 'text-slate-400' }
@@ -568,7 +568,7 @@ export default function AcompanhamentoPaf({
                               </div>
                             </div>
 
-                            {/* Aviso de 80% */}
+                            {/* Aviso de 90% */}
                             {precisaProximaParcela && (
                               <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-800">
                                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />

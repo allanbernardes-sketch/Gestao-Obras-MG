@@ -28,7 +28,8 @@ interface ProcessAnalysisPanelProps {
   handleAISmartAnalysis: (docId: string) => void;
   removerDocumento: (docId: string) => void;
   enviarAprovacaoFinal?: () => void;
-  enviarReprovacaoFinal?: () => void;
+  enviarReprovacaoFinal?: (justificativaAdicional?: string) => void;
+  enviarValidacaoComRessalvas?: (ressalvas: string) => void;
   somenteLeitura?: boolean;
 }
 
@@ -46,12 +47,19 @@ export default function ProcessAnalysisPanel({
   removerDocumento,
   enviarAprovacaoFinal,
   enviarReprovacaoFinal,
+  enviarValidacaoComRessalvas,
   somenteLeitura = false
 }: ProcessAnalysisPanelProps) {
   const [subTab, setSubTab] = useState<'dados_gerais' | 'checklist'>('dados_gerais');
   const [novoCustomDocNome, setNovoCustomDocNome] = useState('');
   const [opinioesAditivo, setOpinioesAditivo] = useState<{[key: string]: string}>({});
   const [opinioesAjuste, setOpinioesAjuste] = useState<{[key: string]: string}>({});
+
+  // Modais das ações finais — reprovação pede confirmação antes de executar (2 passos);
+  // aprovação e ressalvas mostram feedback após a ação já ter sido efetivada.
+  const [modalAcaoFinal, setModalAcaoFinal] = useState<null | 'reprovacao' | 'reprovacao_sucesso' | 'aprovacao_sucesso' | 'ressalvas'>(null);
+  const [justificativaReprovacao, setJustificativaReprovacao] = useState('');
+  const [ressalvasTexto, setRessalvasTexto] = useState('');
   const { escolas, buscarEnderecos, carregando: carregandoEscolas } = useEscolas();
   const [enderecosDisponiveis, setEnderecosDisponiveis] = useState<EnderecoEscola[]>([]);
 
@@ -1436,24 +1444,6 @@ export default function ProcessAnalysisPanel({
               </div>
             )}
           </div>
-
-          {/* Campo de observações agrupadas/consolidado */}
-          <div className="bg-slate-50 p-5 rounded-xl border border-slate-300 space-y-3 font-sans">
-            <div className="flex items-center gap-2 text-slate-800 font-extrabold text-xs uppercase font-mono">
-              <MessageSquare className="w-4 h-4 text-blue-600" />
-              Parecer Técnico de Auditoria (Agrupamento dos Dados Gerais)
-            </div>
-            <textarea
-              rows={4}
-              value={solicitacao.observacoesAnalistaDadosGerais || ''}
-              onChange={(e) => onUpdate({ ...solicitacao, observacoesAnalistaDadosGerais: e.target.value })}
-              placeholder="Digite aqui um consolidado ou notas adicionais sobre a regularidade do atendimento de infraestrutura..."
-              className="w-full text-xs p-3 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500/10 bg-white leading-relaxed font-sans text-slate-800"
-            />
-            <p className="text-[10px] text-slate-500">
-              💡 As considerações consolidadas acima fazem parte do dossiê final de homologação do atendimento técnico da SRE junto à DORE.
-            </p>
-          </div>
         </div>
       )}
 
@@ -1820,7 +1810,7 @@ export default function ProcessAnalysisPanel({
                   data-testid="botao-reprovar-processo"
                   type="button"
                   disabled={!podeDevolver}
-                  onClick={podeDevolver ? (enviarReprovacaoFinal || solicitarDevolucaoProcesso) : undefined}
+                  onClick={podeDevolver ? () => { setJustificativaReprovacao(''); setModalAcaoFinal('reprovacao'); } : undefined}
                   title={!podeDevolver ? 'Analise ao menos um item antes de devolver o processo' : 'Devolver para correção'}
                   className={`flex items-center gap-2 px-6 py-3 text-white text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition ${
                     podeDevolver
@@ -1832,10 +1822,25 @@ export default function ProcessAnalysisPanel({
                   Enviar Reprovação
                 </button>
                 <button
+                  data-testid="botao-validar-ressalva-processo"
+                  type="button"
+                  disabled={!podeAprovar}
+                  onClick={podeAprovar ? () => { setRessalvasTexto(''); setModalAcaoFinal('ressalvas'); } : undefined}
+                  title={!podeAprovar ? 'Conclua a revisão antes de validar com ressalvas' : 'Validar com ressalvas técnicas'}
+                  className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-wide rounded-xl shadow-sm transition border-2 ${
+                    podeAprovar
+                      ? 'bg-amber-50 border-amber-400 text-amber-800 hover:bg-amber-100 cursor-pointer'
+                      : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                  }`}
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  Validar com Ressalva
+                </button>
+                <button
                   data-testid="botao-aprovar-processo"
                   type="button"
                   disabled={!podeAprovar}
-                  onClick={podeAprovar ? (enviarAprovacaoFinal || finalizarAnaliseDore) : undefined}
+                  onClick={podeAprovar ? () => { (enviarAprovacaoFinal || finalizarAnaliseDore)?.(); setModalAcaoFinal('aprovacao_sucesso'); } : undefined}
                   title={
                     !hasStartedReview ? 'Analise o processo antes de enviar aprovação' :
                     docPendentes > 0 ? `Há ${docPendentes} documento(s) pendente(s) de análise` :
@@ -1854,6 +1859,149 @@ export default function ProcessAnalysisPanel({
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAIS DAS AÇÕES FINAIS */}
+      {modalAcaoFinal === 'reprovacao' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-black text-slate-800">Devolver para Correção</h3>
+              <p className="text-[11px] text-slate-500 mt-0.5 font-mono">{solicitacao.id} — {solicitacao.nomeEscola}</p>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
+                Justificativa adicional da reprovação (opcional)
+              </label>
+              <textarea
+                rows={4}
+                autoFocus
+                value={justificativaReprovacao}
+                onChange={(e) => setJustificativaReprovacao(e.target.value)}
+                placeholder="Observações complementares para a regional, além dos itens já recusados no checklist..."
+                className="w-full text-xs p-3 border border-slate-300 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-400/30 text-slate-800 leading-relaxed"
+              />
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setModalAcaoFinal(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (enviarReprovacaoFinal) {
+                    enviarReprovacaoFinal(justificativaReprovacao.trim() || undefined);
+                  } else {
+                    solicitarDevolucaoProcesso();
+                  }
+                  setModalAcaoFinal('reprovacao_sucesso');
+                }}
+                className="px-4 py-2 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition cursor-pointer"
+              >
+                Confirmar Devolução
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalAcaoFinal === 'reprovacao_sucesso' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden text-center">
+            <div className="px-6 py-6 space-y-2">
+              <span className="text-3xl">✅</span>
+              <h3 className="text-sm font-black text-slate-800">Processo Devolvido para Correção</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                As correções necessárias foram comunicadas à regional com sucesso.
+              </p>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setModalAcaoFinal(null)}
+                className="w-full px-4 py-2 text-xs font-black text-white bg-slate-800 hover:bg-slate-900 rounded-lg transition cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalAcaoFinal === 'aprovacao_sucesso' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden text-center">
+            <div className="px-6 py-6 space-y-2">
+              <span className="text-3xl">✅</span>
+              <h3 className="text-sm font-black text-slate-800">Processo Aprovado</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                O processo foi encaminhado para Geração de PAF com sucesso.
+              </p>
+            </div>
+            <div className="px-5 py-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setModalAcaoFinal(null)}
+                className="w-full px-4 py-2 text-xs font-black text-white bg-slate-800 hover:bg-slate-900 rounded-lg transition cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalAcaoFinal === 'ressalvas' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-black text-slate-800">Validar com Ressalvas</h3>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
+                Descreva as ressalvas técnicas*
+              </label>
+              <textarea
+                rows={4}
+                autoFocus
+                required
+                value={ressalvasTexto}
+                onChange={(e) => setRessalvasTexto(e.target.value)}
+                placeholder="Descreva as ressalvas que devem ser observadas durante a execução ou nas próximas etapas do processo..."
+                className="w-full text-xs p-3 border border-amber-300 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-400/30 text-slate-800 leading-relaxed"
+              />
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setModalAcaoFinal(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!ressalvasTexto.trim()}
+                onClick={() => {
+                  if (!ressalvasTexto.trim()) return;
+                  enviarValidacaoComRessalvas?.(ressalvasTexto.trim());
+                  setModalAcaoFinal(null);
+                }}
+                className={`px-4 py-2 text-xs font-black text-white rounded-lg transition ${
+                  ressalvasTexto.trim()
+                    ? 'bg-amber-600 hover:bg-amber-700 cursor-pointer'
+                    : 'bg-slate-300 cursor-not-allowed opacity-60'
+                }`}
+              >
+                Confirmar com Ressalvas
+              </button>
+            </div>
           </div>
         </div>
       )}
