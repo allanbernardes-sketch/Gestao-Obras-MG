@@ -1,5 +1,25 @@
 export type EtapaProcesso = 'cadastro' | 'analise' | 'correcao' | 'paf_autorizacao' | 'paf' | 'ordem_inicio' | 'execucao' | 'cancelado';
 
+// Equipe de especialidade do Analista de Engenharia (DORE). Planejamento = Atendimento Inicial
+// (Análise Técnica); Ajuste = Ajuste de Planilha/Reequilíbrio/Saldo Complementar; as demais
+// (Elétrica, Arquitetura, PSCIP) só entram como auxiliares de validação em processos das outras
+// duas equipes. Ver [[equipes-analista-auxiliares]].
+export type EquipeAnalista = 'Planejamento' | 'Ajuste' | 'Eletrica' | 'Arquitetura' | 'PSCIP';
+
+// Auxiliar de validação: analista de uma equipe de especialidade (Elétrica/Arquitetura/PSCIP)
+// anexado a um processo de outra equipe pra dar parecer técnico da própria área. O processo só
+// pode ser homologado pelo analista titular depois que todo auxiliar tiver `aprovado === true`.
+export interface AuxiliarProcesso {
+  id: string;
+  nome: string;
+  usuarioId?: string;
+  equipe: 'Eletrica' | 'Arquitetura' | 'PSCIP';
+  parecer?: string;
+  aprovado?: boolean;
+  dataParecer?: string;
+  atribuidoPor?: string;
+}
+
 // Modelo de validação técnica (Nível 1 — status por item, aba Dados Gerais)
 export type StatusValidacao = 'pendente' | 'validado' | 'editado' | 'nao_validado';
 
@@ -71,7 +91,18 @@ export interface Aditivo {
   checklistDocs?: { item: string; checked: boolean; fileName?: string }[];
 }
 
-export interface AjustePlanilha {
+// Campos de SLA (checkpoints de tempo) reaproveitados por todo item que passa pela fila de
+// Atribuição (AjustePlanilha, ReequilibrioItem, SaldoComplementarItem e Solicitacao.analiseSla).
+// Ver [[sla-atendimentos]] e src/utils/sla.ts — os nomes dos campos aqui casam com
+// ChecklistSlaItem daquele arquivo de propósito.
+export interface ChecklistSla {
+  dataEntradaFila?: string;   // timestamp ISO — quando entrou na fila (liberado pelo coordenador)
+  dataAtribuicao?: string;    // timestamp ISO — quando um analista foi designado
+  dataInicioAnalise?: string; // timestamp ISO — quando o analista clicou em "Iniciar Análise"
+  dataConclusao?: string;     // timestamp ISO — quando o parecer/decisão foi registrado
+}
+
+export interface AjustePlanilha extends ChecklistSla {
   id: string;
   numero: number;
   tipoAjuste: 'sem_alteracao_meta' | 'com_alteracao_meta' | 'com_alteracao_meta_projeto' | 'sem_alteracao_meta_com_projeto' | 'ajuste_sem_meta_com_projeto';
@@ -85,12 +116,21 @@ export interface AjustePlanilha {
   avancoFisico: number;
   observacoes: string;
   dataCriacao: string;
-  status: 'em_elaboracao' | 'analise_dore' | 'validado';
+  // 'aguardando_coordenador' = enviado pelo fiscal, aguardando aprovação do coordenador regional antes
+  // de entrar na fila de Atribuição da DORE (banco: 'pendente'). Ver [[gate-coordenador-execucao]].
+  status: 'aguardando_coordenador' | 'em_elaboracao' | 'analise_dore' | 'validado';
   analistaAtribuido?: string;
   planilhaAjusteFileName?: string;
   planilhaAjusteFileSize?: string;
   planilhaAjusteUploadedAt?: string;
   parecerDore?: string;
+  // Auxiliares de validação (Elétrica/Arquitetura/PSCIP). Ver [[equipes-analista-auxiliares]].
+  auxiliares?: AuxiliarProcesso[];
+  // Aprovação do Coordenador Regional — gate leve antes da fila de Atribuição da DORE (mesmo padrão de
+  // Solicitacao.statusAprovacaoRegional).
+  coordenadorAprovador?: string;
+  dataAprovacaoCoordenador?: string;
+  justificativaReprovacaoCoordenador?: string;
 
   // Detalhamento estendido do pedido de ajuste
   supressao?: number;
@@ -235,6 +275,11 @@ export interface Solicitacao {
   aditivos: Aditivo[];
   ajustes?: AjustePlanilha[];
   analistaAtribuido?: string;
+  // SLA da Análise Técnica (Etapa 2) — checkpoints de tempo entrada na fila → atribuição → início
+  // (botão "Iniciar Análise") → conclusão. Ver [[sla-atendimentos]] e src/utils/sla.ts.
+  analiseSla?: ChecklistSla;
+  // Auxiliares de validação (Elétrica/Arquitetura/PSCIP) anexados ao Atendimento Inicial. Ver [[equipes-analista-auxiliares]].
+  auxiliares?: AuxiliarProcesso[];
   atribuicaoForcada?: boolean; // true quando Admin/Gestor atribuiu acima da capacidade disponível do analista (Parte 4 do IEE)
   contadorAnalises?: number;
   parecerConsolidado?: string;
@@ -360,11 +405,20 @@ export interface Solicitacao {
     tamanhoRelatorio?: string;
   }[];
   // Lições aprendidas — preenchidas pelo engenheiro; pelo menos 1 é exigida para liberar o
-  // encerramento da obra (checklist de conclusão em SolicitacaoDetalhes)
+  // encerramento da obra (checklist de conclusão em SolicitacaoDetalhes). Ver [[licoes-aprendidas-estruturadas]].
   licoesAprendidas?: {
     id: string;
     descricao: string;
+    // Área administrativa do relato — eixo legado, ortogonal ao checklist de etapas/serviços abaixo.
     categoria?: 'Técnica' | 'Gestão' | 'Cronograma' | 'Fornecedor' | 'Financeira' | 'Outros';
+    // Checklist (multisseleção) das etapas/serviços de obra a que a lição se refere — ver ETAPAS_SERVICO_OBRA.
+    etapasServico?: string[];
+    // Natureza: não qualifica a obra/responsável, só indica como o aprendizado deve ser usado em obras futuras.
+    natureza?: 'oportunidade_melhoria' | 'risco_materializado';
+    // Orientação/ação recomendada para obras futuras, decorrente da lição.
+    recomendacao?: string;
+    // Evidências (fotos, vídeos ou outros registros) — mesmo padrão simulado de upload usado no restante do app.
+    evidencias?: { nome: string; tamanho: string; tipo?: 'foto' | 'video' | 'documento' }[];
     dataRegistro: string;
     autor?: string;
   }[];
@@ -375,11 +429,28 @@ export interface Solicitacao {
   reequilibrios?: ReequilibrioItem[];
 }
 
-export interface ReequilibrioItem {
+// 'aguardando_coordenador' = enviado pelo fiscal, aguardando aprovação do coordenador regional antes
+// de entrar na fila de Atribuição da DORE. 'aguardando_liberacao_financeira' = aprovado tecnicamente
+// pelo analista DORE, aguardando o Subsecretário de Administração (gestor_paf) liberar o recurso
+// financeiro. Ver [[gate-coordenador-execucao]] e [[gate-liberacao-financeira]].
+export type StatusItemFinanceiroExecucao = 'aguardando_coordenador' | 'aguardando_analista' | 'em_analise' | 'aguardando_liberacao_financeira' | 'aprovado' | 'reprovado';
+
+export interface ReequilibrioItem extends ChecklistSla {
   id: string;
   dataCriacao: string;
-  status: 'aguardando_analista' | 'em_analise' | 'aprovado' | 'reprovado';
+  status: StatusItemFinanceiroExecucao;
   analistaAtribuido?: string;
+  coordenadorAprovador?: string;
+  dataAprovacaoCoordenador?: string;
+  justificativaReprovacaoCoordenador?: string;
+  // Parecer técnico do analista DORE (homologação/recusa) — ver [[gate-liberacao-financeira]].
+  parecerDore?: string;
+  // Liberação financeira final pelo Subsecretário de Administração (gestor_paf / Silas Fagundes)
+  liberadoPor?: string;
+  dataLiberacaoFinanceira?: string;
+  justificativaReprovacaoFinanceira?: string;
+  // Auxiliares de validação (Elétrica/Arquitetura/PSCIP). Ver [[equipes-analista-auxiliares]].
+  auxiliares?: AuxiliarProcesso[];
   // Etapa 1
   justificativaFileName?: string;
   justificativaFileSize?: string;
@@ -394,11 +465,20 @@ export interface ReequilibrioItem {
   valorReequilibrado?: number;
 }
 
-export interface SaldoComplementarItem {
+export interface SaldoComplementarItem extends ChecklistSla {
   id: string;
   dataCriacao: string;
-  status: 'aguardando_analista' | 'em_analise' | 'aprovado' | 'reprovado';
+  status: StatusItemFinanceiroExecucao;
   analistaAtribuido?: string;
+  coordenadorAprovador?: string;
+  dataAprovacaoCoordenador?: string;
+  justificativaReprovacaoCoordenador?: string;
+  // Liberação financeira final pelo Subsecretário de Administração (gestor_paf / Silas Fagundes)
+  liberadoPor?: string;
+  dataLiberacaoFinanceira?: string;
+  justificativaReprovacaoFinanceira?: string;
+  // Auxiliares de validação (Elétrica/Arquitetura/PSCIP). Ver [[equipes-analista-auxiliares]].
+  auxiliares?: AuxiliarProcesso[];
   // Dados financeiros
   valorTC: number;
   valorLiberado: number;
@@ -412,7 +492,9 @@ export interface SaldoComplementarItem {
   documentos: { item: string; obrigatorio: boolean; checked: boolean; fileName?: string }[];
 }
 
-export type PerfilUsuario = 'tecnico_infra' | 'coordenador_regional' | 'gestor_dore' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'diretor_dore' | 'admin';
+// 'gestor_dore' (Gestor de Atendimento) foi descontinuado e removido do sistema — não é mais um
+// perfil válido. Ver [[remocao-perfil-gestor-dore]].
+export type PerfilUsuario = 'tecnico_infra' | 'coordenador_regional' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'diretor_dore' | 'admin';
 
 export interface UsuarioSistema {
   id: string;
@@ -420,6 +502,8 @@ export interface UsuarioSistema {
   email: string;
   perfil: PerfilUsuario | string;
   departamento: string;
+  // Equipe de especialidade — só se aplica a perfil === 'analista_dore'. Ver [[equipes-analista-auxiliares]].
+  equipeAnalise?: EquipeAnalista;
   // Dados profissionais estendidos
   cargo?: string;
   formacao?: string;
@@ -658,6 +742,9 @@ export interface Notificacao {
   tipo: 'processo_avanco' | 'processo_retrocesso' | 'aditivo_pendente' | 'ajuste_pendente' | 'sistema' | 'alerta';
   solicitacaoId?: string;
   escola?: string;
+  // Chave de deduplicação de alertas gerados automaticamente (ex: SLA estourado) — evita recriar a
+  // mesma notificação a cada verificação periódica. Ver [[sla-atendimentos]].
+  slaChave?: string;
 }
 
 

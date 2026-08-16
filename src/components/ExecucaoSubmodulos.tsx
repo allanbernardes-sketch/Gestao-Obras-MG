@@ -10,6 +10,7 @@ import {
 import { Solicitacao, Medicao, Aditivo, AjustePlanilha, SaldoComplementarItem, ReequilibrioItem, PerfilUsuario, EmpresaSeguranca, UsuarioSistema, DocumentoChecklist, ParcelaPAF, computeStatusObra, montarChecklistGED } from '../types';
 import { supabase } from '../lib/supabase';
 import { useEscolas } from '../hooks/useEscolas';
+import { ETAPAS_SERVICO_OBRA, NATUREZA_LICAO_INFO } from '../utils/licoesAprendidas';
 
 interface ExecucaoSubmodulosProps {
   activeSubTask: string;
@@ -2001,6 +2002,10 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
   // Lições Aprendidas states
   const [licaoDesc, setLicaoDesc] = useState('');
   const [licaoCategoria, setLicaoCategoria] = useState<'Técnica' | 'Gestão' | 'Cronograma' | 'Fornecedor' | 'Financeira' | 'Outros'>('Técnica');
+  const [licaoEtapasServico, setLicaoEtapasServico] = useState<string[]>([]);
+  const [licaoNatureza, setLicaoNatureza] = useState<'oportunidade_melhoria' | 'risco_materializado'>('oportunidade_melhoria');
+  const [licaoRecomendacao, setLicaoRecomendacao] = useState('');
+  const [licaoEvidencias, setLicaoEvidencias] = useState<{ nome: string; tamanho: string; tipo: 'foto' | 'video' | 'documento' }[]>([]);
 
   if (!currentSol) return <NoObraSelected />;
 
@@ -2341,6 +2346,10 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
   const adicNovaLicaoAprendida = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!licaoDesc.trim()) return;
+    if (licaoEtapasServico.length === 0) {
+      alert('Selecione ao menos uma etapa/serviço de obra relacionada a esta lição.');
+      return;
+    }
 
     let dbId = currentSol._dbId;
     if (!dbId) {
@@ -2365,6 +2374,10 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
         solicitacao_id: dbId,
         descricao: licaoDesc,
         categoria: licaoCategoria ?? null,
+        etapas_servico: licaoEtapasServico,
+        natureza: licaoNatureza,
+        recomendacao: licaoRecomendacao.trim() || null,
+        evidencias: licaoEvidencias,
         usuario_id: userData.user?.id ?? null
       })
       .select('id')
@@ -2380,6 +2393,10 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
       id: licaoRow.id,
       descricao: licaoDesc,
       categoria: licaoCategoria,
+      etapasServico: licaoEtapasServico,
+      natureza: licaoNatureza,
+      recomendacao: licaoRecomendacao.trim() || undefined,
+      evidencias: licaoEvidencias,
       dataRegistro
     };
 
@@ -2390,6 +2407,10 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
 
     onUpdate(updated);
     setLicaoDesc('');
+    setLicaoEtapasServico([]);
+    setLicaoNatureza('oportunidade_melhoria');
+    setLicaoRecomendacao('');
+    setLicaoEvidencias([]);
   };
 
   const deletarLicaoAprendida = async (id: string) => {
@@ -3844,31 +3865,76 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {listLicoesAprendidas.map((l) => (
-                    <div key={l.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {l.categoria && (
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
-                              {l.categoria}
-                            </span>
-                          )}
-                          <span className="text-[10.5px] font-bold text-slate-400">Registrada em: {l.dataRegistro}</span>
+                  {listLicoesAprendidas.map((l) => {
+                    const naturezaInfo = l.natureza ? NATUREZA_LICAO_INFO[l.natureza] : null;
+                    return (
+                      <div key={l.id} className={`p-4 rounded-xl border space-y-3 ${naturezaInfo ? naturezaInfo.corClassName : 'border-slate-200 bg-slate-50/50'}`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {naturezaInfo && (
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${naturezaInfo.corBadge}`}>
+                                {naturezaInfo.label}
+                              </span>
+                            )}
+                            {l.categoria && (
+                              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                                {l.categoria}
+                              </span>
+                            )}
+                            <span className="text-[10.5px] font-bold text-slate-400">Registrada em: {l.dataRegistro}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => deletarLicaoAprendida(l.id)}
+                            className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 cursor-pointer shrink-0"
+                            title="Excluir lição aprendida"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => deletarLicaoAprendida(l.id)}
-                          className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 cursor-pointer"
-                          title="Excluir lição aprendida"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+
+                        {(l.etapasServico || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {(l.etapasServico || []).map(etapa => (
+                              <span key={etapa} className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/70 border border-slate-300 text-slate-600">
+                                {etapa}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div>
+                          <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block mb-0.5">O que aconteceu</span>
+                          <p className="text-xs font-semibold text-slate-700 font-sans leading-relaxed">
+                            {l.descricao}
+                          </p>
+                        </div>
+
+                        {l.recomendacao && (
+                          <div className="bg-white/70 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block mb-0.5">Recomendação / Ação Futura</span>
+                            <p className="text-xs font-semibold text-slate-700 font-sans leading-relaxed">
+                              {l.recomendacao}
+                            </p>
+                          </div>
+                        )}
+
+                        {(l.evidencias || []).length > 0 && (
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider block mb-1">Evidências ({(l.evidencias || []).length})</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(l.evidencias || []).map((ev, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-2 py-1">
+                                  <FileText className="w-3 h-3 text-slate-400" />
+                                  {ev.nome}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-xs font-semibold text-slate-700 font-sans leading-relaxed">
-                        {l.descricao}
-                      </p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -3882,6 +3948,56 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
               </h3>
 
               <form onSubmit={adicNovaLicaoAprendida} className="space-y-4">
+                {/* Natureza — não qualifica a obra/responsável, só orienta como usar o aprendizado */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                    Natureza da Lição *
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(Object.keys(NATUREZA_LICAO_INFO) as Array<keyof typeof NATUREZA_LICAO_INFO>).map(chave => {
+                      const info = NATUREZA_LICAO_INFO[chave];
+                      const ativo = licaoNatureza === chave;
+                      return (
+                        <button
+                          key={chave}
+                          type="button"
+                          onClick={() => setLicaoNatureza(chave)}
+                          className={`px-2.5 py-2 rounded-xl border text-[10.5px] font-black uppercase tracking-wide transition-all cursor-pointer ${
+                            ativo ? info.corBadge + ' ring-1 ring-inset ring-current' : 'border-slate-200 bg-white text-slate-400 hover:bg-slate-50'
+                          }`}
+                        >
+                          {info.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Checklist de Etapas/Serviços */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                    Etapa(s) / Serviço(s) de Obra *
+                  </label>
+                  <div className="max-h-40 overflow-y-auto grid grid-cols-1 gap-1 border border-slate-200 rounded-xl p-2 bg-slate-50/50">
+                    {ETAPAS_SERVICO_OBRA.map(etapa => {
+                      const checked = licaoEtapasServico.includes(etapa);
+                      return (
+                        <label key={etapa} className="flex items-center gap-2 text-[11px] font-semibold text-slate-700 px-1.5 py-1 rounded-lg hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setLicaoEtapasServico(prev =>
+                              checked ? prev.filter(e => e !== etapa) : [...prev, etapa]
+                            )}
+                            className="cursor-pointer accent-amber-600"
+                          />
+                          {etapa}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
                     Categoria
@@ -3902,16 +4018,79 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
-                    Descrição da Lição Aprendida *
+                    O que Aconteceu *
                   </label>
                   <textarea
                     required
                     rows={4}
-                    placeholder="Descreva o que aconteceu, o que foi aprendido e como isso pode ajudar em obras futuras..."
+                    placeholder="Descreva o que aconteceu, a solução adotada ou o problema ocorrido..."
                     value={licaoDesc}
                     onChange={(e) => setLicaoDesc(e.target.value)}
                     className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                    Recomendação / Ação para Obras Futuras
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="O que deve ser feito diferente (ou repetido) em obras futuras a partir desse aprendizado..."
+                    value={licaoRecomendacao}
+                    onChange={(e) => setLicaoRecomendacao(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-xl bg-white text-slate-800"
+                  />
+                </div>
+
+                {/* Evidências — mesmo padrão de upload simulado usado no restante do sistema */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-extrabold text-slate-500 block uppercase tracking-wider">
+                    Evidências (Fotos, Vídeos ou Outros Registros)
+                  </label>
+                  {licaoEvidencias.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-1.5">
+                      {licaoEvidencias.map((ev, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-lg pl-2 pr-1 py-1">
+                          <FileText className="w-3 h-3 text-slate-400" />
+                          {ev.nome}
+                          <button
+                            type="button"
+                            onClick={() => setLicaoEvidencias(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-slate-400 hover:text-rose-600 cursor-pointer p-0.5"
+                            title="Remover evidência"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <label
+                    htmlFor="licao-evidencia-input"
+                    className="flex items-center justify-center gap-1.5 px-4 py-3 border-2 border-dashed border-slate-300 hover:border-amber-400 hover:bg-amber-50/20 rounded-xl cursor-pointer transition group"
+                  >
+                    <UploadCloud className="w-4 h-4 text-slate-300 group-hover:text-amber-500 transition" />
+                    <span className="text-[11px] font-bold text-slate-500 group-hover:text-amber-700 transition">Anexar evidência</span>
+                    <input
+                      id="licao-evidencia-input"
+                      type="file"
+                      accept="image/*,video/*,.pdf"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files) return;
+                        const novas = Array.from(files).map(file => ({
+                          nome: file.name,
+                          tamanho: file.size < 1024 * 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+                          tipo: (file.type.startsWith('image/') ? 'foto' : file.type.startsWith('video/') ? 'video' : 'documento') as 'foto' | 'video' | 'documento',
+                        }));
+                        setLicaoEvidencias(prev => [...prev, ...novas]);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
                 </div>
 
                 <button
@@ -6994,7 +7173,7 @@ function SubAjustes({
   // Selected adjust for detail view or analyst actions
   const [selectedAjusteId, setSelectedAjusteId] = useState<string | null>(null);
   const [parecerDoreInput, setParecerDoreInput] = useState('');
-  const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'em_elaboracao' | 'analise_dore' | 'validado'>('todos');
+  const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'aguardando_coordenador' | 'em_elaboracao' | 'analise_dore' | 'validado'>('todos');
 
   if (!currentSol) return <NoObraSelected />;
 
@@ -7090,7 +7269,7 @@ function SubAjustes({
         solicitacao_id: dbId,
         numero_ajuste: numeroAjusteInt,
         valor_ajuste: numAcre,
-        status: 'pendente',
+        status: 'aguardando_coordenador',
         tipo_ajuste: tipoAjuste,
         responsavel_planilha: responsavelP,
         registro_profissional: registroProfissional,
@@ -7130,7 +7309,7 @@ function SubAjustes({
       avancoFisico: 0,
       observacoes: observacoesAjuste,
       dataCriacao: dataAjuste,
-      status: 'analise_dore', // Sent to DORE (banco: 'pendente')
+      status: 'aguardando_coordenador', // Aguardando aprovação do coordenador regional (banco: 'aguardando_coordenador')
       analistaAtribuido: undefined,
       supressao: numSup > 0 ? numSup : undefined,
       reprogramacao,
@@ -7148,7 +7327,7 @@ function SubAjustes({
 
     onUpdate(updated);
 
-    alert('Nova solicitação de ajuste cadastrada com sucesso e está pendente de análise. A obra continua em execução.');
+    alert('Nova solicitação de ajuste cadastrada com sucesso e está aguardando aprovação do coordenador regional. A obra continua em execução.');
 
     // Reset Form
     setTipoAjuste('sem_alteracao_meta');
@@ -7287,13 +7466,13 @@ function SubAjustes({
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 flex items-center justify-between">
               <span className="text-[11px] font-black uppercase text-slate-500 tracking-wider">Filtrar Ajustes:</span>
               <div className="flex items-center gap-1.5 text-xs">
-                {(['todos', 'em_elaboracao', 'analise_dore', 'validado'] as const).map(f => (
+                {(['todos', 'aguardando_coordenador', 'em_elaboracao', 'analise_dore', 'validado'] as const).map(f => (
                   <button
                     key={f}
                     onClick={() => setTipoFiltro(f)}
                     className={`px-2.5 py-1 rounded-lg font-bold transition-all ${tipoFiltro === f ? 'bg-slate-800 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
                   >
-                    {f === 'todos' ? 'Todos' : f === 'em_elaboracao' ? 'Correção/Rascunho' : f === 'analise_dore' ? 'Em Análise' : 'Validado'}
+                    {f === 'todos' ? 'Todos' : f === 'aguardando_coordenador' ? 'Aguardando Coordenador' : f === 'em_elaboracao' ? 'Correção/Rascunho' : f === 'analise_dore' ? 'Em Análise' : 'Validado'}
                   </button>
                 ))}
               </div>
@@ -7321,9 +7500,10 @@ function SubAjustes({
                             <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                               aju.status === 'validado' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
                               aju.status === 'em_elaboracao' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                              aju.status === 'aguardando_coordenador' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
                               'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse'
                             }`}>
-                              ● {aju.status === 'validado' ? 'Validado' : aju.status === 'em_elaboracao' ? 'Correção Requerida' : 'DORE em Análise'}
+                              ● {aju.status === 'validado' ? 'Validado' : aju.status === 'em_elaboracao' ? 'Correção Requerida' : aju.status === 'aguardando_coordenador' ? 'Aguardando Coordenador' : 'DORE em Análise'}
                             </span>
                           </div>
                           <p className="text-xs font-black text-slate-800 mt-2">
@@ -7396,6 +7576,22 @@ function SubAjustes({
                               )}
                             </div>
                           </div>
+
+                          {/* Aprovação/Reprovação do Coordenador Regional, se já decidida */}
+                          {(aju.coordenadorAprovador || aju.justificativaReprovacaoCoordenador) && (
+                            <div className="col-span-1 md:col-span-2 p-3 bg-slate-100 border border-slate-200 rounded-xl space-y-1 text-left">
+                              <span className="font-black text-slate-700 text-[10px] uppercase tracking-wider flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5 text-slate-500" />
+                                Aprovação do Coordenador Regional: {aju.coordenadorAprovador || '—'}
+                                {aju.dataAprovacaoCoordenador && ` (${aju.dataAprovacaoCoordenador})`}
+                              </span>
+                              {aju.justificativaReprovacaoCoordenador && (
+                                <p className="text-slate-700 italic font-mono text-[11px] whitespace-pre-wrap font-bold">
+                                  {aju.justificativaReprovacaoCoordenador}
+                                </p>
+                              )}
+                            </div>
+                          )}
 
                           {/* Parecer DORE se existente */}
                           {aju.parecerDore && (
@@ -8045,8 +8241,9 @@ function NoObraSelected() {
 // AJUSTES CONTRATUAIS — COMPONENTES
 // ==========================================================
 
-// Mapeia o status interno (4 valores) para o enum do banco (3 valores: pendente/aprovado/recusado)
-function statusParaBanco(status: 'aguardando_analista' | 'em_analise' | 'aprovado' | 'reprovado'): 'pendente' | 'aprovado' | 'recusado' {
+// Mapeia o status interno (5 valores) para o enum do banco (4 valores: aguardando_coordenador/pendente/aprovado/recusado)
+function statusParaBanco(status: 'aguardando_coordenador' | 'aguardando_analista' | 'em_analise' | 'aprovado' | 'reprovado'): 'aguardando_coordenador' | 'pendente' | 'aprovado' | 'recusado' {
+  if (status === 'aguardando_coordenador') return 'aguardando_coordenador';
   if (status === 'aprovado') return 'aprovado';
   if (status === 'reprovado') return 'recusado';
   return 'pendente';
@@ -8121,7 +8318,7 @@ function SubReequilibrio({
       dbId = solRow.id;
     }
 
-    const status: ReequilibrioItem['status'] = 'aguardando_analista';
+    const status: ReequilibrioItem['status'] = 'aguardando_coordenador';
     const descontoNum = parseFloat(descontoContratual) || 0;
     const valorReequilibradoNum = parseFloat(valorReequilibrado) || undefined;
     const { data: userData } = await supabase.auth.getUser();
@@ -8165,7 +8362,7 @@ function SubReequilibrio({
     };
 
     onUpdate({ ...currentSol, reequilibrios: [...(currentSol.reequilibrios || []), novo] });
-    alert('Solicitação de Reequilíbrio Financeiro enviada! Aguardando atribuição de analista.');
+    alert('Solicitação de Reequilíbrio Financeiro enviada! Aguardando aprovação do coordenador regional.');
   };
 
   const inputCls = 'w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-500/20';
@@ -8404,8 +8601,10 @@ function SubReequilibrio({
                 {r.valorReequilibrado && <p className="text-slate-500 mt-0.5">Valor reequilibrado: {fmtBRL(r.valorReequilibrado)}</p>}
               </div>
               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                r.status === 'aguardando_coordenador' ? 'bg-slate-100 text-slate-600' :
                 r.status === 'aguardando_analista' ? 'bg-amber-100 text-amber-700' :
                 r.status === 'em_analise'          ? 'bg-blue-100 text-blue-700' :
+                r.status === 'aguardando_liberacao_financeira' ? 'bg-indigo-100 text-indigo-700' :
                 r.status === 'aprovado'            ? 'bg-emerald-100 text-emerald-700' :
                                                     'bg-rose-100 text-rose-700'
               }`}>{r.status.replace(/_/g, ' ')}</span>
@@ -8537,7 +8736,7 @@ function SubSaldoComplementar({
         solicitacao_id: dbId,
         valor_saldo: numSaldo,
         descricao: null,
-        status: 'pendente',
+        status: 'aguardando_coordenador',
         valor_tc: numTC,
         valor_liberado: numLib,
         valor_pago: numPago,
@@ -8558,7 +8757,7 @@ function SubSaldoComplementar({
     const novo: SaldoComplementarItem = {
       id: saldoRow.id,
       dataCriacao: new Date().toISOString().split('T')[0],
-      status: 'aguardando_analista',
+      status: 'aguardando_coordenador',
       valorTC: numTC,
       valorLiberado: numLib,
       valorPago: numPago,
@@ -8573,7 +8772,7 @@ function SubSaldoComplementar({
 
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
-    alert('Solicitação de Saldo Complementar enviada! Aguardando atribuição de analista.');
+    alert('Solicitação de Saldo Complementar enviada! Aguardando aprovação do coordenador regional.');
   };
 
   const labelCls = 'block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1';
@@ -8812,11 +9011,13 @@ function SubSaldoComplementar({
                 <p className="text-slate-500 mt-0.5">Valor Total: {fmtBRL(sc.saldoEmConta + Math.max(0, sc.valorTC - sc.valorLiberado))}</p>
               </div>
               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                sc.status === 'aguardando_coordenador' ? 'bg-slate-100 text-slate-600' :
                 sc.status === 'aguardando_analista' ? 'bg-amber-100 text-amber-700' :
                 sc.status === 'em_analise'          ? 'bg-blue-100 text-blue-700' :
+                sc.status === 'aguardando_liberacao_financeira' ? 'bg-indigo-100 text-indigo-700' :
                 sc.status === 'aprovado'            ? 'bg-emerald-100 text-emerald-700' :
                                                      'bg-rose-100 text-rose-700'
-              }`}>{sc.status.replace('_', ' ')}</span>
+              }`}>{sc.status.replace(/_/g, ' ')}</span>
             </div>
           ))}
         </div>

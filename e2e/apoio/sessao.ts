@@ -9,8 +9,12 @@ export const CREDENCIAIS = {
   tecnico_infra: 'tecnicoregional@educacao.mg.gov.br',
   tecnico_infra_sre_a: 'tecnico.sre-a@educacao.mg.gov.br',
   coordenador_regional: 'coordenador@educacao.mg.gov.br',
-  gestor_dore: 'gestordore@educacao.mg.gov.br',
+  // 'gestor_dore' foi removido do sistema (ver [[remocao-perfil-gestor-dore]]) — quem hoje atribui
+  // analista na fila de Atribuição é admin/diretor_dore, ou o próprio analista_dore se auto-atribuindo.
+  // Aline (login abaixo) foi reaproveitada como segunda analista de teste, equipe "Ajuste"
+  // (analista_dore é a equipe "Planejamento") — ver [[equipes-analista-auxiliares]].
   analista_dore: 'analistadore@educacao.mg.gov.br',
+  analista_dore_ajuste: 'gestordore@educacao.mg.gov.br',
   gestor_paf: 'gestorpaf@educacao.mg.gov.br',
   administrativo_dore: 'administrativo@educacao.mg.gov.br',
   diretor_dore: 'diretor@educacao.mg.gov.br',

@@ -6,6 +6,9 @@ import { gerarParecerIA } from './GeradorParecerIA';
 import ProcessAnalysisPanel from './ProcessAnalysisPanel';
 import { SECOES_DADOS_GERAIS, SECAO_LABEL, getStatusSecoes, capturarSnapshotTecnico } from '../utils/validacaoTecnica';
 import { ETAPA_LABEL, processoAindaModificavel, getEtapasAnteriores } from '../utils/etapas';
+import { calcularSlaCorrente, STATUS_SLA_INFO, formatarDuracaoHoras } from '../utils/sla';
+import { podeHomologarComAuxiliares, auxiliaresPendentes } from '../utils/auxiliares';
+import PainelParecerAuxiliar from './PainelParecerAuxiliar';
 import {
   ArrowLeft, Calendar, FileText, CheckCircle, XCircle, AlertCircle, AlertTriangle, TrendingUp,
   UploadCloud, Sparkles, DollarSign, Building, Plus, Trash2,
@@ -642,6 +645,25 @@ ${totalPendencias > 0
     alert('Processo devolvido com sucesso à etapa de atendimento inicial para correções de envio!');
   };
 
+  // Grava o parecer de um auxiliar de validação (Elétrica/Arquitetura/PSCIP) no Atendimento
+  // Inicial. Ver [[equipes-analista-auxiliares]].
+  const [salvandoAuxiliarId, setSalvandoAuxiliarId] = useState<string | null>(null);
+  const handleSalvarParecerAuxiliar = async (auxiliarId: string, aprovado: boolean, parecer: string) => {
+    setSalvandoAuxiliarId(auxiliarId);
+    const dataParecer = new Date().toISOString();
+    const { error } = await supabase
+      .from('processo_auxiliares')
+      .update({ aprovado, parecer, data_parecer: dataParecer })
+      .eq('id', auxiliarId);
+    setSalvandoAuxiliarId(null);
+    if (error) { console.error(error); alert('Erro ao gravar o parecer do auxiliar no banco de dados.'); return; }
+
+    onUpdate({
+      ...solicitacao,
+      auxiliares: (solicitacao.auxiliares || []).map(a => a.id === auxiliarId ? { ...a, aprovado, parecer, dataParecer } : a),
+    });
+  };
+
   const finalizarAnaliseDore = () => {
     const planilhaOrcamentaria = solicitacao.documentos.find(d => d.id === 'doc_1');
     if (planilhaOrcamentaria?.status === 'recusado' && !planilhaOrcamentaria.arquivoDevolucaoFileName) {
@@ -651,8 +673,16 @@ ${totalPendencias > 0
 
     // Determine if there are absolute rejections on uploaded/mandatory files
     const hasRejections = solicitacao.documentos.some(d => d.status === 'recusado');
+
+    // Auxiliares de validação (Elétrica/Arquitetura/PSCIP) precisam ter dado parecer de aprovação
+    // antes do analista titular poder aprovar o processo. Ver [[equipes-analista-auxiliares]].
+    if (!hasRejections && !podeHomologarComAuxiliares(solicitacao.auxiliares)) {
+      alert(`Ainda há auxiliar(es) de validação pendente(s) de parecer: ${auxiliaresPendentes(solicitacao.auxiliares).map(a => a.nome).join(', ')}.`);
+      return;
+    }
+
     const currentCount = solicitacao.contadorAnalises || 1;
-    
+
     // Contando quando o engenheiro não validar e voltar para o técnico
     const nextCount = hasRejections ? currentCount + 1 : currentCount;
     const parecerTudo = gerarParecerConsolidadoTudo(solicitacao.documentos, currentCount);
@@ -664,6 +694,9 @@ ${totalPendencias > 0
         etapaAtual: 'cadastro',
         contadorAnalises: nextCount,
         parecerConsolidado: parecerTudo,
+        // Conclusão do checkpoint de SLA — devolvido pro técnico também encerra o relógio de
+        // análise deste ciclo. Ver [[sla-atendimentos]].
+        analiseSla: { ...solicitacao.analiseSla, dataConclusao: new Date().toISOString() },
         historicoEtapas: [
           ...solicitacao.historicoEtapas,
           { etapa: 'cadastro', data: new Date().toISOString().split('T')[0], responsavel: 'Eng. DORE (Retorno por Pendências)' }
@@ -676,6 +709,7 @@ ${totalPendencias > 0
         ...solicitacao,
         etapaAtual: 'paf_autorizacao',
         parecerConsolidado: parecerTudo,
+        analiseSla: { ...solicitacao.analiseSla, dataConclusao: new Date().toISOString() },
         historicoEtapas: [
           ...solicitacao.historicoEtapas,
           { etapa: 'paf_autorizacao', data: new Date().toISOString().split('T')[0], responsavel: 'Eng. DORE (Aprovação Técnica)' }
@@ -687,11 +721,16 @@ ${totalPendencias > 0
 
   // APROVAÇÃO / REPROVAÇÃO FINAL DO PROCESSO (botões globais da tela de atribuição técnica)
   const enviarAprovacaoFinal = () => {
+    if (!podeHomologarComAuxiliares(solicitacao.auxiliares)) {
+      alert(`Ainda há auxiliar(es) de validação pendente(s) de parecer: ${auxiliaresPendentes(solicitacao.auxiliares).map(a => a.nome).join(', ')}.`);
+      return;
+    }
     const parecerTudo = gerarParecerConsolidadoTudo(solicitacao.documentos, solicitacao.contadorAnalises || 1);
     onUpdate({
       ...solicitacao,
       etapaAtual: 'paf_autorizacao',
       parecerConsolidado: parecerTudo,
+      analiseSla: { ...solicitacao.analiseSla, dataConclusao: new Date().toISOString() },
       historicoEtapas: [
         ...solicitacao.historicoEtapas,
         { etapa: 'paf_autorizacao', data: new Date().toISOString().split('T')[0], responsavel: `${currentUserNome || perfilUsuario} (Aprovação Final)` }
@@ -1590,8 +1629,8 @@ ${totalPendencias > 0
         </div>
       )}
 
-      {/* ATRIBUIÇÃO DE ANALISTA DA DORE (Apenas para Gestor Atendimento DORE) */}
-      {(perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && solicitacao.etapaAtual === 'analise' && (
+      {/* ATRIBUIÇÃO DE ANALISTA DA DORE (Admin/Diretor DORE) */}
+      {(perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') && solicitacao.etapaAtual === 'analise' && (
         <div className="bg-indigo-50/70 border border-indigo-200/85 rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 shrink-0">
@@ -1600,7 +1639,7 @@ ${totalPendencias > 0
             <div>
               <h3 className="text-sm font-bold text-slate-800">Encaminhar para Analista DORE</h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Como Gestor Geral de Atendimento, você recebe os checklists encaminhados pelas SREs. Valide o cadastro e decida qual analista da DORE será responsável por validar esta demanda.
+                Os checklists encaminhados pelas SREs chegam aqui para validação. Decida qual analista da DORE será responsável por validar esta demanda.
               </p>
               {solicitacao.analistaAtribuido ? (
                 <p className="text-xs text-indigo-800 font-semibold mt-1">
@@ -2022,9 +2061,22 @@ ${totalPendencias > 0
                     <User className="w-4 h-4 text-slate-500" />
                   </div>
                   <div>
-                    <p className="font-semibold text-slate-800">Atribuição da Demanda (DORE)</p>
+                    <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      Atribuição da Demanda (DORE)
+                      {solicitacao.etapaAtual === 'analise' && (() => {
+                        const resultado = calcularSlaCorrente(solicitacao.analiseSla || {});
+                        const info = STATUS_SLA_INFO[resultado.status];
+                        const checkpointLabel = resultado.checkpoint === 'atribuicao' ? 'p/ atribuir' : resultado.checkpoint === 'inicio' ? 'p/ iniciar' : 'p/ concluir';
+                        return (
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${info.corBadge}`} title={`SLA ${checkpointLabel}: ${formatarDuracaoHoras(resultado.horasRestantes)} ${resultado.horasRestantes >= 0 ? 'restantes' : 'de atraso'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${info.corPonto}`} />
+                            SLA {info.label}
+                          </span>
+                        );
+                      })()}
+                    </p>
                     <p className="text-slate-500 text-[10.5px]">
-                      {solicitacao.analistaAtribuido 
+                      {solicitacao.analistaAtribuido
                         ? `Responsável técnico: ${solicitacao.analistaAtribuido}`
                         : '⚠️ Ninguém atribuído. Esta demanda precisa ser encaminhada por um Gestor DORE.'}
                     </p>
@@ -2036,6 +2088,19 @@ ${totalPendencias > 0
                       <span className="bg-emerald-150 text-emerald-805 border border-emerald-250 font-bold px-2.5 py-1 rounded-full text-[10.5px]">
                         ✓ Atribuído a você
                       </span>
+                      {solicitacao.etapaAtual === 'analise' && !solicitacao.analiseSla?.dataInicioAnalise && (
+                        <button
+                          onClick={() => onUpdate({
+                            ...solicitacao,
+                            analiseSla: { ...solicitacao.analiseSla, dataInicioAnalise: new Date().toISOString() },
+                          })}
+                          className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1"
+                          title="Registra o início formal da análise, começando a contar o SLA de conclusão"
+                        >
+                          <Play className="w-3 h-3" />
+                          Iniciar Análise
+                        </button>
+                      )}
                       {solicitacao.etapaAtual === 'analise' && (
                         <button
                           data-testid="botao-aprovar-processo"
@@ -2067,6 +2132,17 @@ ${totalPendencias > 0
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {(solicitacao.auxiliares || []).length > 0 && solicitacao.etapaAtual === 'analise' && (
+              <div className="mb-6">
+                <PainelParecerAuxiliar
+                  auxiliares={solicitacao.auxiliares || []}
+                  nomeUsuarioLogado={currentUserNome}
+                  salvandoId={salvandoAuxiliarId}
+                  onSalvarParecer={handleSalvarParecerAuxiliar}
+                />
               </div>
             )}
 

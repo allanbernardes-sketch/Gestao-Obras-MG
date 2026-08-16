@@ -4,16 +4,17 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, DocumentoChecklist, computeStatusObra, montarChecklistCanonico, montarChecklistGED } from './types';
-import { recalcularPrioridade, calcularPontuacaoAutorizacaoPAF } from './utils/prioridade';
-import { recalcularIEE } from './utils/iee';
+import { Solicitacao, PerfilUsuario, EmpresaSeguranca, Notificacao, SistemaLog, Medicao, Aditivo, AjustePlanilha, UsuarioSistema, DocumentoChecklist, StatusItemFinanceiroExecucao, EquipeAnalista, AuxiliarProcesso, computeStatusObra, montarChecklistCanonico, montarChecklistGED } from './types';
+import { recalcularPrioridade, calcularPontuacaoAutorizacaoPAF, calcularEstrelas, calcularPrioridade, getInfoEtiqueta, CodigoEtiqueta } from './utils/prioridade';
+import { recalcularIEE, calcularIEE, CLASSE_IEE_INFO } from './utils/iee';
+import { coletarAlertasSla } from './utils/sla';
 import { SOLICITACOES_INICIAIS, NOTIFICACOES_INICIAIS, LOGS_INICIAIS } from './initialData';
 import Dashboard from './components/Dashboard';
 import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft, FileCheck } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft, FileCheck, DollarSign, Clock, AlertTriangle } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, AtribuicaoHistoricoPanel, AprovacaoRegionalPanel } from './components/GestaoObrasViews';
@@ -39,7 +40,6 @@ import {
 const PERFIS_SELECIONAVEIS: { value: PerfilUsuario; label: string; regional: boolean }[] = [
   { value: 'tecnico_infra', label: 'Técnico de Infraestrutura (SRE)', regional: true },
   { value: 'coordenador_regional', label: 'Coordenador Regional (SRE)', regional: true },
-  { value: 'gestor_dore', label: 'Gestor Atendimento (DORE)', regional: false },
   { value: 'analista_dore', label: 'Analista de Engenharia (DORE)', regional: false },
   { value: 'administrativo_dore', label: 'Administrativo (DORE)', regional: false },
   { value: 'gestor_paf', label: 'Subsecretário de Administração (PAF)', regional: false },
@@ -49,7 +49,6 @@ const PERFIS_SELECIONAVEIS: { value: PerfilUsuario; label: string; regional: boo
 
 // Departamento padrão exibido para perfis do órgão central (perfis regionais usam a SRE escolhida).
 const DEPARTAMENTO_POR_PERFIL_CENTRAL: Record<string, string> = {
-  gestor_dore: 'DORE Atendimento',
   analista_dore: 'DORE Engenharia',
   administrativo_dore: 'Administrativo DORE',
   gestor_paf: 'SAF/PAF Secretarias',
@@ -59,6 +58,40 @@ const DEPARTAMENTO_POR_PERFIL_CENTRAL: Record<string, string> = {
 
 // Formações que exigem registro profissional (CREA/CAU) obrigatório no cadastro.
 const FORMACOES_EXIGEM_REGISTRO = ['Engenharia Civil', 'Arquitetura', 'Técnico em Edificações'];
+
+// Rótulo genérico de cada etiqueta de prioridade para uso em filtro (sem interpolar dados de um
+// processo específico, ao contrário de getInfoEtiqueta — ver REGRAS_ETIQUETA em utils/prioridade.ts).
+const ETIQUETA_LABEL_FILTRO: Record<CodigoEtiqueta, string> = {
+  EMERGENCIAL: 'Emergencial',
+  PRIORIDADE: 'Prioridade (ADM)',
+  ESPECIAL: 'Especial (Notificação de Órgão)',
+  EMENDA_IMPOSITIVA: 'Emenda Impositiva',
+  SEM_LIB_FINANCEIRA: 'Sem Liberação Financeira',
+  NORMAL: 'Normal',
+};
+
+// Tela de Autorização do PAF (Etapa 3): uma única fila reúne o Atendimento Inicial (avança
+// etapaAtual 'paf_autorizacao' → 'paf') e a liberação financeira final de Reequilíbrio/Saldo
+// Complementar já homologados pela DORE (atualiza só o item, a obra permanece em 'execucao') — a
+// extinta tela "Liberação Financeira" foi fundida aqui, a pedido do usuário. Ver
+// [[fusao-liberacao-financeira-autorizacao]].
+type TipoLinhaAutorizacao = 'atendimento_inicial' | 'reequilibrio' | 'saldo';
+interface LinhaAutorizacao {
+  sol: Solicitacao;
+  tipo: TipoLinhaAutorizacao;
+  itemId: string | null;
+  valor: number;
+  label: string;
+}
+const TIPO_LINHA_AUTORIZACAO_INFO: Record<TipoLinhaAutorizacao, { label: string; corClassName: string }> = {
+  atendimento_inicial: { label: 'Atendimento Inicial', corClassName: 'border-blue-300 text-blue-700 bg-blue-50/40' },
+  reequilibrio: { label: 'Reequilíbrio Financeiro', corClassName: 'border-purple-300 text-purple-700 bg-purple-50/40' },
+  saldo: { label: 'Saldo Complementar', corClassName: 'border-teal-300 text-teal-700 bg-teal-50/40' },
+};
+const TABELA_POR_TIPO_LINHA_AUTORIZACAO: Record<'reequilibrio' | 'saldo', string> = {
+  reequilibrio: 'reequilibrios_financeiros',
+  saldo: 'saldos_complementares',
+};
 
 // status_obra no banco é um enum snake_case computado (nao_iniciada | em_andamento | paralisada
 // | concluida | distratada), diferente do campo statusObra do frontend (que é só um override manual
@@ -131,7 +164,6 @@ export default function App() {
       perfil: perfilUsuario === 'admin' ? 'Administrador do Sistema' :
               perfilUsuario === 'tecnico_infra' ? 'Técnico de Infraestrutura SRE' :
               perfilUsuario === 'coordenador_regional' ? 'Coordenador Regional' :
-              perfilUsuario === 'gestor_dore' ? 'Gestor Atendimento DORE' :
               perfilUsuario === 'analista_dore' ? 'Analista de Engenharia DORE' :
               perfilUsuario === 'gestor_paf' ? 'Subsecretário de Administração' :
               perfilUsuario === 'administrativo_dore' ? 'Administrativo DORE' :
@@ -147,7 +179,7 @@ export default function App() {
     localStorage.setItem('sgo_logs', JSON.stringify(novosLogs));
   };
 
-  const criarNotificacao = (titulo: string, mensagem: string, tipo: 'processo_avanco' | 'processo_retrocesso' | 'aditivo_pendente' | 'ajuste_pendente' | 'sistema' | 'alerta', solicitacaoId?: string, escola?: string) => {
+  const criarNotificacao = (titulo: string, mensagem: string, tipo: 'processo_avanco' | 'processo_retrocesso' | 'aditivo_pendente' | 'ajuste_pendente' | 'sistema' | 'alerta', solicitacaoId?: string, escola?: string, slaChave?: string) => {
     const novaNotif: Notificacao = {
       id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       titulo,
@@ -156,12 +188,45 @@ export default function App() {
       lida: false,
       tipo,
       solicitacaoId,
-      escola
+      escola,
+      slaChave
     };
     const novasNotifs = [novaNotif, ...notifications];
     setNotifications(novasNotifs);
     localStorage.setItem('sgo_notifications', JSON.stringify(novasNotifs));
   };
+
+  // Verificação periódica de SLA — gera uma notificação de alerta por checkpoint estourado, uma
+  // única vez cada (dedup por slaChave). Roda ao carregar/mudar as solicitações e a cada 5min
+  // enquanto a aba fica aberta, para pegar atrasos que "vencem" só pela passagem do tempo, sem
+  // nenhuma ação do usuário. Ver [[sla-atendimentos]].
+  useEffect(() => {
+    const verificarSla = () => {
+      setNotifications(prevNotifs => {
+        const alertas = coletarAlertasSla(solicitacoes);
+        const chavesExistentes = new Set(prevNotifs.map(n => n.slaChave).filter(Boolean));
+        const novos = alertas.filter(a => !chavesExistentes.has(a.chave));
+        if (novos.length === 0) return prevNotifs;
+        const novasNotifsSla: Notificacao[] = novos.map(a => ({
+          id: `notif-sla-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          titulo: a.titulo,
+          mensagem: a.mensagem,
+          dataHora: new Date().toISOString(),
+          lida: false,
+          tipo: 'alerta',
+          solicitacaoId: a.solicitacaoId,
+          escola: a.escola,
+          slaChave: a.chave,
+        }));
+        const atualizado = [...novasNotifsSla, ...prevNotifs];
+        localStorage.setItem('sgo_notifications', JSON.stringify(atualizado));
+        return atualizado;
+      });
+    };
+    verificarSla();
+    const intervalId = setInterval(verificarSla, 5 * 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, [solicitacoes]);
 
   // NEW DUAL NAV ARCHITECTURE STATES
   const [activeModule, setActiveModule] = useState<'seguranca' | 'orcamento' | 'gestao_obras' | 'imoveis' | 'abertura_chamados' | 'central_logs'>('gestao_obras');
@@ -186,6 +251,12 @@ export default function App() {
   const [filterSre, setFilterSre] = useState('');
   const [filterMunicipio, setFilterMunicipio] = useState('');
   const [filterEscola, setFilterEscola] = useState('');
+  const [filterTipoObra, setFilterTipoObra] = useState('');
+  const [filterTipoAtendimento, setFilterTipoAtendimento] = useState('');
+  const [filterClasseIEE, setFilterClasseIEE] = useState('');
+  const [filterEtiqueta, setFilterEtiqueta] = useState('');
+  // 'atendimento_inicial' | 'reequilibrio' | 'saldo' — ver [[fusao-liberacao-financeira-autorizacao]]
+  const [filterTipoProcesso, setFilterTipoProcesso] = useState('');
 
   // FILTERS STATE FOR "2. ANÁLISE TÉCNICA" (ProcessAnalysisPanel)
   const [filterAnaliseIdText, setFilterAnaliseIdText] = useState('');
@@ -202,15 +273,16 @@ export default function App() {
   const [historicoAtribuicaoSelecionadoId, setHistoricoAtribuicaoSelecionadoId] = useState<string | null>(null);
 
 
-  // REJECTION STATE FOR "3. AUTORIZAÇÃO DO PAF"
-  const [rejectingSchoolId, setRejectingSchoolId] = useState<string | null>(null);
-  const [rejectionJustification, setRejectionJustification] = useState('');
-  const [confirmingSolId, setConfirmingSolId] = useState<string | null>(null);
+  // AÇÕES DA "3. AUTORIZAÇÃO DO PAF" — a mesma tela trata tanto o Atendimento Inicial (avança
+  // etapaAtual) quanto a liberação financeira de Reequilíbrio/Saldo Complementar já homologados
+  // pela DORE (atualiza o item, não a etapa da obra). Ver [[fusao-liberacao-financeira-autorizacao]].
+  const [linhaConfirmando, setLinhaConfirmando] = useState<LinhaAutorizacao | null>(null);
+  const [linhaRejeitando, setLinhaRejeitando] = useState<LinhaAutorizacao | null>(null);
+  const [justificativaRejeicaoPaf, setJustificativaRejeicaoPaf] = useState('');
 
   // REGISTROS DE SEGURANÇA (INTERACTIVE STATE MODEL)
   const [usuariosSeguranca, setUsuariosSeguranca] = useState<UsuarioSistema[]>([
     { id: 'USR-01', nome: 'João Paulo Penfield', email: 'joao.paulo@sre.mg.gov.br', perfil: 'tecnico_infra', departamento: 'SRE Patos de Minas' },
-    { id: 'USR-02', nome: 'Aline Davino', email: 'aline.davino@educacao.mg.gov.br', perfil: 'gestor_dore', departamento: 'DORE Atendimento' },
     { id: 'USR-03', nome: 'Flavia Borges', email: 'flavia.borges@educacao.mg.gov.br', perfil: 'analista_dore', departamento: 'DORE Engenharia' },
     { id: 'USR-04', nome: 'Silas Fagundes', email: 'silas.fagundes@paf.mg.gov.br', perfil: 'gestor_paf', departamento: 'SAF/PAF Secretarias' },
     { id: 'USR-05', nome: 'Rui Lages', email: 'rui.lages@educacao.mg.gov.br', perfil: 'administrativo_dore', departamento: 'Administrativo DORE' },
@@ -263,6 +335,8 @@ export default function App() {
   const [usrSituacaoFuncional, setUsrSituacaoFuncional] = useState<'Ativo' | 'Férias' | 'Licença' | 'Afastado' | 'Desligado'>('Ativo');
   const [usrPerfil, setUsrPerfil] = useState<PerfilUsuario>('tecnico_infra');
   const [usrRegionais, setUsrRegionais] = useState<string[]>(['SRE Metropolitana A']);
+  // Equipe de especialidade — obrigatória quando usrPerfil === 'analista_dore'. Ver [[equipes-analista-auxiliares]].
+  const [usrEquipe, setUsrEquipe] = useState<EquipeAnalista | ''>('');
 
   // FILTROS DA TABELA DE USUÁRIOS
   const [filtroUsrBusca, setFiltroUsrBusca] = useState('');
@@ -292,6 +366,7 @@ export default function App() {
     setUsrSituacaoFuncional('Ativo');
     setUsrPerfil('tecnico_infra');
     setUsrRegionais(['SRE Metropolitana A']);
+    setUsrEquipe('');
     setUsrIdEmEdicao(null);
     setShowCadastroUsuarioModal(false);
   };
@@ -310,6 +385,7 @@ export default function App() {
     setUsrRegionais(u.tipoVinculo === 'regional'
       ? (u.regionais?.length ? u.regionais : (u.departamento ? [u.departamento] : ['SRE Metropolitana A']))
       : ['SRE Metropolitana A']);
+    setUsrEquipe((u.equipeAnalise as EquipeAnalista) || '');
     setShowCadastroUsuarioModal(true);
   };
 
@@ -318,7 +394,6 @@ export default function App() {
       switch (perfil) {
         case 'tecnico_infra': return 'Técnico de Infraestrutura (SRE)';
         case 'coordenador_regional': return 'Coordenador Regional (SRE)';
-        case 'gestor_dore': return 'Gestor Atendimento (DORE)';
         case 'analista_dore': return 'Analista de Engenharia (DORE)';
         case 'gestor_paf': return 'Subsecretário de Administração';
         case 'administrativo_dore': return 'Administrativo DORE';
@@ -365,7 +440,7 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleCadastrarUsuario = (e: React.FormEvent) => {
+  const handleCadastrarUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!usrNome || !usrEmail) {
       alert('Por favor, preencha todos os campos obrigatórios.');
@@ -377,6 +452,10 @@ export default function App() {
     }
     if (FORMACOES_EXIGEM_REGISTRO.includes(usrFormacao) && (!usrCreaNum.trim() || !usrCreaSituacao)) {
       alert('Nº de Registro e Situação do Registro (CREA/CAU) são obrigatórios para esta formação.');
+      return;
+    }
+    if (usrPerfil === 'analista_dore' && !usrEquipe) {
+      alert('Selecione a equipe de especialidade do Analista de Engenharia (Planejamento, Ajuste, Elétrica, Arquitetura ou PSCIP).');
       return;
     }
 
@@ -391,6 +470,7 @@ export default function App() {
       perfil: usrPerfil,
       departamento,
       regionais: isRegional ? usrRegionais : undefined,
+      equipeAnalise: usrPerfil === 'analista_dore' ? (usrEquipe || undefined) : undefined,
       cargo: usrCargo,
       formacao: usrFormacao,
       creaNum: usrCreaNum || undefined,
@@ -402,6 +482,22 @@ export default function App() {
     };
 
     if (usrIdEmEdicao) {
+      // Persiste perfil e equipe no banco (as únicas duas colunas de fato regidas por regra de
+      // negócio real hoje — o resto do cadastro segue só em memória, ver [[equipes-analista-auxiliares]]).
+      // Só tenta se o id for um uuid real (usuário carregado do Supabase, não um mock local).
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(usrIdEmEdicao)) {
+        const { data: perfilRow } = await supabase.from('perfis').select('id').eq('codigo', usrPerfil).single();
+        if (perfilRow) {
+          const { error: erroPersist } = await supabase
+            .from('usuarios')
+            .update({ perfil_id: perfilRow.id, equipe_analise: dadosAtualizados.equipeAnalise ?? null })
+            .eq('id', usrIdEmEdicao);
+          if (erroPersist) {
+            console.error('Erro ao gravar perfil/equipe no Supabase:', erroPersist);
+            alert('Erro ao gravar o perfil/equipe no banco de dados. As demais alterações do cadastro foram salvas só nesta sessão.');
+          }
+        }
+      }
       setUsuariosSeguranca(usuariosSeguranca.map(u =>
         u.id === usrIdEmEdicao ? { ...u, ...dadosAtualizados } : u
       ));
@@ -543,6 +639,10 @@ export default function App() {
   // Nome do coordenador regional logado (usado para registrar quem aprovou/reprovou o atendimento)
   const nomeCoordenadorLogado = perfilUsuario === 'coordenador_regional' ? nomeUsuario : '';
 
+  // Nome do Subsecretário de Administração logado (usado para registrar quem liberou/reprovou o
+  // recurso financeiro de Reequilíbrio/Saldo Complementar). Ver [[gate-liberacao-financeira]].
+  const nomeGestorPafLogado = perfilUsuario === 'gestor_paf' ? nomeUsuario : '';
+
   // Fail-closed: perfil restrito sem regionais cadastradas não vê nada (antes via o estado inteiro)
   const solicitacoesVisiveis = perfilRestritoPorRegional
     ? solicitacoes.filter(s =>
@@ -577,6 +677,12 @@ export default function App() {
             etapaAtual: row.etapa_atual,
             analistaAtribuido: row.analista?.nome ?? undefined,
             fiscalObraAtribuido: row.fiscal?.nome ?? undefined,
+            analiseSla: {
+              dataEntradaFila: row.analise_data_entrada_fila ?? undefined,
+              dataAtribuicao: row.analise_data_atribuicao ?? undefined,
+              dataInicioAnalise: row.analise_data_inicio ?? undefined,
+              dataConclusao: row.analise_data_conclusao ?? undefined,
+            },
             historicoEtapas: [],
             documentos: [],
             medicoes: [],
@@ -827,6 +933,7 @@ export default function App() {
                 switch (v) {
                   case 'aprovado': return 'validado';
                   case 'recusado': return 'em_elaboracao';
+                  case 'aguardando_coordenador': return 'aguardando_coordenador';
                   default: return 'analise_dore';
                 }
               };
@@ -865,6 +972,13 @@ export default function App() {
                     valorAditivo: row.diferenca_planilhas ?? undefined,
                     percentualContrato: row.percentual_contrato ?? undefined,
                     parecerDore: row.parecer_dore ?? undefined,
+                    coordenadorAprovador: row.coordenador_aprovador ?? undefined,
+                    dataAprovacaoCoordenador: row.data_aprovacao_coordenador ?? undefined,
+                    justificativaReprovacaoCoordenador: row.justificativa_reprovacao_coordenador ?? undefined,
+                    dataEntradaFila: row.data_entrada_fila ?? undefined,
+                    dataAtribuicao: row.data_atribuicao ?? undefined,
+                    dataInicioAnalise: row.data_inicio_analise ?? undefined,
+                    dataConclusao: row.data_conclusao ?? undefined,
                   })),
                 };
               });
@@ -1018,6 +1132,10 @@ export default function App() {
                     id: row.id,
                     descricao: row.descricao ?? '',
                     categoria: row.categoria ?? undefined,
+                    etapasServico: Array.isArray(row.etapas_servico) ? row.etapas_servico : [],
+                    natureza: row.natureza ?? undefined,
+                    recomendacao: row.recomendacao ?? undefined,
+                    evidencias: Array.isArray(row.evidencias) ? row.evidencias : [],
                     dataRegistro: row.created_at ? String(row.created_at).slice(0, 10) : '',
                     autor: row.usuario_id ?? undefined,
                   })),
@@ -1164,9 +1282,11 @@ export default function App() {
             if (reequilibriosError) {
               console.error('Erro ao carregar reequilíbrios financeiros:', reequilibriosError);
             } else if (reequilibriosData) {
-              const statusReequilibrioDoBanco = (v: string | null): 'aguardando_analista' | 'aprovado' | 'reprovado' => {
+              const statusReequilibrioDoBanco = (v: string | null): StatusItemFinanceiroExecucao => {
                 if (v === 'aprovado') return 'aprovado';
                 if (v === 'recusado') return 'reprovado';
+                if (v === 'aguardando_coordenador') return 'aguardando_coordenador';
+                if (v === 'aguardando_liberacao_financeira') return 'aguardando_liberacao_financeira';
                 return 'aguardando_analista';
               };
 
@@ -1191,6 +1311,17 @@ export default function App() {
                     descontoContratual: row.desconto_contratual ?? undefined,
                     valorOriginal: row.valor_original ?? undefined,
                     analistaAtribuido: row.analista_nome ?? undefined,
+                    coordenadorAprovador: row.coordenador_aprovador ?? undefined,
+                    dataAprovacaoCoordenador: row.data_aprovacao_coordenador ?? undefined,
+                    justificativaReprovacaoCoordenador: row.justificativa_reprovacao_coordenador ?? undefined,
+                    parecerDore: row.parecer_dore ?? undefined,
+                    liberadoPor: row.liberado_por ?? undefined,
+                    dataLiberacaoFinanceira: row.data_liberacao_financeira ?? undefined,
+                    justificativaReprovacaoFinanceira: row.justificativa_reprovacao_financeira ?? undefined,
+                    dataEntradaFila: row.data_entrada_fila ?? undefined,
+                    dataAtribuicao: row.data_atribuicao ?? undefined,
+                    dataInicioAnalise: row.data_inicio_analise ?? undefined,
+                    dataConclusao: row.data_conclusao ?? undefined,
                   })),
                 };
               });
@@ -1209,9 +1340,11 @@ export default function App() {
             if (saldosError) {
               console.error('Erro ao carregar saldos complementares:', saldosError);
             } else if (saldosData) {
-              const statusSaldoDoBanco = (v: string | null): 'aguardando_analista' | 'aprovado' | 'reprovado' => {
+              const statusSaldoDoBanco = (v: string | null): StatusItemFinanceiroExecucao => {
                 if (v === 'aprovado') return 'aprovado';
                 if (v === 'recusado') return 'reprovado';
+                if (v === 'aguardando_coordenador') return 'aguardando_coordenador';
+                if (v === 'aguardando_liberacao_financeira') return 'aguardando_liberacao_financeira';
                 return 'aguardando_analista';
               };
 
@@ -1238,14 +1371,71 @@ export default function App() {
                     necessidadeAditivo: row.necessidade_aditivo ?? 0,
                     analistaAtribuido: row.analista_nome ?? undefined,
                     documentos: row.documentos_checklist ? JSON.parse(row.documentos_checklist) : [],
+                    coordenadorAprovador: row.coordenador_aprovador ?? undefined,
+                    dataAprovacaoCoordenador: row.data_aprovacao_coordenador ?? undefined,
+                    justificativaReprovacaoCoordenador: row.justificativa_reprovacao_coordenador ?? undefined,
+                    liberadoPor: row.liberado_por ?? undefined,
+                    dataLiberacaoFinanceira: row.data_liberacao_financeira ?? undefined,
+                    justificativaReprovacaoFinanceira: row.justificativa_reprovacao_financeira ?? undefined,
+                    dataEntradaFila: row.data_entrada_fila ?? undefined,
+                    dataAtribuicao: row.data_atribuicao ?? undefined,
+                    dataInicioAnalise: row.data_inicio_analise ?? undefined,
+                    dataConclusao: row.data_conclusao ?? undefined,
                   })),
                 };
               });
             }
           }
 
+          // Carrega os auxiliares de validação (Elétrica/Arquitetura/PSCIP) de cada processo —
+          // precisa vir depois de comSaldos porque distribui nas listas de ajustes/reequilibrios/
+          // saldosComplementares já hidratadas. Ver [[equipes-analista-auxiliares]].
+          let comAuxiliares = comSaldos;
+          if (dbIds.length > 0) {
+            const { data: auxData, error: auxError } = await supabase
+              .from('processo_auxiliares')
+              .select('*')
+              .in('solicitacao_id', dbIds)
+              .order('created_at', { ascending: true });
+
+            if (auxError) {
+              console.error('Erro ao carregar auxiliares de validação:', auxError);
+            } else if (auxData) {
+              const porSolicitacaoAux = new Map<string, any[]>();
+              (auxData as any[]).forEach((row) => {
+                const lista = porSolicitacaoAux.get(row.solicitacao_id) ?? [];
+                lista.push(row);
+                porSolicitacaoAux.set(row.solicitacao_id, lista);
+              });
+
+              const paraAuxiliar = (row: any): AuxiliarProcesso => ({
+                id: row.id,
+                nome: row.nome,
+                usuarioId: row.usuario_id ?? undefined,
+                equipe: row.equipe,
+                parecer: row.parecer ?? undefined,
+                aprovado: row.aprovado ?? undefined,
+                dataParecer: row.data_parecer ?? undefined,
+              });
+
+              comAuxiliares = comSaldos.map(sol => {
+                const linhas = sol._dbId ? porSolicitacaoAux.get(sol._dbId) : undefined;
+                if (!linhas || linhas.length === 0) return sol;
+                const porItem = (tipo: string, itemId: string | null) =>
+                  linhas.filter(r => r.tipo_item === tipo && (itemId === null ? true : r.item_id === itemId)).map(paraAuxiliar);
+                return {
+                  ...sol,
+                  auxiliares: porItem('analise', null),
+                  ajustes: (sol.ajustes || []).map(a => ({ ...a, auxiliares: porItem('ajuste', a.id) })),
+                  reequilibrios: (sol.reequilibrios || []).map(r => ({ ...r, auxiliares: porItem('reequilibrio', r.id) })),
+                  saldosComplementares: (sol.saldosComplementares || []).map(s => ({ ...s, auxiliares: porItem('saldo', s.id) })),
+                };
+              });
+            }
+          }
+
           // Carrega as parcelas do PAF (recursos liberados) de cada solicitação
-          let comParcelas = comSaldos;
+          let comParcelas = comAuxiliares;
           if (dbIds.length > 0) {
             const { data: parcelasData, error: parcelasError } = await supabase
               .from('parcelas_paf')
@@ -1314,7 +1504,7 @@ export default function App() {
     async function carregarUsuarios() {
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('usuarios')
-        .select('id, nome, email, perfil_id, perfis(codigo), usuario_regionais(regionais_sre(nome))')
+        .select('id, nome, email, perfil_id, equipe_analise, perfis(codigo), usuario_regionais(regionais_sre(nome))')
         .eq('ativo', true);
 
       if (usuariosError) {
@@ -1334,6 +1524,7 @@ export default function App() {
             perfil: u.perfis?.codigo ?? '',
             departamento: regionais[0] ?? '',
             regionais,
+            equipeAnalise: u.equipe_analise ?? undefined,
           };
         }));
       }
@@ -1466,6 +1657,11 @@ export default function App() {
           analista_atribuido_id: resolverUsuarioIdPorNome(usuariosSeguranca, sol.analistaAtribuido),
           // Preferência: id explícito escolhido na UI (main); fallback: resolução por nome
           fiscal_obra_atribuido_id: sol.fiscalObraAtribuidoId ?? resolverUsuarioIdPorNome(usuariosSeguranca, sol.fiscalObraAtribuido),
+          // SLA da Análise Técnica — ver [[sla-atendimentos]]
+          analise_data_entrada_fila: dataOuNull(sol.analiseSla?.dataEntradaFila),
+          analise_data_atribuicao: dataOuNull(sol.analiseSla?.dataAtribuicao),
+          analise_data_inicio: dataOuNull(sol.analiseSla?.dataInicioAnalise),
+          analise_data_conclusao: dataOuNull(sol.analiseSla?.dataConclusao),
           // Campos da aba Conclusão de Obra
           data_conclusao: dataOuNull(sol.dataConclusao),
           laudo_conclusivo_file_name: sol.laudoConclusivoFileName ?? null,
@@ -2056,7 +2252,7 @@ export default function App() {
                     )}
                   </div>
 
-                  {(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
+                  {(perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
                     <div className="px-3 pt-2 pb-0.5 border-t border-slate-100 flex justify-center">
                       <button
                         onClick={() => {
@@ -2086,7 +2282,6 @@ export default function App() {
                   {perfilUsuario === 'admin' && 'Administrador do Sistema'}
                   {perfilUsuario === 'tecnico_infra' && 'Técnico de Infraestrutura (SRE)'}
                   {perfilUsuario === 'coordenador_regional' && 'Coordenador Regional (SRE)'}
-                  {perfilUsuario === 'gestor_dore' && 'Gestor Atendimento (DORE)'}
                   {perfilUsuario === 'analista_dore' && 'Analista de Engenharia (DORE)'}
                   {perfilUsuario === 'gestor_paf' && 'Subsecretário de Administração'}
                   {perfilUsuario === 'administrativo_dore' && 'Administrativo DORE'}
@@ -2232,7 +2427,7 @@ export default function App() {
 
           {/* 6. LOG DO SISTEMA — somente gestores */}
           {(() => {
-            const bloqueado = !(perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'));
+            const bloqueado = !(perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'));
             return (
               <button
                 data-testid="modulo-central-logs"
@@ -2435,11 +2630,12 @@ export default function App() {
                       {[
                         { id: 'paf_acompanhamento', label: 'Acompanhamento de PAF', icon: ClipboardList },
                         { id: 'paf_autorizacao', label: 'Autorizações', icon: CheckCircle },
-                        { id: 'paf', label: 'Geração de PAF', icon: Landmark }
+                        { id: 'paf', label: 'Geração de PAF', icon: Landmark },
                       ].map(item => {
                         const Icon = item.icon;
                         const isActive = activeSubTask === item.id;
-                        const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || ((perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore') && item.id === 'paf_autorizacao');
+                        const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' ||
+                          (item.id === 'paf_autorizacao' && perfilUsuario !== 'gestor_paf' && perfilUsuario !== 'admin' && perfilUsuario !== 'diretor_dore');
                         return (
                           <button
                             data-testid={`menu-${item.id}`}
@@ -2869,26 +3065,93 @@ export default function App() {
             />
           ) : activeModule === 'gestao_obras' && activeSubTask === 'paf_autorizacao' && !idSolicitacaoSelecionada ? (
             (() => {
-              const schoolsInAutorizacao = solicitacoesVisiveis.filter(s => s.etapaAtual === 'paf_autorizacao');
-              
+              // Fila unificada da Autorização do PAF: Atendimento Inicial (etapaAtual 'paf_autorizacao')
+              // + Reequilíbrio/Saldo Complementar já homologados tecnicamente pela DORE, aguardando a
+              // liberação financeira final do mesmo Subsecretário — a extinta tela "Liberação
+              // Financeira" foi fundida aqui a pedido do usuário. Ver [[fusao-liberacao-financeira-autorizacao]].
+              const solicitacoesAtendimentoInicial = solicitacoesVisiveis.filter(s => s.etapaAtual === 'paf_autorizacao');
+
+              const todasLinhasFila: LinhaAutorizacao[] = [
+                ...solicitacoesAtendimentoInicial.map((s): LinhaAutorizacao => ({
+                  sol: s,
+                  tipo: 'atendimento_inicial',
+                  itemId: null,
+                  valor: s.valorPlanilha || s.valorHomologado || 0,
+                  label: s.tipo || s.tipoObra || 'Atendimento Inicial',
+                })),
+                ...solicitacoesVisiveis.flatMap((s): LinhaAutorizacao[] =>
+                  (s.reequilibrios || [])
+                    .filter(r => r.status === 'aguardando_liberacao_financeira')
+                    .map((r): LinhaAutorizacao => ({
+                      sol: s,
+                      tipo: 'reequilibrio',
+                      itemId: r.id,
+                      valor: r.valorReequilibrado || r.valorOriginal || 0,
+                      label: 'Reequilíbrio Financeiro',
+                    }))
+                ),
+                ...solicitacoesVisiveis.flatMap((s): LinhaAutorizacao[] =>
+                  (s.saldosComplementares || [])
+                    .filter(sc => sc.status === 'aguardando_liberacao_financeira')
+                    .map((sc): LinhaAutorizacao => ({
+                      sol: s,
+                      tipo: 'saldo',
+                      itemId: sc.id,
+                      valor: sc.valorLiberado || 0,
+                      label: 'Saldo Complementar',
+                    }))
+                ),
+              ];
+
               // Dynamic filter items based on the data
-              const uniqueCodesc = Array.from(new Set(schoolsInAutorizacao.map(s => s.codesc).filter(Boolean)));
-              const uniqueSre = Array.from(new Set(schoolsInAutorizacao.map(s => s.sre).filter(Boolean)));
-              const uniqueMunicipio = Array.from(new Set(schoolsInAutorizacao.map(s => s.municipio).filter(Boolean)));
-              const uniqueEscola = Array.from(new Set(schoolsInAutorizacao.map(s => s.nomeEscola).filter(Boolean)));
+              const uniqueCodesc = Array.from(new Set(todasLinhasFila.map(l => l.sol.codesc).filter(Boolean)));
+              const uniqueSre = Array.from(new Set(todasLinhasFila.map(l => l.sol.sre).filter(Boolean)));
+              const uniqueMunicipio = Array.from(new Set(todasLinhasFila.map(l => l.sol.municipio).filter(Boolean)));
+              const uniqueEscola = Array.from(new Set(todasLinhasFila.map(l => l.sol.nomeEscola).filter(Boolean)));
+              const uniqueTipoObra = Array.from(new Set(todasLinhasFila.map(l => l.sol.tipoObra || l.sol.tipo).filter(Boolean)));
+              const uniqueTipoAtendimento = Array.from(new Set(todasLinhasFila.map(l => l.sol.tipoAtendimento).filter(Boolean)));
+              const uniqueClasseIEE = Array.from(new Set(todasLinhasFila.map(l => l.sol.ieeClasse ?? calcularIEE(l.sol)?.classe).filter((c): c is NonNullable<typeof c> => !!c)));
+              const uniqueEtiquetas = Array.from(new Set(todasLinhasFila.flatMap(l => (l.sol.etiquetasPrioridade as CodigoEtiqueta[] | undefined) ?? calcularPrioridade(l.sol).etiquetas)));
+              const uniqueTipoProcesso = Array.from(new Set(todasLinhasFila.map(l => l.tipo)));
 
               // Ranking técnico da fila: quanto maior a pontuação, maior a prioridade sugerida
               // para o subsecretário autorizar primeiro. Ver critérios em calcularPontuacaoAutorizacaoPAF.
-              const filteredSchoolsInAutorizacao = schoolsInAutorizacao
-                .filter(s => {
+              const filteredLinhasFila = todasLinhasFila
+                .filter(linha => {
+                  const s = linha.sol;
                   if (filterCodesc && s.codesc !== filterCodesc) return false;
                   if (filterSre && s.sre !== filterSre) return false;
                   if (filterMunicipio && s.municipio !== filterMunicipio) return false;
                   if (filterEscola && s.nomeEscola !== filterEscola) return false;
+                  if (filterTipoObra && (s.tipoObra || s.tipo) !== filterTipoObra) return false;
+                  if (filterTipoAtendimento && s.tipoAtendimento !== filterTipoAtendimento) return false;
+                  if (filterClasseIEE && (s.ieeClasse ?? calcularIEE(s)?.classe) !== filterClasseIEE) return false;
+                  if (filterTipoProcesso && linha.tipo !== filterTipoProcesso) return false;
+                  if (filterEtiqueta) {
+                    const etiquetasS = (s.etiquetasPrioridade as CodigoEtiqueta[] | undefined) ?? calcularPrioridade(s).etiquetas;
+                    if (!etiquetasS.includes(filterEtiqueta as CodigoEtiqueta)) return false;
+                  }
                   return true;
                 })
-                .map(s => ({ sol: s, ranking: calcularPontuacaoAutorizacaoPAF(s) }))
+                .map(linha => ({ linha, ranking: calcularPontuacaoAutorizacaoPAF(linha.sol) }))
                 .sort((a, b) => b.ranking.pontos - a.ranking.pontos);
+
+              // Autorização do PAF (Etapa 3) é de controle exclusivo do Subsecretário de Administração
+              // (gestor_paf) — admin/diretor_dore mantêm o mesmo acesso de override usado no resto do
+              // sistema. Blindagem de conteúdo: o menu já bloqueia a navegação para os demais perfis
+              // (cinza + cadeado), mas essa checagem cobre o caso de troca de perfil com a tela já aberta.
+              const podeAutorizarPAF = perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore';
+              if (!podeAutorizarPAF) {
+                return (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400 space-y-3">
+                    <Lock className="w-12 h-12 mx-auto text-slate-300" />
+                    <h3 className="text-sm font-black text-slate-700">Acesso Restrito</h3>
+                    <p className="text-xs max-w-xs mx-auto leading-relaxed">
+                      A Autorização do PAF (Etapa 3) é de acesso exclusivo do Subsecretário de Administração.
+                    </p>
+                  </div>
+                );
+              }
 
               const handleAutorizarPAF = (s: Solicitacao) => {
                 const updated: Solicitacao = {
@@ -2914,8 +3177,72 @@ export default function App() {
                   ]
                 };
                 handleUpdateSolicitacao(updated);
-                setRejectingSchoolId(null);
-                setRejectionJustification('');
+                setLinhaRejeitando(null);
+                setJustificativaRejeicaoPaf('');
+              };
+
+              // Liberação financeira final de Reequilíbrio/Saldo Complementar já homologados pela
+              // DORE — mesma lógica que vivia na extinta tela "Liberação Financeira", agora inline
+              // nesta fila. A obra permanece em 'execucao'; só o item filho muda de status.
+              const handleLiberarRecursoFinanceiro = async (linha: LinhaAutorizacao) => {
+                if (linha.tipo === 'atendimento_inicial' || !linha.itemId) return;
+                const tabela = TABELA_POR_TIPO_LINHA_AUTORIZACAO[linha.tipo];
+                const hoje = new Date().toISOString().split('T')[0];
+                const { error } = await supabase
+                  .from(tabela)
+                  .update({ status: 'aprovado', liberado_por: nomeUsuario, data_liberacao_financeira: hoje })
+                  .eq('id', linha.itemId);
+                if (error) {
+                  console.error('Erro ao liberar recurso financeiro no Supabase:', error);
+                  alert('Erro ao liberar o recurso financeiro no banco de dados. Tente novamente.');
+                  return;
+                }
+                const s = linha.sol;
+                const updated: Solicitacao = {
+                  ...s,
+                  reequilibrios: linha.tipo === 'reequilibrio'
+                    ? (s.reequilibrios || []).map(r => r.id === linha.itemId ? { ...r, status: 'aprovado', liberadoPor: nomeUsuario, dataLiberacaoFinanceira: hoje } : r)
+                    : s.reequilibrios,
+                  saldosComplementares: linha.tipo === 'saldo'
+                    ? (s.saldosComplementares || []).map(sc => sc.id === linha.itemId ? { ...sc, status: 'aprovado', liberadoPor: nomeUsuario, dataLiberacaoFinanceira: hoje } : sc)
+                    : s.saldosComplementares,
+                  historicoEtapas: [
+                    ...s.historicoEtapas,
+                    { etapa: s.etapaAtual, data: hoje, responsavel: `Subsecretário (Liberação Financeira: ${TIPO_LINHA_AUTORIZACAO_INFO[linha.tipo].label} Aprovado)` }
+                  ]
+                };
+                handleUpdateSolicitacao(updated);
+              };
+
+              const handleReprovarRecursoFinanceiro = async (linha: LinhaAutorizacao, justificativa: string) => {
+                if (linha.tipo === 'atendimento_inicial' || !linha.itemId) return;
+                const tabela = TABELA_POR_TIPO_LINHA_AUTORIZACAO[linha.tipo];
+                const { error } = await supabase
+                  .from(tabela)
+                  .update({ status: 'reprovado', justificativa_reprovacao_financeira: justificativa })
+                  .eq('id', linha.itemId);
+                if (error) {
+                  console.error('Erro ao reprovar liberação financeira no Supabase:', error);
+                  alert('Erro ao reprovar o recurso financeiro no banco de dados. Tente novamente.');
+                  return;
+                }
+                const s = linha.sol;
+                const updated: Solicitacao = {
+                  ...s,
+                  reequilibrios: linha.tipo === 'reequilibrio'
+                    ? (s.reequilibrios || []).map(r => r.id === linha.itemId ? { ...r, status: 'reprovado', justificativaReprovacaoFinanceira: justificativa } : r)
+                    : s.reequilibrios,
+                  saldosComplementares: linha.tipo === 'saldo'
+                    ? (s.saldosComplementares || []).map(sc => sc.id === linha.itemId ? { ...sc, status: 'reprovado', justificativaReprovacaoFinanceira: justificativa } : sc)
+                    : s.saldosComplementares,
+                  historicoEtapas: [
+                    ...s.historicoEtapas,
+                    { etapa: s.etapaAtual, data: new Date().toISOString().split('T')[0], responsavel: `Subsecretário (Liberação Financeira Reprovada: ${justificativa})` }
+                  ]
+                };
+                handleUpdateSolicitacao(updated);
+                setLinhaRejeitando(null);
+                setJustificativaRejeicaoPaf('');
               };
 
               return (
@@ -2935,6 +3262,118 @@ export default function App() {
                       </p>
                     </div>
                   </div>
+
+                  {/* CARDS DE VISÃO GERAL DA FILA — para o Subsecretário ter embasamento antes de entrar nos filtros */}
+                  {(() => {
+                    const valorTotalFila = todasLinhasFila.reduce((acc, l) => acc + l.valor, 0);
+
+                    const contagemPorTipoAtendimento = todasLinhasFila.reduce((acc, l) => {
+                      const tipo = (l.sol.tipoAtendimento || 'Normal').toUpperCase();
+                      acc[tipo] = (acc[tipo] || 0) + 1;
+                      return acc;
+                    }, {} as Record<string, number>);
+                    const tiposOrdenados = Object.entries(contagemPorTipoAtendimento).sort((a, b) => b[1] - a[1]);
+
+                    const contagemPorTipoProcesso = todasLinhasFila.reduce((acc, l) => {
+                      acc[l.tipo] = (acc[l.tipo] || 0) + 1;
+                      return acc;
+                    }, {} as Record<TipoLinhaAutorizacao, number>);
+
+                    const totalPrioritarios = todasLinhasFila.filter(l => {
+                      const etiquetas = (l.sol.etiquetasPrioridade as CodigoEtiqueta[] | undefined) ?? calcularPrioridade(l.sol).etiquetas;
+                      return etiquetas.includes('EMERGENCIAL') || etiquetas.includes('PRIORIDADE');
+                    }).length;
+
+                    const tempoMedioEsperaDias = todasLinhasFila.length > 0
+                      ? Math.round(todasLinhasFila.reduce((acc, l) => {
+                          const dataRef = l.itemId
+                            ? (l.tipo === 'reequilibrio'
+                                ? (l.sol.reequilibrios || []).find(r => r.id === l.itemId)?.dataCriacao
+                                : (l.sol.saldosComplementares || []).find(sc => sc.id === l.itemId)?.dataCriacao)
+                            : (l.sol.historicoEtapas?.find(h => h.etapa === 'paf_autorizacao')?.data || l.sol.dataCriacao);
+                          if (!dataRef) return acc;
+                          const dias = Math.max(0, Math.floor((Date.now() - new Date(`${dataRef}T00:00:00`).getTime()) / (1000 * 60 * 60 * 24)));
+                          return acc + dias;
+                        }, 0) / todasLinhasFila.length)
+                      : 0;
+
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-3xs flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+                            <ClipboardList className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-widest block">Processos na Fila</span>
+                            <span className="text-xl font-black font-mono text-slate-800 block mt-0.5">{todasLinhasFila.length}</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-3xs flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                            <DollarSign className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-widest block">Valor Total em Fila</span>
+                            <span className="text-sm font-black font-mono text-slate-800 block mt-0.5">
+                              {valorTotalFila.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-3xs flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
+                            <AlertTriangle className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-widest block">Emergenciais / Prioritários</span>
+                            <span className="text-xl font-black font-mono text-slate-800 block mt-0.5">{totalPrioritarios}</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-3xs flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                            <Clock className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-widest block">Tempo Médio de Espera</span>
+                            <span className="text-xl font-black font-mono text-slate-800 block mt-0.5">{tempoMedioEsperaDias} {tempoMedioEsperaDias === 1 ? 'dia' : 'dias'}</span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-3xs sm:col-span-2 lg:col-span-2">
+                          <span className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-widest block mb-2">Por Tipo de Processo</span>
+                          <div className="flex flex-wrap gap-2">
+                            {(Object.keys(TIPO_LINHA_AUTORIZACAO_INFO) as TipoLinhaAutorizacao[])
+                              .filter(tipo => contagemPorTipoProcesso[tipo] > 0)
+                              .map(tipo => (
+                                <span key={tipo} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-bold border ${TIPO_LINHA_AUTORIZACAO_INFO[tipo].corClassName}`}>
+                                  {TIPO_LINHA_AUTORIZACAO_INFO[tipo].label}
+                                  <span className="px-1.5 py-0.2 rounded-full bg-slate-700 text-white font-mono text-[9.5px]">{contagemPorTipoProcesso[tipo]}</span>
+                                </span>
+                              ))}
+                            {todasLinhasFila.length === 0 && <span className="text-xs text-slate-400 italic">Nenhum processo na fila.</span>}
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-3xs sm:col-span-2 lg:col-span-2">
+                          <span className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-widest block mb-2">Por Tipo de Atendimento</span>
+                          {tiposOrdenados.length === 0 ? (
+                            <span className="text-xs text-slate-400 italic">Nenhum processo na fila.</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {tiposOrdenados.map(([tipo, qtd]) => (
+                                <span key={tipo} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-slate-50 border border-slate-200 text-slate-700">
+                                  {tipo}
+                                  <span className="px-1.5 py-0.2 rounded-full bg-slate-700 text-white font-mono text-[9.5px]">{qtd}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* FORM DE FILTROS SEPARADOS EM CODESC, SRE, MUNICIPIO E ESCOLA */}
                   <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-3xs text-left">
@@ -3004,9 +3443,84 @@ export default function App() {
                           ))}
                         </select>
                       </div>
+
+                      {/* TIPO DE OBRA SELECTOR */}
+                      <div className="space-y-1 font-sans">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Tipo de Obra</label>
+                        <select
+                          value={filterTipoObra}
+                          onChange={(e) => setFilterTipoObra(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-slate-705 h-9"
+                        >
+                          <option value="">Todos os Tipos ({uniqueTipoObra.length})</option>
+                          {uniqueTipoObra.map(t => (
+                            t && <option key={t} value={t}>{t.toUpperCase()}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* TIPO DE ATENDIMENTO SELECTOR */}
+                      <div className="space-y-1 font-sans">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Tipo de Atendimento</label>
+                        <select
+                          value={filterTipoAtendimento}
+                          onChange={(e) => setFilterTipoAtendimento(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-slate-705 h-9"
+                        >
+                          <option value="">Todos os Atendimentos ({uniqueTipoAtendimento.length})</option>
+                          {uniqueTipoAtendimento.map(t => (
+                            t && <option key={t} value={t}>{t.toUpperCase()}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* CLASSE IEE SELECTOR */}
+                      <div className="space-y-1 font-sans">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Classe (IEE)</label>
+                        <select
+                          value={filterClasseIEE}
+                          onChange={(e) => setFilterClasseIEE(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-slate-705 h-9"
+                        >
+                          <option value="">Todas as Classes ({uniqueClasseIEE.length})</option>
+                          {uniqueClasseIEE.map(c => (
+                            <option key={c} value={c}>{CLASSE_IEE_INFO[c].label}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* ETIQUETA DE PRIORIDADE SELECTOR */}
+                      <div className="space-y-1 font-sans">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Prioridade</label>
+                        <select
+                          value={filterEtiqueta}
+                          onChange={(e) => setFilterEtiqueta(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-slate-705 h-9"
+                        >
+                          <option value="">Todas as Prioridades ({uniqueEtiquetas.length})</option>
+                          {uniqueEtiquetas.map(codigo => (
+                            <option key={codigo} value={codigo}>{ETIQUETA_LABEL_FILTRO[codigo]}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* TIPO DE PROCESSO SELECTOR — Atendimento Inicial x Reequilíbrio x Saldo Complementar */}
+                      <div className="space-y-1 font-sans">
+                        <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Tipo de Processo</label>
+                        <select
+                          value={filterTipoProcesso}
+                          onChange={(e) => setFilterTipoProcesso(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 bg-white text-slate-705 h-9"
+                        >
+                          <option value="">Todos os Tipos ({uniqueTipoProcesso.length})</option>
+                          {uniqueTipoProcesso.map(tipo => (
+                            <option key={tipo} value={tipo}>{TIPO_LINHA_AUTORIZACAO_INFO[tipo].label}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
-                    {(filterCodesc || filterSre || filterMunicipio || filterEscola) && (
+                    {(filterCodesc || filterSre || filterMunicipio || filterEscola || filterTipoObra || filterTipoAtendimento || filterClasseIEE || filterEtiqueta || filterTipoProcesso) && (
                       <div className="mt-3 flex justify-end font-sans">
                         <button
                           type="button"
@@ -3015,6 +3529,11 @@ export default function App() {
                             setFilterSre('');
                             setFilterMunicipio('');
                             setFilterEscola('');
+                            setFilterTipoObra('');
+                            setFilterTipoAtendimento('');
+                            setFilterClasseIEE('');
+                            setFilterEtiqueta('');
+                            setFilterTipoProcesso('');
                           }}
                           className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg text-[10px] uppercase tracking-wider transition-colors cursor-pointer"
                         >
@@ -3024,16 +3543,6 @@ export default function App() {
                     )}
                   </div>
 
-                  {perfilUsuario !== 'gestor_paf' && (
-                    <div className="p-4 bg-amber-50 border border-amber-205 text-neutral-900 rounded-xl text-xs space-y-1.5 text-left font-sans flex items-start gap-2.5">
-                      <span className="text-base select-none leading-none mt-0.5">⚠️</span>
-                      <div className="space-y-0.5">
-                        <strong className="font-extrabold block text-amber-950">Ação Restrita: Controle Exclusivo do Subsecretário de Administração</strong>
-                        <span>O seu perfil atual é <strong>{perfilUsuario.toUpperCase()}</strong>. Para avaliar, autorizar ou rejeitar as dotações orçamentárias do PAF nesta Etapa 3, por favor mude seu perfil para <strong>Silas Fagundes (Subsecretário de Administração)</strong> no seletor de usuário (canto superior direito).</span>
-                      </div>
-                    </div>
-                  )}
-
                   {/* TABELA DE AUTORIZAÇÃO */}
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs text-left">
                     <div className="p-4 border-b border-emerald-100/30 bg-slate-50/50 flex justify-between items-center flex-wrap gap-2 font-sans">
@@ -3042,11 +3551,11 @@ export default function App() {
                         <p className="text-[10px] text-slate-500 leading-none mt-0.5">Mostrando dotações aguardando dotação do Gestor Financeiro.</p>
                       </div>
                       <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 border-emerald-150 border font-extrabold rounded-full text-[10px] font-mono">
-                        {filteredSchoolsInAutorizacao.length} aguardando
+                        {filteredLinhasFila.length} aguardando
                       </span>
                     </div>
 
-                    {filteredSchoolsInAutorizacao.length === 0 ? (
+                    {filteredLinhasFila.length === 0 ? (
                       <div className="p-10 text-center text-slate-400 font-sans space-y-3 max-w-md mx-auto">
                         <div className="w-10 h-10 bg-slate-50 border border-slate-150 rounded-full flex items-center justify-center text-slate-500 mx-auto">
                           <CheckCircle className="w-5 h-5 text-emerald-500" />
@@ -3059,34 +3568,98 @@ export default function App() {
                         <table className="w-full text-left border-collapse font-sans text-xs">
                           <thead>
                             <tr className="bg-slate-50 border-b border-slate-200 text-slate-550 font-bold uppercase tracking-wider text-[10px] h-11">
-                              <th className="py-3 px-4 w-16 text-center" title="Ranking técnico sugerido — quanto maior a pontuação, maior a prioridade de autorização">Rank</th>
+                              <th className="py-3 px-4 w-24 text-center" title="Ranking técnico sugerido — quanto maior a pontuação, maior a prioridade de autorização">Rank PAF</th>
+                              <th className="py-3 px-4 text-center">Tipo</th>
+                              <th className="py-3 px-4 text-center">Prioridade</th>
+                              <th className="py-3 px-4 text-center">Classe (IEE)</th>
                               <th className="py-3 px-4 w-28">Obra ID</th>
                               <th className="py-3 px-4">Escola</th>
                               <th className="py-3 px-4">SRE</th>
                               <th className="py-3 px-4">Município</th>
                               <th className="py-3 px-4">Tipo de Obra</th>
                               <th className="py-3 px-4">Tipo de atendimento</th>
+                              <th className="py-3 px-4 min-w-[280px]">Descrição da Demanda</th>
                               <th className="py-3 px-4 text-right">Valor</th>
-                              <th className="py-3 px-4 text-center w-56">Autorizar PAF?</th>
+                              <th className="py-3 px-4 text-center w-56">Autorizar / Liberar?</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
-                            {filteredSchoolsInAutorizacao.map(({ sol, ranking }, index) => {
-                              const valorObra = sol.valorPlanilha || sol.valorHomologado || 0;
-                              const tituloRanking = ranking.criterios
-                                .filter(c => c.pontos > 0)
+                            {filteredLinhasFila.map(({ linha, ranking }, index) => {
+                              const sol = linha.sol;
+                              const valorObra = linha.valor;
+                              const criteriosAtivos = ranking.criterios.filter(c => c.pontos > 0);
+                              const tituloRanking = criteriosAtivos
                                 .map(c => `${c.criterio}: +${c.pontos}`)
                                 .join('\n') || 'Sem pontuação adicional';
+                              const estrelasCalc = sol.estrelas ?? calcularEstrelas(sol);
+                              const prioridadeScoreCalc = sol.prioridadeScore ?? calcularPrioridade(sol).score;
+                              const etiquetasCalc: CodigoEtiqueta[] = (sol.etiquetasPrioridade as CodigoEtiqueta[] | undefined) ?? calcularPrioridade(sol).etiquetas;
+                              const ieeClasseCalc = sol.ieeClasse ?? calcularIEE(sol)?.classe;
                               return (
-                                <tr key={sol.id} className="hover:bg-slate-50/50 transition-colors group">
-                                  {/* Rank técnico */}
+                                <tr key={`${sol.id}-${linha.tipo}-${linha.itemId ?? ''}`} className="hover:bg-slate-50/50 transition-colors group">
+                                  {/* Rank técnico específico da fila do PAF — pontuação e critérios que a compõem */}
                                   <td className="py-4 px-4 text-center" title={tituloRanking}>
-                                    <span className="inline-flex flex-col items-center gap-0.5">
+                                    <span className="inline-flex flex-col items-center gap-1">
                                       <span className="text-[10px] font-black text-slate-400 font-mono">#{index + 1}</span>
                                       <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded text-[10px] font-extrabold font-mono">
                                         {ranking.pontos} pts
                                       </span>
+                                      {criteriosAtivos.length > 0 && (
+                                        <div className="flex flex-col items-center gap-0.5 max-w-[130px]">
+                                          {criteriosAtivos.map((c, i) => (
+                                            <span key={i} className="text-[8.5px] text-slate-400 leading-tight text-center">
+                                              {c.criterio.split(' (')[0]} <span className="font-bold text-indigo-500">+{c.pontos}</span>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
                                     </span>
+                                  </td>
+
+                                  {/* Tipo de processo — distingue Atendimento Inicial de Reequilíbrio/Saldo Complementar
+                                      já homologados pela DORE, agora reunidos nesta mesma fila. */}
+                                  <td className="py-4 px-4 text-center">
+                                    <span className={`px-2 py-0.5 border rounded text-[9px] font-black uppercase tracking-wide inline-block ${TIPO_LINHA_AUTORIZACAO_INFO[linha.tipo].corClassName}`}>
+                                      {TIPO_LINHA_AUTORIZACAO_INFO[linha.tipo].label}
+                                    </span>
+                                  </td>
+
+                                  {/* Prioridade geral do processo (estrelas + etiquetas) — mesmo cálculo usado na fila de Atribuição */}
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    <div className="flex flex-col items-center gap-1">
+                                      {estrelasCalc > 0 && (
+                                        <div className="flex items-center gap-0.5" title={`${estrelasCalc} de 5 estrelas de prioridade`}>
+                                          {[1, 2, 3, 4, 5].map(n => (
+                                            <span key={n} className={`text-xs leading-none ${n <= estrelasCalc ? 'text-amber-400' : 'text-slate-200'}`}>★</span>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <div className="flex flex-wrap justify-center gap-1 max-w-[150px]">
+                                        {etiquetasCalc.map(codigo => {
+                                          const info = getInfoEtiqueta(codigo, sol);
+                                          return (
+                                            <span key={codigo} className={`${info.corClassName} text-[8.5px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 inline-block`}>
+                                              {info.label}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                      <span className="text-[8px] text-slate-300 font-mono tracking-wide">score: {prioridadeScoreCalc}</span>
+                                    </div>
+                                  </td>
+
+                                  {/* Classe IEE — complexidade técnica da obra */}
+                                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                                    {ieeClasseCalc ? (
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span className={`${CLASSE_IEE_INFO[ieeClasseCalc].corClassName} text-[9px] font-black uppercase tracking-wide rounded px-2 py-1 inline-block`}>
+                                          {CLASSE_IEE_INFO[ieeClasseCalc].label}
+                                        </span>
+                                        <span className="text-[8px] text-slate-300 font-mono tracking-wide">{sol.ieePontos ?? calcularIEE(sol)?.pontos} pts IEE</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[9px] text-slate-300 italic">—</span>
+                                    )}
                                   </td>
                                   {/* ID da Obra */}
                                   <td className="py-4 px-4 font-mono font-bold text-blue-800">
@@ -3121,48 +3694,55 @@ export default function App() {
 
                                   {/* Tipo de Obra */}
                                   <td className="py-4 px-4">
-                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-900 border border-blue-150 rounded text-[10px] font-semibold">
-                                      {sol.tipoObra || sol.tipo}
+                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-900 border border-blue-150 rounded text-[10px] font-semibold uppercase">
+                                      {(sol.tipoObra || sol.tipo || '—').toUpperCase()}
                                     </span>
                                   </td>
 
                                   {/* Tipo Atendimento */}
                                   <td className="py-4 px-4">
-                                    <span className="px-2 py-0.5 bg-teal-50 text-teal-900 border border-teal-150 rounded text-[10px] font-semibold">
-                                      {sol.tipoAtendimento || 'Atendimento Regular'}
+                                    <span className="px-2 py-0.5 bg-teal-50 text-teal-900 border border-teal-150 rounded text-[10px] font-semibold uppercase">
+                                      {(sol.tipoAtendimento || 'Atendimento Regular').toUpperCase()}
                                     </span>
                                   </td>
 
-                                  {/* Valor Obra */}
-                                  <td className="py-4 px-4 text-right font-mono font-bold text-slate-700">
-                                    R$ {valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  {/* Descrição da Demanda — o que de fato será executado */}
+                                  <td className="py-4 px-4 min-w-[280px]">
+                                    <p className="text-slate-500 text-[10.5px] leading-snug font-medium line-clamp-3" title={sol.descricaoFolhaRosto || sol.tipo}>
+                                      {sol.descricaoFolhaRosto || sol.tipo || '—'}
+                                    </p>
                                   </td>
 
-                                  {/* Botões de Ação */}
-                                  <td className="py-4 px-4 text-center">
-                                    {(perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) ? (
-                                      <div className="flex items-center justify-center gap-1.5">
-                                        <button
-                                          data-testid={`paf-autorizar-${sol.id}`}
-                                          onClick={() => setConfirmingSolId(sol.id)}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors shadow-3xs cursor-pointer"
-                                        >
-                                          Autorizar PAF
-                                        </button>
-                                        <button
-                                          onClick={() => setRejectingSchoolId(sol.id)}
-                                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors shadow-3xs cursor-pointer"
-                                        >
-                                          Não
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <div className="text-center font-sans">
-                                        <span className="text-[10px] font-extrabold text-slate-400 bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1 inline-flex items-center gap-1 select-none" title="Apenas o Gestor Geral Silas Fagundes possui dotação oficial para autorizar PAF nesta Etapa 3.">
-                                          🔒 Apenas Subsecretário de Administração
-                                        </span>
-                                      </div>
+                                  {/* Valor Obra */}
+                                  <td className="py-4 px-4 text-right">
+                                    <span className="font-mono font-bold text-slate-700 block">
+                                      R$ {valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                    {linha.tipo === 'atendimento_inicial' && !!sol.necessidadeAditivoEstimada && (
+                                      <span className="text-[9px] text-amber-600 font-semibold block mt-0.5" title="Necessidade de aditivo já estimada no cadastro inicial">
+                                        + R$ {sol.necessidadeAditivoEstimada.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} previsto em aditivo
+                                      </span>
                                     )}
+                                  </td>
+
+                                  {/* Botões de Ação — texto varia conforme o tipo: Atendimento Inicial autoriza o PAF
+                                      (avança etapaAtual), Reequilíbrio/Saldo libera o recurso financeiro (atualiza o item). */}
+                                  <td className="py-4 px-4 text-center">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <button
+                                        data-testid={linha.tipo === 'atendimento_inicial' ? `paf-autorizar-${sol.id}` : `paf-liberar-${linha.itemId}`}
+                                        onClick={() => setLinhaConfirmando(linha)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors shadow-3xs cursor-pointer"
+                                      >
+                                        {linha.tipo === 'atendimento_inicial' ? 'Autorizar PAF' : 'Liberar Recurso'}
+                                      </button>
+                                      <button
+                                        onClick={() => setLinhaRejeitando(linha)}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors shadow-3xs cursor-pointer"
+                                      >
+                                        {linha.tipo === 'atendimento_inicial' ? 'Não' : 'Reprovar'}
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -3173,28 +3753,34 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* MODAL / BANNER DE JUSTIFICATIVA DE REJEIÇÃO */}
-                  {rejectingSchoolId && (() => {
-                    const activeRejecting = solicitacoes.find(s => s.id === rejectingSchoolId);
-                    if (!activeRejecting) return null;
+                  {/* MODAL / BANNER DE JUSTIFICATIVA DE REJEIÇÃO — cobre tanto a devolução do Atendimento
+                      Inicial (volta pra 'cadastro') quanto a reprovação da liberação financeira de
+                      Reequilíbrio/Saldo (o item vira 'reprovado', a obra permanece em 'execucao'). */}
+                  {linhaRejeitando && (() => {
+                    const linha = linhaRejeitando;
+                    const ehFinanceiro = linha.tipo !== 'atendimento_inicial';
                     return (
                       <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center z-50 p-4 font-sans">
                         <div className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-150">
                           <div className="bg-rose-50 border-b border-rose-100 p-4">
                             <h3 className="text-sm font-extrabold text-rose-800 uppercase tracking-wider flex items-center gap-2">
-                              Motivo de Não-Autorização
+                              {ehFinanceiro ? 'Motivo de Reprovação da Liberação Financeira' : 'Motivo de Não-Autorização'}
                             </h3>
-                            <p className="text-xs text-neutral-500 mt-0.5">Demanda: {activeRejecting.nomeEscola} ({activeRejecting.id})</p>
+                            <p className="text-xs text-neutral-500 mt-0.5">
+                              {TIPO_LINHA_AUTORIZACAO_INFO[linha.tipo].label} — {linha.sol.nomeEscola} ({linha.sol.id})
+                            </p>
                           </div>
-                          
+
                           <div className="p-4 space-y-4">
                             <div>
                               <label className="block text-xs font-bold text-slate-600 mb-1">
-                                Escreva a justificativa para o retorno / rejeição do processo *
+                                {ehFinanceiro
+                                  ? 'Escreva a justificativa para a reprovação da liberação do recurso *'
+                                  : 'Escreva a justificativa para o retorno / rejeição do processo *'}
                               </label>
                               <textarea
-                                value={rejectionJustification}
-                                onChange={(e) => setRejectionJustification(e.target.value)}
+                                value={justificativaRejeicaoPaf}
+                                onChange={(e) => setJustificativaRejeicaoPaf(e.target.value)}
                                 placeholder="Digite aqui o parecer descrevendo o porquê de o recurso do PAF não ter sido aprovado..."
                                 rows={4}
                                 required
@@ -3206,8 +3792,8 @@ export default function App() {
                           <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2 text-xs">
                             <button
                               onClick={() => {
-                                setRejectingSchoolId(null);
-                                setRejectionJustification('');
+                                setLinhaRejeitando(null);
+                                setJustificativaRejeicaoPaf('');
                               }}
                               className="px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-lg cursor-pointer animate-none"
                             >
@@ -3215,15 +3801,19 @@ export default function App() {
                             </button>
                             <button
                               onClick={() => {
-                                if (!rejectionJustification.trim()) {
+                                if (!justificativaRejeicaoPaf.trim()) {
                                   alert('Por favor, digite a justificativa.');
                                   return;
                                 }
-                                handleRejeitarPAF(activeRejecting, rejectionJustification);
+                                if (ehFinanceiro) {
+                                  handleReprovarRecursoFinanceiro(linha, justificativaRejeicaoPaf);
+                                } else {
+                                  handleRejeitarPAF(linha.sol, justificativaRejeicaoPaf);
+                                }
                               }}
                               className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-lg cursor-pointer"
                             >
-                              Confirmar Devolução
+                              {ehFinanceiro ? 'Confirmar Reprovação' : 'Confirmar Devolução'}
                             </button>
                           </div>
                         </div>
@@ -3231,51 +3821,61 @@ export default function App() {
                     );
                   })()}
 
-                  {/* MODAL DE CONFIRMAÇÃO DE AUTORIZAÇÃO PAF */}
-                  {confirmingSolId && (() => {
-                    const activeConfirming = solicitacoes.find(s => s.id === confirmingSolId);
-                    if (!activeConfirming) return null;
-                    const valorObra = activeConfirming.valorPlanilha || activeConfirming.valorHomologado || 0;
+                  {/* MODAL DE CONFIRMAÇÃO — Autorização do PAF (Atendimento Inicial) ou Liberação
+                      Financeira (Reequilíbrio/Saldo Complementar). */}
+                  {linhaConfirmando && (() => {
+                    const linha = linhaConfirmando;
+                    const ehFinanceiro = linha.tipo !== 'atendimento_inicial';
                     return (
                       <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-3xs flex items-center justify-center z-50 p-4 font-sans">
                         <div className="bg-white rounded-xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-150">
                           <div className="bg-emerald-50 border-b border-emerald-100 p-4">
                             <h3 className="text-sm font-extrabold text-emerald-800 uppercase tracking-wider flex items-center gap-2">
-                              ✓ Confirmar Autorização do PAF
+                              {ehFinanceiro ? '✓ Confirmar Liberação Financeira' : '✓ Confirmar Autorização do PAF'}
                             </h3>
-                            <p className="text-xs text-neutral-500 mt-0.5">Demanda: {activeConfirming.nomeEscola} ({activeConfirming.id})</p>
+                            <p className="text-xs text-neutral-500 mt-0.5">
+                              {TIPO_LINHA_AUTORIZACAO_INFO[linha.tipo].label} — {linha.sol.nomeEscola} ({linha.sol.id})
+                            </p>
                           </div>
-                          
+
                           <div className="p-4 space-y-4">
                             <p className="text-xs text-slate-600 leading-relaxed">
-                              Deseja aprovar e autorizar oficialmente o PAF desta demanda no valor de:
+                              {ehFinanceiro
+                                ? 'Deseja liberar oficialmente o recurso financeiro deste item, já homologado tecnicamente pela DORE, no valor de:'
+                                : 'Deseja aprovar e autorizar oficialmente o PAF desta demanda no valor de:'}
                             </p>
                             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
                               <span className="text-base font-black text-emerald-700 font-mono">
-                                R$ {valorObra.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                R$ {linha.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
                             <p className="text-[10px] text-slate-500 italic leading-normal">
-                              Esta ação registrará o trâmite na planilha oficial de dotações orçamentárias e arquivará o parecer do Gestor Geral.
+                              {ehFinanceiro
+                                ? 'Esta ação registrará a liberação financeira do item e arquivará o parecer do Subsecretário de Administração.'
+                                : 'Esta ação registrará o trâmite na planilha oficial de dotações orçamentárias e arquivará o parecer do Gestor Geral.'}
                             </p>
                           </div>
 
                           <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end gap-2 text-xs">
                             <button
-                              onClick={() => setConfirmingSolId(null)}
+                              onClick={() => setLinhaConfirmando(null)}
                               className="px-3.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold rounded-lg cursor-pointer"
                             >
                               Cancelar
                             </button>
                             <button
-                              data-testid="paf-autorizacao-confirmar"
+                              data-testid={ehFinanceiro ? `paf-liberar-confirmar-${linha.itemId}` : 'paf-autorizacao-confirmar'}
                               onClick={() => {
-                                handleAutorizarPAF(activeConfirming);
-                                setConfirmingSolId(null);
+                                if (ehFinanceiro) {
+                                  handleLiberarRecursoFinanceiro(linha);
+                                } else {
+                                  handleAutorizarPAF(linha.sol);
+                                }
+                                setLinhaConfirmando(null);
                               }}
                               className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg cursor-pointer"
                             >
-                              Autorizar PAF
+                              {ehFinanceiro ? 'Liberar Recurso' : 'Autorizar PAF'}
                             </button>
                           </div>
                         </div>
@@ -4164,6 +4764,9 @@ export default function App() {
                       solicitacoes={solicitacoesVisiveis}
                       onSelectSchool={(sol) => handleSelectSolicitacao(sol)}
                       onNavigateToSubTask={(subTask) => setActiveSubTask(subTask)}
+                      // Base de Lições Aprendidas é deliberadamente irrestrita por regional — o
+                      // propósito é o compartilhamento de experiências entre SREs. Ver [[licoes-aprendidas-estruturadas]].
+                      todasSolicitacoesLicoes={solicitacoes}
                     />
                   ) : viewMode === 'lista' ? (
                     <Dashboard
@@ -4368,7 +4971,6 @@ export default function App() {
                                       'bg-slate-100 text-slate-600';
                                     const perfilColor = u.perfil === 'tecnico_infra' ? 'bg-amber-100 text-amber-800' :
                                       u.perfil === 'coordenador_regional' ? 'bg-orange-100 text-orange-800' :
-                                      u.perfil === 'gestor_dore' ? 'bg-indigo-100 text-indigo-800' :
                                       u.perfil === 'analista_dore' ? 'bg-blue-100 text-blue-800' :
                                       u.perfil === 'gestor_paf' ? 'bg-cyan-100 text-cyan-800' :
                                       u.perfil === 'administrativo_dore' ? 'bg-purple-100 text-purple-800' :
@@ -4413,7 +5015,6 @@ export default function App() {
                                           <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold ${perfilColor}`}>
                                             {u.perfil === 'tecnico_infra' ? 'TÉC. INFRA' :
                                              u.perfil === 'coordenador_regional' ? 'COORD. REGIONAL' :
-                                             u.perfil === 'gestor_dore' ? 'GESTOR DORE' :
                                              u.perfil === 'analista_dore' ? 'ANALISTA' :
                                              u.perfil === 'gestor_paf' ? 'SUBSEC. ADM' :
                                              u.perfil === 'administrativo_dore' ? 'ADMIN DORE' :
@@ -4733,7 +5334,7 @@ export default function App() {
               )}
 
               {activeModule === 'central_logs' && (
-                (perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) ? (
+                (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) ? (
                   <CentralNotificacoesLogs
                     logs={logs}
                     perfilUsuario={perfilUsuario}
@@ -5088,6 +5689,35 @@ export default function App() {
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {usrPerfil === 'analista_dore' && (
+                  <div className="animate-in slide-in-from-top-1 duration-200 space-y-1">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      Equipe de Especialidade *
+                      <span className="ml-1.5 text-[9px] font-normal text-slate-400 normal-case">
+                        Define quais processos esse analista pode receber como titular
+                      </span>
+                    </label>
+                    <select
+                      required
+                      value={usrEquipe}
+                      onChange={(e) => setUsrEquipe(e.target.value as EquipeAnalista)}
+                      className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden cursor-pointer"
+                    >
+                      <option value="">-- Selecione a Equipe --</option>
+                      <option value="Planejamento">Planejamento (Atendimento Inicial)</option>
+                      <option value="Ajuste">Ajuste (Ajuste de Planilha / Reequilíbrio / Saldo Complementar)</option>
+                      <option value="Eletrica">Elétrica</option>
+                      <option value="Arquitetura">Arquitetura</option>
+                      <option value="PSCIP">PSCIP</option>
+                    </select>
+                    {(usrEquipe === 'Eletrica' || usrEquipe === 'Arquitetura' || usrEquipe === 'PSCIP') && (
+                      <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-1">
+                        ⚠️ Essa equipe não recebe processos como titular — só pode ser adicionada como auxiliar de validação em processos de Planejamento ou Ajuste.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

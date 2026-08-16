@@ -23,7 +23,6 @@ export default function CentralNotificacoesLogs({ logs, perfilUsuario }: Central
 
   const getPerfilNome = (perf: PerfilUsuario) => {
     switch (perf) {
-      case 'gestor_dore': return 'Aline Davino (Gestor DORE)';
       case 'gestor_paf': return 'Silas Fagundes (Subsecretário de Administração)';
       default: return 'Gestor do Sistema';
     }
