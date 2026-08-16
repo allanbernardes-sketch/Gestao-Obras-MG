@@ -1,30 +1,121 @@
 import React, { useState, useMemo } from 'react';
-import { Solicitacao } from '../types';
-import { 
-  Building2, Coins, HardHat, Layers, FileText, Landmark, CheckCircle, 
-  MapPin, Search, ArrowUpRight, TrendingUp, Users, Calendar, AlertCircle
+import { Solicitacao, EtapaProcesso } from '../types';
+import {
+  Building2, Coins, HardHat, Layers, FileText, Landmark, CheckCircle,
+  MapPin, Search, ArrowUpRight, TrendingUp, Users, Calendar, AlertCircle, Lightbulb
 } from 'lucide-react';
+import { ETAPAS_SERVICO_OBRA, NATUREZA_LICAO_INFO, NaturezaLicao } from '../utils/licoesAprendidas';
+import { ETAPA_LABEL } from '../utils/etapas';
+
+// Etapas mostradas no funil "Repartição das Obras por Etapa do Fluxo" — rótulos vêm de
+// ETAPA_LABEL (a mesma fonte usada no restante do sistema, ex: Retorno Administrativo em
+// SolicitacaoDetalhes.tsx), pra nunca mais divergir do resto do fluxo. Cores alinhadas com o badge
+// de etapa já usado mais abaixo nesta mesma tela (Explorador de Escolas). 'cancelado' fica de fora
+// do funil de propósito — é uma saída do fluxo, não um "portão" a percorrer.
+const CORES_ETAPA_FUNIL: Record<EtapaProcesso, { corBarra: string; corTextoHover: string }> = {
+  cadastro: { corBarra: 'bg-slate-400', corTextoHover: 'group-hover:text-slate-700' },
+  correcao: { corBarra: 'bg-orange-500', corTextoHover: 'group-hover:text-orange-600' },
+  analise: { corBarra: 'bg-indigo-500', corTextoHover: 'group-hover:text-indigo-600' },
+  paf_autorizacao: { corBarra: 'bg-cyan-500', corTextoHover: 'group-hover:text-cyan-600' },
+  paf: { corBarra: 'bg-purple-500', corTextoHover: 'group-hover:text-purple-600' },
+  ordem_inicio: { corBarra: 'bg-blue-500', corTextoHover: 'group-hover:text-blue-600' },
+  execucao: { corBarra: 'bg-emerald-500', corTextoHover: 'group-hover:text-emerald-600' },
+  cancelado: { corBarra: 'bg-red-500', corTextoHover: 'group-hover:text-red-600' },
+};
 
 interface VisaoGeralDashboardProps {
   solicitacoes: Solicitacao[];
   onSelectSchool: (sol: Solicitacao) => void;
   onNavigateToSubTask: (subTask: string) => void;
+  // Conjunto irrestrito de solicitações (todas as regionais), usado só na base de Lições
+  // Aprendidas — o compartilhamento de experiências entre SREs é o propósito da seção, então ela
+  // não deve respeitar o mesmo recorte regional do restante do dashboard. Se omitido, cai para
+  // `solicitacoes` (mesmo escopo do resto do painel). Ver [[licoes-aprendidas-estruturadas]].
+  todasSolicitacoesLicoes?: Solicitacao[];
 }
 
-export default function VisaoGeralDashboard({ 
-  solicitacoes, 
-  onSelectSchool, 
-  onNavigateToSubTask 
+interface LicaoConsolidada {
+  id: string;
+  solId: string;
+  nomeEscola: string;
+  sre: string;
+  municipio: string;
+  descricao: string;
+  categoria?: string;
+  etapasServico: string[];
+  natureza?: NaturezaLicao;
+  recomendacao?: string;
+  evidenciasCount: number;
+  dataRegistro: string;
+}
+
+export default function VisaoGeralDashboard({
+  solicitacoes,
+  onSelectSchool,
+  onNavigateToSubTask,
+  todasSolicitacoesLicoes
 }: VisaoGeralDashboardProps) {
   // Region-wise and School-wise filters state inside Dashboard
   const [sreFilter, setSreFilter] = useState<string>('todos');
   const [searchSchoolQuery, setSearchSchoolQuery] = useState<string>('');
   const [selectedMunicipio, setSelectedMunicipio] = useState<string>('todos');
 
+  // Filtros da base consolidada de Lições Aprendidas (independentes dos filtros acima)
+  const [licaoBusca, setLicaoBusca] = useState('');
+  const [licaoFiltroEtapa, setLicaoFiltroEtapa] = useState('todos');
+  const [licaoFiltroNatureza, setLicaoFiltroNatureza] = useState('todos');
+  const [licaoFiltroSre, setLicaoFiltroSre] = useState('todos');
+
   // List of SREs and Municipios for sidebar lists
   const sresDisponiveis = useMemo(() => {
     return Array.from(new Set(solicitacoes.map(s => s.sre).filter(Boolean))).sort();
   }, [solicitacoes]);
+
+  // Base consolidada: uma linha por lição aprendida, com os dados da obra de origem anexados —
+  // usa o conjunto irrestrito (todas as regionais) quando disponível.
+  const baseSolicitacoesLicoes = todasSolicitacoesLicoes ?? solicitacoes;
+  const todasLicoes = useMemo<LicaoConsolidada[]>(() => {
+    return baseSolicitacoesLicoes.flatMap(s =>
+      (s.licoesAprendidas || []).map(l => ({
+        id: l.id,
+        solId: s.id,
+        nomeEscola: s.nomeEscola,
+        sre: s.sre,
+        municipio: s.municipio,
+        descricao: l.descricao,
+        categoria: l.categoria,
+        etapasServico: l.etapasServico || [],
+        natureza: l.natureza,
+        recomendacao: l.recomendacao,
+        evidenciasCount: (l.evidencias || []).length,
+        dataRegistro: l.dataRegistro,
+      }))
+    ).sort((a, b) => (b.dataRegistro || '').localeCompare(a.dataRegistro || ''));
+  }, [baseSolicitacoesLicoes]);
+
+  const sresComLicoes = useMemo(() => {
+    return Array.from(new Set(todasLicoes.map(l => l.sre).filter(Boolean))).sort();
+  }, [todasLicoes]);
+
+  const licoesFiltradas = useMemo(() => {
+    const termo = licaoBusca.trim().toLowerCase();
+    return todasLicoes.filter(l => {
+      if (licaoFiltroEtapa !== 'todos' && !l.etapasServico.includes(licaoFiltroEtapa)) return false;
+      if (licaoFiltroNatureza !== 'todos' && l.natureza !== licaoFiltroNatureza) return false;
+      if (licaoFiltroSre !== 'todos' && l.sre !== licaoFiltroSre) return false;
+      if (termo) {
+        const alvo = `${l.descricao} ${l.recomendacao || ''} ${l.etapasServico.join(' ')} ${l.nomeEscola} ${l.categoria || ''}`.toLowerCase();
+        if (!alvo.includes(termo)) return false;
+      }
+      return true;
+    });
+  }, [todasLicoes, licaoBusca, licaoFiltroEtapa, licaoFiltroNatureza, licaoFiltroSre]);
+
+  const licoesStats = useMemo(() => ({
+    total: todasLicoes.length,
+    oportunidades: todasLicoes.filter(l => l.natureza === 'oportunidade_melhoria').length,
+    riscos: todasLicoes.filter(l => l.natureza === 'risco_materializado').length,
+  }), [todasLicoes]);
 
   const municipiosDisponiveis = useMemo(() => {
     return Array.from(new Set(solicitacoes.map(s => s.municipio).filter(Boolean))).sort();
@@ -47,8 +138,12 @@ export default function VisaoGeralDashboard({
   const stats = useMemo(() => {
     const totalCount = filteredSolicitacoes.length;
     
-    // Stage counts
-    const cadastroCount = filteredSolicitacoes.filter(s => s.etapaAtual === 'cadastro' || s.etapaAtual === 'correcao').length;
+    // Stage counts — mesmos nomes de etapa/rótulo usados no menu lateral e no restante do sistema
+    // (ver ETAPA_LABEL em src/utils/etapas.ts e as categorias do menu em App.tsx). 'correcao' é
+    // contado à parte de 'cadastro' porque em todo o resto do app ele é tratado como status
+    // distinto (devolvido para correção), não como "ainda no atendimento inicial".
+    const cadastroCount = filteredSolicitacoes.filter(s => s.etapaAtual === 'cadastro').length;
+    const correcaoCount = filteredSolicitacoes.filter(s => s.etapaAtual === 'correcao').length;
     const analiseCount = filteredSolicitacoes.filter(s => s.etapaAtual === 'analise').length;
     const pafAutorizacaoCount = filteredSolicitacoes.filter(s => s.etapaAtual === 'paf_autorizacao').length;
     const pafCount = filteredSolicitacoes.filter(s => s.etapaAtual === 'paf').length;
@@ -69,6 +164,7 @@ export default function VisaoGeralDashboard({
     return {
       totalCount,
       cadastroCount,
+      correcaoCount,
       analiseCount,
       pafAutorizacaoCount,
       pafCount,
@@ -80,6 +176,19 @@ export default function VisaoGeralDashboard({
       totalMeasuredValue
     };
   }, [filteredSolicitacoes]);
+
+  // Linhas do funil "Repartição das Obras por Etapa do Fluxo" — uma por etapa do fluxo real
+  // (EtapaProcesso), na ordem em que a obra percorre o sistema. 'cancelado' fica de fora (ver
+  // CORES_ETAPA_FUNIL acima).
+  const ETAPAS_FUNIL: { id: EtapaProcesso; count: number; subTask: string; corBarra: string; corTextoHover: string }[] = [
+    { id: 'cadastro', count: stats.cadastroCount, subTask: 'cadastro', ...CORES_ETAPA_FUNIL.cadastro },
+    { id: 'correcao', count: stats.correcaoCount, subTask: 'cadastro', ...CORES_ETAPA_FUNIL.correcao },
+    { id: 'analise', count: stats.analiseCount, subTask: 'analise', ...CORES_ETAPA_FUNIL.analise },
+    { id: 'paf_autorizacao', count: stats.pafAutorizacaoCount, subTask: 'paf_autorizacao', ...CORES_ETAPA_FUNIL.paf_autorizacao },
+    { id: 'paf', count: stats.pafCount, subTask: 'paf', ...CORES_ETAPA_FUNIL.paf },
+    { id: 'ordem_inicio', count: stats.ordemInicioCount, subTask: 'execucao', ...CORES_ETAPA_FUNIL.ordem_inicio },
+    { id: 'execucao', count: stats.execucaoCount, subTask: 'execucao', ...CORES_ETAPA_FUNIL.execucao },
+  ];
 
   // SRE allocations calculation for custom mini SRE Bar Chart
   const sreAllocations = useMemo(() => {
@@ -212,8 +321,149 @@ export default function VisaoGeralDashboard({
         </div>
       </div>
 
+      {/* LIÇÕES APRENDIDAS — BASE DE CONHECIMENTO CONSOLIDADA ENTRE REGIONAIS */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+        <div className="flex flex-col md:flex-row md:items-start md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-800 font-sans flex items-center gap-1.5">
+              <Lightbulb className="w-4.5 h-4.5 text-amber-500" />
+              Lições Aprendidas — Base de Conhecimento
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5 max-w-xl">
+              Experiências registradas em obras de todas as Regionais (SRE). Use os filtros para localizar por etapa/serviço de obra (ex: telhado, terraplenagem), natureza ou regional.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wide shrink-0">
+            <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600">{licoesStats.total} registradas</span>
+            <span className="px-2.5 py-1.5 rounded-lg bg-emerald-100 text-emerald-700">{licoesStats.oportunidades} oportunidades</span>
+            <span className="px-2.5 py-1.5 rounded-lg bg-rose-100 text-rose-700">{licoesStats.riscos} riscos</span>
+          </div>
+        </div>
+
+        {/* Filtros da base de lições */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="relative lg:col-span-2">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+            <input
+              type="text"
+              placeholder="Buscar por palavra-chave (ex: manta de carbono, telhado)..."
+              value={licaoBusca}
+              onChange={(e) => setLicaoBusca(e.target.value)}
+              className="w-full text-xs border border-slate-200 rounded-lg py-2 pl-8 pr-3 focus:ring-1 focus:ring-blue-500 bg-white text-slate-700 font-medium outline-hidden placeholder-slate-400"
+            />
+          </div>
+          <select
+            value={licaoFiltroEtapa}
+            onChange={(e) => setLicaoFiltroEtapa(e.target.value)}
+            className="w-full text-xs border border-slate-200 rounded-lg py-2 px-2 focus:outline-hidden focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700 cursor-pointer"
+          >
+            <option value="todos">Todas as Etapas/Serviços</option>
+            {ETAPAS_SERVICO_OBRA.map(etapa => (
+              <option key={etapa} value={etapa}>{etapa}</option>
+            ))}
+          </select>
+          <select
+            value={licaoFiltroSre}
+            onChange={(e) => setLicaoFiltroSre(e.target.value)}
+            className="w-full text-xs border border-slate-200 rounded-lg py-2 px-2 focus:outline-hidden focus:ring-1 focus:ring-blue-500 bg-white font-bold text-slate-700 cursor-pointer"
+          >
+            <option value="todos">Todas as Regionais (SRE)</option>
+            {sresComLicoes.map(sre => (
+              <option key={sre} value={sre}>{sre}</option>
+            ))}
+          </select>
+          <div className="lg:col-span-4 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mr-1">Natureza:</span>
+            {(['todos', 'oportunidade_melhoria', 'risco_materializado'] as const).map(chave => {
+              const ativo = licaoFiltroNatureza === chave;
+              const label = chave === 'todos' ? 'Todas' : NATUREZA_LICAO_INFO[chave].label;
+              const corAtivo = chave === 'todos' ? 'bg-slate-700 text-white' : chave === 'oportunidade_melhoria' ? NATUREZA_LICAO_INFO[chave].corBadge : NATUREZA_LICAO_INFO[chave].corBadge;
+              return (
+                <button
+                  key={chave}
+                  type="button"
+                  onClick={() => setLicaoFiltroNatureza(chave)}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all cursor-pointer border ${
+                    ativo ? corAtivo : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Lista de lições */}
+        {licoesFiltradas.length === 0 ? (
+          <div className="text-center py-10 text-xs text-slate-400 font-semibold font-sans bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+            {todasLicoes.length === 0
+              ? 'Nenhuma lição aprendida registrada ainda em nenhuma obra.'
+              : 'Nenhuma lição aprendida encontrada com esses filtros.'}
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+            {licoesFiltradas.map(l => {
+              const naturezaInfo = l.natureza ? NATUREZA_LICAO_INFO[l.natureza] : null;
+              const solOrigem = baseSolicitacoesLicoes.find(s => s.id === l.solId);
+              return (
+                <div
+                  key={l.id}
+                  onClick={() => solOrigem && onSelectSchool(solOrigem)}
+                  className="p-4 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-white hover:shadow-sm hover:border-blue-200 transition-all cursor-pointer space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                      {naturezaInfo && (
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${naturezaInfo.corBadge}`}>
+                          {naturezaInfo.label}
+                        </span>
+                      )}
+                      <span className="font-extrabold text-[#112347] text-[11.5px] truncate">{l.nomeEscola}</span>
+                      <span className="text-[10px] text-slate-400 font-mono shrink-0">{l.solId}</span>
+                    </div>
+                    <span className="text-[9.5px] text-slate-400 font-mono shrink-0">{l.dataRegistro}</span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-[10px] text-slate-400 font-semibold">
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    <span>{l.municipio} ({l.sre})</span>
+                  </div>
+
+                  {l.etapasServico.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {l.etapasServico.map(etapa => (
+                        <span key={etapa} className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                          {etapa}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <p className="text-xs text-slate-700 font-medium leading-relaxed line-clamp-2">
+                    {l.descricao}
+                  </p>
+
+                  {l.recomendacao && (
+                    <p className="text-[11px] text-slate-500 italic leading-relaxed line-clamp-2">
+                      <span className="font-bold not-italic text-slate-600">Recomendação: </span>{l.recomendacao}
+                    </p>
+                  )}
+
+                  {l.evidenciasCount > 0 && (
+                    <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-slate-400">
+                      <FileText className="w-3 h-3" /> {l.evidenciasCount} evidência{l.evidenciasCount > 1 ? 's' : ''} anexada{l.evidenciasCount > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* COLUNA 1 & 2: CONTRATOS POR ETAPA DO FLUXO E APORTES */}
         <div className="lg:col-span-2 space-y-6">
           
@@ -232,135 +482,36 @@ export default function VisaoGeralDashboard({
             </div>
 
             <div className="space-y-3">
-              {/* ETAPA 1: CADASTRO */}
-              <div 
-                className="group cursor-pointer" 
-                onClick={() => onNavigateToSubTask('cadastro')}
-                title="Ir para Atendimento Inicial"
-              >
-                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1 group-hover:text-blue-600 transition-colors">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded bg-blue-500 block"></span>
-                    1. Atendimento Inicial & Checklist
-                  </span>
-                  <span className="font-mono font-bold">
-                    {stats.cadastroCount} {stats.cadastroCount === 1 ? 'escola' : 'escolas'}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 h-6.5 rounded-lg overflow-hidden flex relative items-center px-2 group-hover:bg-slate-200/50 transition-all">
-                  <div 
-                    className="bg-blue-500 h-full absolute left-0 top-0 rounded-l-lg transition-all duration-300"
-                    style={{ width: `${getPercentageOfTotal(stats.cadastroCount)}%` }}
-                  />
-                  <span className="text-[10px] text-slate-705 font-black z-10 block ml-0.5">
-                    {getPercentageOfTotal(stats.cadastroCount)}%
-                  </span>
-                </div>
-              </div>
-
-              {/* ETAPA 2: ANALISE TÉCNICA */}
-              <div 
-                className="group cursor-pointer" 
-                onClick={() => onNavigateToSubTask('analise')}
-                title="Ir para Análise Técnica"
-              >
-                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1 group-hover:text-indigo-600 transition-colors">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded bg-indigo-500 block"></span>
-                    2. Análise Técnica DORE (Engenharia)
-                  </span>
-                  <span className="font-mono font-bold">
-                    {stats.analiseCount} {stats.analiseCount === 1 ? 'escola' : 'escolas'}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 h-6.5 rounded-lg overflow-hidden flex relative items-center px-2 group-hover:bg-slate-200/50 transition-all">
-                  <div 
-                    className="bg-indigo-500 h-full absolute left-0 top-0 rounded-l-lg transition-all duration-300"
-                    style={{ width: `${getPercentageOfTotal(stats.analiseCount)}%` }}
-                  />
-                  <span className="text-[10px] text-slate-700 font-black z-10 block ml-0.5">
-                    {getPercentageOfTotal(stats.analiseCount)}%
-                  </span>
-                </div>
-              </div>
-
-              {/* ETAPA 3: AUTORIZACAO DO PAF */}
-              <div 
-                className="group cursor-pointer" 
-                onClick={() => onNavigateToSubTask('paf_autorizacao')}
-                title="Ir para Autorizações SGO"
-              >
-                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1 group-hover:text-cyan-600 transition-colors">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded bg-cyan-500 block"></span>
-                    3. Autorização SGO (Financeiro)
-                  </span>
-                  <span className="font-mono font-bold">
-                    {stats.pafAutorizacaoCount} {stats.pafAutorizacaoCount === 1 ? 'escola' : 'escolas'}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 h-6.5 rounded-lg overflow-hidden flex relative items-center px-2 group-hover:bg-slate-200/50 transition-all">
-                  <div 
-                    className="bg-cyan-500 h-full absolute left-0 top-0 rounded-l-lg transition-all duration-300"
-                    style={{ width: `${getPercentageOfTotal(stats.pafAutorizacaoCount)}%` }}
-                  />
-                  <span className="text-[10px] text-slate-700 font-black z-10 block ml-0.5">
-                    {getPercentageOfTotal(stats.pafAutorizacaoCount)}%
-                  </span>
-                </div>
-              </div>
-
-              {/* ETAPA 4: GERACAO DO PAF */}
-              <div 
-                className="group cursor-pointer" 
-                onClick={() => onNavigateToSubTask('paf')}
-                title="Ir para Geração de PAF"
-              >
-                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1 group-hover:text-purple-600 transition-colors">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded bg-purple-500 block"></span>
-                    4. Homologação / Faturamento do PAF
-                  </span>
-                  <span className="font-mono font-bold">
-                    {stats.pafCount} {stats.pafCount === 1 ? 'escola' : 'escolas'}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 h-6.5 rounded-lg overflow-hidden flex relative items-center px-2 group-hover:bg-slate-200/50 transition-all">
-                  <div 
-                    className="bg-purple-500 h-full absolute left-0 top-0 rounded-l-lg transition-all duration-300"
-                    style={{ width: `${getPercentageOfTotal(stats.pafCount)}%` }}
-                  />
-                  <span className="text-[10px] text-slate-755 font-black z-10 block ml-0.5">
-                    {getPercentageOfTotal(stats.pafCount)}%
-                  </span>
-                </div>
-              </div>
-
-              {/* ETAPA 5 & 6: ORDEM INICIO E MEDICÕES */}
-              <div 
-                className="group cursor-pointer" 
-                onClick={() => onNavigateToSubTask('execucao')}
-                title="Ir para Execução/Medições"
-              >
-                <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1 group-hover:text-emerald-600 transition-colors">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded bg-emerald-500 block"></span>
-                    5 & 6. Ordem de Início / Execução Física
-                  </span>
-                  <span className="font-mono font-bold">
-                    {stats.ordemInicioCount + stats.execucaoCount} { (stats.ordemInicioCount + stats.execucaoCount) === 1 ? 'escola' : 'escolas' }
-                  </span>
-                </div>
-                <div className="w-full bg-slate-100 h-6.5 rounded-lg overflow-hidden flex relative items-center px-2 group-hover:bg-slate-200/50 transition-all">
-                  <div 
-                    className="bg-emerald-500 h-full absolute left-0 top-0 rounded-l-lg transition-all duration-300"
-                    style={{ width: `${getPercentageOfTotal(stats.ordemInicioCount + stats.execucaoCount)}%` }}
-                  />
-                  <span className="text-[10px] text-slate-755 font-black z-10 block ml-0.5">
-                    {getPercentageOfTotal(stats.ordemInicioCount + stats.execucaoCount)}%
-                  </span>
-                </div>
-              </div>
+              {ETAPAS_FUNIL.map((etapa, idx) => {
+                const percent = getPercentageOfTotal(etapa.count);
+                return (
+                  <div
+                    key={etapa.id}
+                    className="group cursor-pointer"
+                    onClick={() => onNavigateToSubTask(etapa.subTask)}
+                    title={`Ir para ${ETAPA_LABEL[etapa.id]}`}
+                  >
+                    <div className={`flex justify-between text-xs font-semibold text-slate-700 mb-1 transition-colors ${etapa.corTextoHover}`}>
+                      <span className="flex items-center gap-1.5">
+                        <span className={`w-2.5 h-2.5 rounded block ${etapa.corBarra}`}></span>
+                        {idx + 1}. {ETAPA_LABEL[etapa.id]}
+                      </span>
+                      <span className="font-mono font-bold">
+                        {etapa.count} {etapa.count === 1 ? 'escola' : 'escolas'}
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-6.5 rounded-lg overflow-hidden flex relative items-center px-2 group-hover:bg-slate-200/50 transition-all">
+                      <div
+                        className={`h-full absolute left-0 top-0 rounded-l-lg transition-all duration-300 ${etapa.corBarra}`}
+                        style={{ width: `${percent}%` }}
+                      />
+                      <span className="text-[10px] text-slate-700 font-black z-10 block ml-0.5">
+                        {percent}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex items-start gap-3">
@@ -491,7 +642,7 @@ export default function VisaoGeralDashboard({
                       case 'analise': return { label: 'Análise', css: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
                       case 'paf_autorizacao': return { label: 'Autorização', css: 'bg-cyan-50 text-cyan-700 border-cyan-200' };
                       case 'paf': return { label: 'Geração PAF', css: 'bg-purple-50 text-purple-700 border-purple-200' };
-                      case 'ordem_inicio': return { label: 'Ordem Înicio', css: 'bg-blue-50 text-blue-700 border-blue-200' };
+                      case 'ordem_inicio': return { label: 'Ordem Início', css: 'bg-blue-50 text-blue-700 border-blue-200' };
                       case 'execucao': return { label: 'Execução', css: 'bg-emerald-50 text-emerald-700 border-emerald-250' };
                       case 'cancelado': return { label: 'Cancelado', css: 'bg-red-50 text-red-750 border-red-200' };
                       default: return { label: etapa, css: 'bg-slate-100 text-slate-700 border-slate-200' };

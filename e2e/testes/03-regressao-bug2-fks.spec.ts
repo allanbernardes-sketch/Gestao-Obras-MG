@@ -12,7 +12,8 @@ test('atribuir analista grava o uuid do seed e o nome sobrevive ao reload', asyn
   await criarSolicitacaoEmAnalise(codigo);
   const analista = await usuarioPorEmail('analistadore@educacao.mg.gov.br');
 
-  await entrarComo(page, 'gestor_dore');
+  // 'gestor_dore' foi removido do sistema — ver [[remocao-perfil-gestor-dore]].
+  await entrarComo(page, 'admin');
   await irParaSubtarefa(page, 'analise_atribuicao');
 
   const seletor = page.getByTestId('atribuicao-selecionar-analista');
@@ -28,7 +29,7 @@ test('atribuir analista grava o uuid do seed e o nome sobrevive ao reload', asyn
     .toBe(analista.id);
 
   // Reload completo: o nome volta do banco (join por FK) e o select mantém o valor
-  await trocarPerfil(page, 'gestor_dore');
+  await trocarPerfil(page, 'admin');
   await irParaSubtarefa(page, 'analise_atribuicao');
   await expect(page.getByTestId('atribuicao-selecionar-analista')).toHaveValue(analista.id);
 });

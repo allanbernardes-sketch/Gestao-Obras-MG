@@ -30,12 +30,80 @@ import {
   Paperclip,
   Lock
 } from 'lucide-react';
-import { Solicitacao, EtapaProcesso, DocumentoChecklist, SecaoDadosGerais, syncChecklistDocs } from '../types';
+import { Solicitacao, EtapaProcesso, DocumentoChecklist, SecaoDadosGerais, syncChecklistDocs, AjustePlanilha, ReequilibrioItem, SaldoComplementarItem, AuxiliarProcesso } from '../types';
+import { supabase } from '../lib/supabase';
 import { CHECKLIST_PADRAO } from '../initialData';
 import { calcularPrioridade, calcularEstrelas, getInfoEtiqueta, compararPorPrioridade, CodigoEtiqueta } from '../utils/prioridade';
 import { calcularIEE, CLASSE_IEE_INFO, getPontosIEEDisponiveis } from '../utils/iee';
 import { getStatusSecao, getStatusSecoes, tecnicoCorrigiuSecao, capturarSnapshotTecnico } from '../utils/validacaoTecnica';
 import { useEscolas, type EnderecoEscola } from '../hooks/useEscolas';
+import { calcularSlaCorrente, STATUS_SLA_INFO, formatarDuracaoHoras } from '../utils/sla';
+import { EQUIPE_LABEL } from '../utils/auxiliares';
+
+// Tipo de processo aceito pela tabela processo_auxiliares — usado tanto pra atribuir auxiliares
+// quanto pra registrar o parecer deles. Ver [[equipes-analista-auxiliares]].
+type TipoItemAuxiliar = 'analise' | 'ajuste' | 'reequilibrio' | 'saldo';
+
+// Controle compacto de auxiliares (Elétrica/Arquitetura/PSCIP) de um processo — usado tanto na
+// fila de Atribuição (designar) quanto nas telas de validação (acompanhar parecer).
+function AuxiliaresControl({
+  auxiliares,
+  candidatos,
+  onAdicionar,
+  onRemover,
+  somenteLeitura = false,
+}: {
+  auxiliares: AuxiliarProcesso[];
+  candidatos: { id: string; nome: string; equipeAnalise?: string }[];
+  onAdicionar: (usuario: { id: string; nome: string; equipe: 'Eletrica' | 'Arquitetura' | 'PSCIP' }) => void;
+  onRemover: (auxiliarId: string) => void;
+  somenteLeitura?: boolean;
+}) {
+  const [selecionado, setSelecionado] = useState('');
+  const jaAdicionados = new Set(auxiliares.map(a => a.usuarioId).filter(Boolean));
+  const disponiveis = candidatos.filter(c => !jaAdicionados.has(c.id));
+
+  return (
+    <div className="space-y-1 mt-1">
+      {auxiliares.map(aux => {
+        const corBadge = aux.aprovado === true ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+          : aux.aprovado === false ? 'bg-rose-100 text-rose-700 border-rose-200'
+          : 'bg-amber-100 text-amber-700 border-amber-200';
+        const labelStatus = aux.aprovado === true ? 'Aprovado' : aux.aprovado === false ? 'Reprovado' : 'Pendente';
+        return (
+          <div key={aux.id} className={`flex items-center justify-between gap-1 text-[9.5px] font-bold px-2 py-1 rounded-lg border ${corBadge}`}>
+            <span className="truncate">{aux.nome} — {EQUIPE_LABEL[aux.equipe]}: {labelStatus}</span>
+            {!somenteLeitura && (
+              <button type="button" onClick={() => onRemover(aux.id)} title="Remover auxiliar" className="shrink-0 cursor-pointer hover:opacity-70">
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {!somenteLeitura && disponiveis.length > 0 && (
+        <select
+          value={selecionado}
+          onChange={(e) => {
+            const usr = disponiveis.find(u => u.id === e.target.value);
+            if (usr && (usr.equipeAnalise === 'Eletrica' || usr.equipeAnalise === 'Arquitetura' || usr.equipeAnalise === 'PSCIP')) {
+              onAdicionar({ id: usr.id, nome: usr.nome, equipe: usr.equipeAnalise });
+            }
+            setSelecionado('');
+          }}
+          className="w-full text-[9.5px] px-2 py-1 border border-dashed border-slate-300 rounded-lg bg-white text-slate-500 cursor-pointer"
+        >
+          <option value="">+ Adicionar auxiliar (Elétrica/Arquitetura/PSCIP)</option>
+          {disponiveis.map(c => {
+            const equipeLabel = c.equipeAnalise === 'Arquitetura' ? 'Arquitetura' : c.equipeAnalise === 'PSCIP' ? 'PSCIP' : 'Elétrica';
+            return <option key={c.id} value={c.id}>{c.nome} ({equipeLabel})</option>;
+          })}
+        </select>
+      )}
+    </div>
+  );
+}
+
 
 // Extensões aceitas para anexos do checklist (documentos técnicos, plantas e comprovantes escaneados)
 const EXTENSOES_ANEXO_ACEITAS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.dwg', '.dxf', '.jpg', '.jpeg', '.png'];
@@ -2700,7 +2768,7 @@ export function NovoAtendimentoPanel({
 interface AtribuicaoPanelProps {
   solicitacoes: Solicitacao[];
   onUpdateSolicitacao: (updated: Solicitacao) => void;
-  usuariosSeguranca: { id: string; nome: string; perfil: string; depto?: string }[];
+  usuariosSeguranca: { id: string; nome: string; perfil: string; depto?: string; equipeAnalise?: string }[];
   atribuicoes: { [solicitacaoId: string]: string };
   onAssign: (solId: string, usrId: string) => void;
   viewMode?: 'lista' | 'kanban_status' | 'kanban_analista';
@@ -2719,7 +2787,7 @@ export function AtribuicaoPanel({
   onAssign,
   viewMode,
   onMudarViewMode,
-  perfilUsuario = 'gestor_dore',
+  perfilUsuario = 'analista_dore',
   onNavToAnalise,
   onNavToAnaliseContratual,
   somenteLeitura = false
@@ -2738,12 +2806,21 @@ export function AtribuicaoPanel({
   const [filtroAtribuicao, setFiltroAtribuicao] = useState<'todos' | 'minhas'>('todos');
   // Classificação da fila: Atendimento Inicial (análise/correção) ou, para obras já em Execução,
   // qual pendência trouxe o processo de volta à fila (Aditivo, Ajuste ou Saldo Complementar).
-  const [filtroClassificacao, setFiltroClassificacao] = useState<'todos' | 'atendimento_inicial' | 'aditivo' | 'ajuste' | 'saldo'>('todos');
+  const [filtroClassificacao, setFiltroClassificacao] = useState<'todos' | 'atendimento_inicial' | 'aditivo' | 'ajuste' | 'reequilibrio' | 'saldo'>('todos');
 
   // Validação de processos é atribuível a analistas do órgão central, além de admin/diretor_dore
   // (que também podem validar qualquer solicitação) — técnicos regionais da SRE não entram nessa lista
   const analistasSgo = usuariosSeguranca.filter(
     u => u.perfil === 'analista_dore' || u.perfil === 'admin' || u.perfil === 'diretor_dore'
+  );
+  // Atendimento Inicial (Análise Técnica) só pode ser atribuído a analistas da equipe Planejamento;
+  // Ajuste/Reequilíbrio/Saldo Complementar só à equipe Ajuste. admin/diretor_dore continuam com
+  // acesso irrestrito (override), como em todo o resto do sistema. Ver [[equipes-analista-auxiliares]].
+  const analistasPlanejamento = analistasSgo.filter(
+    u => u.perfil === 'admin' || u.perfil === 'diretor_dore' || u.equipeAnalise === 'Planejamento'
+  );
+  const analistasAjusteEquipe = analistasSgo.filter(
+    u => u.perfil === 'admin' || u.perfil === 'diretor_dore' || u.equipeAnalise === 'Ajuste'
   );
 
   // Um analista só pode se autoatribuir um processo — não pode trocar a atribuição para outro analista
@@ -2787,17 +2864,19 @@ export function AtribuicaoPanel({
     // Processos em etapas futuras (paf_autorizacao em diante) ou cancelados vivem na aba Histórico.
     const temAditivoPendente = (sol.aditivos || []).some(a => a.status === 'Pendente');
     const temAjustePendente = (sol.ajustes || []).some(a => a.status === 'analise_dore');
+    const temReequilibrioPendente = (sol.reequilibrios || []).some(r => r.status === 'aguardando_analista' || r.status === 'em_analise');
     const temSaldoPendente = (sol.saldosComplementares || []).some(s => s.status === 'aguardando_analista' || s.status === 'em_analise');
-    const emExecucaoComPendencia = sol.etapaAtual === 'execucao' && (temAditivoPendente || temAjustePendente || temSaldoPendente);
+    const emExecucaoComPendencia = sol.etapaAtual === 'execucao' && (temAditivoPendente || temAjustePendente || temReequilibrioPendente || temSaldoPendente);
     if (sol.etapaAtual !== 'analise' && sol.etapaAtual !== 'correcao' && !emExecucaoComPendencia) return false;
 
     // 9. Classificação: Atendimento Inicial (análise/correção) ou o tipo de pendência que trouxe
-    // a obra em Execução de volta à fila (Aditivo, Ajuste ou Saldo Complementar).
+    // a obra em Execução de volta à fila (Aditivo, Ajuste, Reequilíbrio ou Saldo Complementar).
     if (filtroClassificacao !== 'todos') {
       const isAtendimentoInicial = sol.etapaAtual === 'analise' || sol.etapaAtual === 'correcao';
       if (filtroClassificacao === 'atendimento_inicial' && !isAtendimentoInicial) return false;
       if (filtroClassificacao === 'aditivo' && !temAditivoPendente) return false;
       if (filtroClassificacao === 'ajuste' && !temAjustePendente) return false;
+      if (filtroClassificacao === 'reequilibrio' && !temReequilibrioPendente) return false;
       if (filtroClassificacao === 'saldo' && !temSaldoPendente) return false;
     }
 
@@ -2828,9 +2907,6 @@ export function AtribuicaoPanel({
       const myNome = usuariosSeguranca?.find((u: any) => u.perfil === perfilUsuario)?.nome || '';
       const isMyAssign = !!sol.analistaAtribuido && (myNome ? sol.analistaAtribuido === myNome : !!sol.analistaAtribuido);
       if (!isMyAssign) return false;
-    } else if ((perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && filtroAtribuicao === 'minhas') {
-      const noAssign = !sol.analistaAtribuido;
-      if (!noAssign) return false;
     }
 
     return true;
@@ -2872,7 +2948,7 @@ export function AtribuicaoPanel({
       const pontosDisponiveis = getPontosIEEDisponiveis(selectedUser.nome, solicitacoes.filter(s => s.id !== sol.id));
       let forcada = false;
       if (pontosObra > pontosDisponiveis) {
-        const podeForcar = (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') || perfilUsuario === 'gestor_dore' || perfilUsuario === 'gestor_paf';
+        const podeForcar = (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore') || perfilUsuario === 'gestor_paf';
         const mensagem = `Analista sem capacidade disponível para esta obra (${pontosDisponiveis} pontos disponíveis, obra requer ${pontosObra} pontos).`;
         if (!podeForcar) {
           alert(mensagem);
@@ -2888,6 +2964,9 @@ export function AtribuicaoPanel({
         ...sol,
         analistaAtribuido: selectedUser.nome,
         atribuicaoForcada: forcada,
+        // Início do relógio do checkpoint "atribuição → início" — só na primeira atribuição.
+        // Ver [[sla-atendimentos]].
+        analiseSla: { ...sol.analiseSla, dataAtribuicao: sol.analiseSla?.dataAtribuicao ?? new Date().toISOString() },
         aditivos: (sol.aditivos || []).map(a =>
           a.status === 'Pendente' && !a.analistaAtribuido 
             ? { ...a, analistaAtribuido: selectedUser.nome } 
@@ -2918,24 +2997,52 @@ export function AtribuicaoPanel({
     }
   };
 
-  // Atribui (ou remove) o analista de um aditivo/ajuste/saldo complementar específico —
+  // Atribui (ou remove) o analista de um aditivo/ajuste/reequilíbrio/saldo complementar específico —
   // independente do analista da solicitação principal, usado nas linhas de obras em Execução com pendência.
-  const handleAssignAnalystItem = (sol: Solicitacao, tipo: 'aditivo' | 'ajuste' | 'saldo', itemId: string, usrId: string) => {
+  const handleAssignAnalystItem = async (sol: Solicitacao, tipo: 'aditivo' | 'ajuste' | 'reequilibrio' | 'saldo', itemId: string, usrId: string) => {
     const selectedUser = usrId ? analistasSgo.find(u => u.id === usrId) : undefined;
     const nomeAnalista = selectedUser?.nome;
     const feedbackKey = `${sol.id}_${tipo}_${itemId}`;
-    const tipoLabel = tipo === 'aditivo' ? 'Aditivo' : tipo === 'ajuste' ? 'Ajuste' : 'Saldo Complementar';
+    const tipoLabel = tipo === 'aditivo' ? 'Aditivo' : tipo === 'ajuste' ? 'Ajuste' : tipo === 'reequilibrio' ? 'Reequilíbrio' : 'Saldo Complementar';
 
+    // Ajuste/Reequilíbrio/Saldo (não Aditivo, que fica fora do escopo de SLA por ora) — grava o
+    // analista e, na primeira atribuição, o início do relógio de SLA deste checkpoint no banco.
+    // Ver [[sla-atendimentos]].
+    if (tipo === 'ajuste' || tipo === 'reequilibrio' || tipo === 'saldo') {
+      const itemAtual = tipo === 'ajuste'
+        ? (sol.ajustes || []).find(a => a.id === itemId)
+        : tipo === 'reequilibrio'
+          ? (sol.reequilibrios || []).find(r => r.id === itemId)
+          : (sol.saldosComplementares || []).find(s => s.id === itemId);
+      const payload: Record<string, unknown> = {
+        analista_nome: nomeAnalista ?? null,
+        ...(tipo !== 'saldo' ? { analista_id: usrId || null } : {}),
+      };
+      if (nomeAnalista && !itemAtual?.dataAtribuicao) {
+        payload.data_atribuicao = new Date().toISOString();
+      }
+      const { error } = await supabase.from(TABELA_POR_TIPO_PENDENCIA[tipo]).update(payload).eq('id', itemId);
+      if (error) {
+        console.error('Erro ao gravar atribuição de analista no Supabase:', error);
+        alert('Erro ao gravar a atribuição no banco de dados. Tente novamente.');
+        return;
+      }
+    }
+
+    const dataAtribuicaoNova = new Date().toISOString();
     const updated: Solicitacao = {
       ...sol,
       aditivos: tipo === 'aditivo'
         ? (sol.aditivos || []).map(a => a.id === itemId ? { ...a, analistaAtribuido: nomeAnalista } : a)
         : sol.aditivos,
       ajustes: tipo === 'ajuste'
-        ? (sol.ajustes || []).map(a => a.id === itemId ? { ...a, analistaAtribuido: nomeAnalista } : a)
+        ? (sol.ajustes || []).map(a => a.id === itemId ? { ...a, analistaAtribuido: nomeAnalista, dataAtribuicao: nomeAnalista ? (a.dataAtribuicao ?? dataAtribuicaoNova) : a.dataAtribuicao } : a)
         : sol.ajustes,
+      reequilibrios: tipo === 'reequilibrio'
+        ? (sol.reequilibrios || []).map(r => r.id === itemId ? { ...r, analistaAtribuido: nomeAnalista, dataAtribuicao: nomeAnalista ? (r.dataAtribuicao ?? dataAtribuicaoNova) : r.dataAtribuicao } : r)
+        : sol.reequilibrios,
       saldosComplementares: tipo === 'saldo'
-        ? (sol.saldosComplementares || []).map(s => s.id === itemId ? { ...s, analistaAtribuido: nomeAnalista } : s)
+        ? (sol.saldosComplementares || []).map(s => s.id === itemId ? { ...s, analistaAtribuido: nomeAnalista, dataAtribuicao: nomeAnalista ? (s.dataAtribuicao ?? dataAtribuicaoNova) : s.dataAtribuicao } : s)
         : sol.saldosComplementares,
       historicoEtapas: [
         ...sol.historicoEtapas,
@@ -2955,6 +3062,73 @@ export function AtribuicaoPanel({
     setTimeout(() => {
       setFeedbackMsg(prev => ({ ...prev, [feedbackKey]: '' }));
     }, 2000);
+  };
+
+  // Candidatos a auxiliar: qualquer analista das equipes Elétrica/Arquitetura/PSCIP.
+  const candidatosAuxiliares = usuariosSeguranca.filter(
+    u => u.perfil === 'analista_dore' && (u.equipeAnalise === 'Eletrica' || u.equipeAnalise === 'Arquitetura' || u.equipeAnalise === 'PSCIP')
+  );
+
+  // Anexa um auxiliar de validação (Elétrica/Arquitetura/PSCIP) a um processo — ver [[equipes-analista-auxiliares]].
+  const handleAdicionarAuxiliar = async (
+    sol: Solicitacao,
+    tipo: TipoItemAuxiliar,
+    itemId: string | null,
+    usuario: { id: string; nome: string; equipe: 'Eletrica' | 'Arquitetura' | 'PSCIP' }
+  ) => {
+    const { data: row, error } = await supabase
+      .from('processo_auxiliares')
+      .insert({
+        solicitacao_id: sol._dbId ?? null,
+        tipo_item: tipo,
+        item_id: itemId,
+        usuario_id: usuario.id,
+        nome: usuario.nome,
+        equipe: usuario.equipe,
+      })
+      .select('id')
+      .single();
+
+    if (error || !row) {
+      console.error('Erro ao adicionar auxiliar no Supabase:', error);
+      alert('Erro ao adicionar o auxiliar no banco de dados. Tente novamente.');
+      return;
+    }
+
+    const novoAux: AuxiliarProcesso = { id: row.id, nome: usuario.nome, usuarioId: usuario.id, equipe: usuario.equipe };
+    const anexar = (lista: AuxiliarProcesso[] | undefined) => [...(lista || []), novoAux];
+
+    onUpdateSolicitacao({
+      ...sol,
+      auxiliares: tipo === 'analise' ? anexar(sol.auxiliares) : sol.auxiliares,
+      ajustes: tipo === 'ajuste' ? (sol.ajustes || []).map(a => a.id === itemId ? { ...a, auxiliares: anexar(a.auxiliares) } : a) : sol.ajustes,
+      reequilibrios: tipo === 'reequilibrio' ? (sol.reequilibrios || []).map(r => r.id === itemId ? { ...r, auxiliares: anexar(r.auxiliares) } : r) : sol.reequilibrios,
+      saldosComplementares: tipo === 'saldo' ? (sol.saldosComplementares || []).map(s => s.id === itemId ? { ...s, auxiliares: anexar(s.auxiliares) } : s) : sol.saldosComplementares,
+    });
+  };
+
+  const handleRemoverAuxiliar = async (
+    sol: Solicitacao,
+    tipo: TipoItemAuxiliar,
+    itemId: string | null,
+    auxiliarId: string
+  ) => {
+    const { error } = await supabase.from('processo_auxiliares').delete().eq('id', auxiliarId);
+    if (error) {
+      console.error('Erro ao remover auxiliar no Supabase:', error);
+      alert('Erro ao remover o auxiliar no banco de dados. Tente novamente.');
+      return;
+    }
+
+    const remover = (lista: AuxiliarProcesso[] | undefined) => (lista || []).filter(a => a.id !== auxiliarId);
+
+    onUpdateSolicitacao({
+      ...sol,
+      auxiliares: tipo === 'analise' ? remover(sol.auxiliares) : sol.auxiliares,
+      ajustes: tipo === 'ajuste' ? (sol.ajustes || []).map(a => a.id === itemId ? { ...a, auxiliares: remover(a.auxiliares) } : a) : sol.ajustes,
+      reequilibrios: tipo === 'reequilibrio' ? (sol.reequilibrios || []).map(r => r.id === itemId ? { ...r, auxiliares: remover(r.auxiliares) } : r) : sol.reequilibrios,
+      saldosComplementares: tipo === 'saldo' ? (sol.saldosComplementares || []).map(s => s.id === itemId ? { ...s, auxiliares: remover(s.auxiliares) } : s) : sol.saldosComplementares,
+    });
   };
 
   return (
@@ -3090,6 +3264,7 @@ export function AtribuicaoPanel({
               <option value="atendimento_inicial">Atendimento Inicial</option>
               <option value="aditivo">Aditivo</option>
               <option value="ajuste">Ajuste</option>
+              <option value="reequilibrio">Reequilíbrio</option>
               <option value="saldo">Saldo</option>
             </select>
           </div>
@@ -3182,33 +3357,6 @@ export function AtribuicaoPanel({
             </button>
           </div>
         )}
-
-        {(perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
-          <div className="flex bg-slate-200/50 p-0.5 rounded-lg border border-slate-250 select-none shrink-0">
-            <button
-              type="button"
-              onClick={() => setFiltroAtribuicao('minhas')}
-              className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
-                filtroAtribuicao === 'minhas'
-                  ? 'bg-indigo-600 text-white shadow-3xs'
-                  : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
-              }`}
-            >
-              Exibir Apenas Não Atribuídos (Aguardando Designação)
-            </button>
-            <button
-              type="button"
-              onClick={() => setFiltroAtribuicao('todos')}
-              className={`px-3 py-1.5 text-[11px] font-extrabold rounded-md transition-all cursor-pointer ${
-                filtroAtribuicao === 'todos'
-                  ? 'bg-indigo-600 text-white shadow-3xs'
-                  : 'text-slate-605 hover:text-slate-900 bg-transparent font-bold'
-              }`}
-            >
-              Exibir Todas as Demandas
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -3227,6 +3375,7 @@ export function AtribuicaoPanel({
               <th className="py-2.5 px-4 font-sans text-left">DATA CRIAÇÃO</th>
               <th className="py-2.5 px-4 font-sans text-left">RESPONSÁVEL (ENCAMINHOU)</th>
               <th className="py-2.5 px-4 font-sans text-left">ANALISTA DESIGNADO</th>
+              <th className="py-2.5 px-4 font-sans text-center">SLA</th>
               <th className="py-2.5 px-4 font-sans text-center">CHECKLIST DOCS</th>
               <th className="py-2.5 px-4 font-sans text-center">ETAPA ATUAL</th>
               <th className="py-2.5 px-4 font-sans text-center">AÇÕES</th>
@@ -3388,8 +3537,9 @@ export function AtribuicaoPanel({
                     {(() => {
                       const hasAditivo = sol.aditivos && sol.aditivos.some(a => a.status === 'Pendente');
                       const hasAjuste = sol.ajustes && sol.ajustes.some(a => a.status === 'analise_dore');
+                      const hasReequilibrio = sol.reequilibrios && sol.reequilibrios.some(r => r.status === 'aguardando_analista' || r.status === 'em_analise');
                       const hasSaldo = sol.saldosComplementares && sol.saldosComplementares.some(s => s.status === 'aguardando_analista' || s.status === 'em_analise');
-                      if (hasAditivo || hasAjuste || hasSaldo) {
+                      if (hasAditivo || hasAjuste || hasReequilibrio || hasSaldo) {
                         return (
                           <div className="flex flex-col items-center gap-1">
                             {hasAditivo && (
@@ -3400,6 +3550,11 @@ export function AtribuicaoPanel({
                             {hasAjuste && (
                               <span className="border border-violet-300 text-violet-700 bg-violet-50/30 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-[0.05em] whitespace-nowrap">
                                 ⚠️ Ajuste pendente
+                              </span>
+                            )}
+                            {hasReequilibrio && (
+                              <span className="border border-purple-300 text-purple-700 bg-purple-50/30 px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-[0.05em] whitespace-nowrap">
+                                ⚠️ Reequilíbrio pendente
                               </span>
                             )}
                             {hasSaldo && (
@@ -3493,8 +3648,8 @@ export function AtribuicaoPanel({
                             const currentItemAssignId = analistasSgo.find(u => u.nome === aju.analistaAtribuido)?.id || '';
                             const atribuidoOutroAnalista = isAnalista && !!aju.analistaAtribuido && aju.analistaAtribuido !== meuNomeAnalista;
                             const opcoesAnalistas = isAnalista
-                              ? analistasSgo.filter(usr => usr.nome === meuNomeAnalista)
-                              : analistasSgo;
+                              ? analistasAjusteEquipe.filter(usr => usr.nome === meuNomeAnalista)
+                              : analistasAjusteEquipe;
                             const feedbackKey = `${sol.id}_ajuste_${aju.id}`;
                             return (
                               <div key={aju.id} className="space-y-0.5">
@@ -3522,6 +3677,57 @@ export function AtribuicaoPanel({
                                     {feedbackMsg[feedbackKey]}
                                   </span>
                                 )}
+                                <AuxiliaresControl
+                                  auxiliares={aju.auxiliares || []}
+                                  candidatos={candidatosAuxiliares}
+                                  somenteLeitura={somenteLeitura}
+                                  onAdicionar={(usr) => handleAdicionarAuxiliar(sol, 'ajuste', aju.id, usr)}
+                                  onRemover={(auxId) => handleRemoverAuxiliar(sol, 'ajuste', aju.id, auxId)}
+                                />
+                              </div>
+                            );
+                          })}
+
+                          {(sol.reequilibrios || []).filter(r => r.status === 'aguardando_analista' || r.status === 'em_analise').map(req => {
+                            const currentItemAssignId = analistasSgo.find(u => u.nome === req.analistaAtribuido)?.id || '';
+                            const atribuidoOutroAnalista = isAnalista && !!req.analistaAtribuido && req.analistaAtribuido !== meuNomeAnalista;
+                            const opcoesAnalistas = isAnalista
+                              ? analistasAjusteEquipe.filter(usr => usr.nome === meuNomeAnalista)
+                              : analistasAjusteEquipe;
+                            const feedbackKey = `${sol.id}_reequilibrio_${req.id}`;
+                            return (
+                              <div key={req.id} className="space-y-0.5">
+                                <span className="text-[9px] font-bold text-purple-600 uppercase tracking-wide block">Reequilíbrio {req.id}</span>
+                                <select
+                                  value={currentItemAssignId}
+                                  onChange={(e) => !somenteLeitura && !atribuidoOutroAnalista && handleAssignAnalystItem(sol, 'reequilibrio', req.id, e.target.value)}
+                                  disabled={somenteLeitura || atribuidoOutroAnalista}
+                                  className={`text-xs px-3 py-2 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border font-extrabold transition-all duration-150 w-full ${(somenteLeitura || atribuidoOutroAnalista) ? 'cursor-default opacity-60' : 'cursor-pointer'} ${
+                                    req.analistaAtribuido ? 'border-blue-500 text-blue-700 shadow-3xs' : 'border-slate-300 text-slate-500 font-medium'
+                                  }`}
+                                >
+                                  <option value="" className="text-slate-500 font-bold bg-white text-center py-2">-- Não Atribuído --</option>
+                                  {opcoesAnalistas.map(usr => {
+                                    const formattedLabel = usr.perfil === 'tecnico_infra' ? `${usr.nome} (Fiscal)` : `${usr.nome} (DORE)`;
+                                    return (
+                                      <option key={usr.id} value={usr.id} className="text-slate-800 bg-white font-bold py-2">
+                                        {formattedLabel}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                                {feedbackMsg[feedbackKey] && (
+                                  <span className="text-[9px] font-bold text-blue-600 block animate-pulse text-center">
+                                    {feedbackMsg[feedbackKey]}
+                                  </span>
+                                )}
+                                <AuxiliaresControl
+                                  auxiliares={req.auxiliares || []}
+                                  candidatos={candidatosAuxiliares}
+                                  somenteLeitura={somenteLeitura}
+                                  onAdicionar={(usr) => handleAdicionarAuxiliar(sol, 'reequilibrio', req.id, usr)}
+                                  onRemover={(auxId) => handleRemoverAuxiliar(sol, 'reequilibrio', req.id, auxId)}
+                                />
                               </div>
                             );
                           })}
@@ -3530,8 +3736,8 @@ export function AtribuicaoPanel({
                             const currentItemAssignId = analistasSgo.find(u => u.nome === sal.analistaAtribuido)?.id || '';
                             const atribuidoOutroAnalista = isAnalista && !!sal.analistaAtribuido && sal.analistaAtribuido !== meuNomeAnalista;
                             const opcoesAnalistas = isAnalista
-                              ? analistasSgo.filter(usr => usr.nome === meuNomeAnalista)
-                              : analistasSgo;
+                              ? analistasAjusteEquipe.filter(usr => usr.nome === meuNomeAnalista)
+                              : analistasAjusteEquipe;
                             const feedbackKey = `${sol.id}_saldo_${sal.id}`;
                             return (
                               <div key={sal.id} className="space-y-0.5">
@@ -3559,6 +3765,13 @@ export function AtribuicaoPanel({
                                     {feedbackMsg[feedbackKey]}
                                   </span>
                                 )}
+                                <AuxiliaresControl
+                                  auxiliares={sal.auxiliares || []}
+                                  candidatos={candidatosAuxiliares}
+                                  somenteLeitura={somenteLeitura}
+                                  onAdicionar={(usr) => handleAdicionarAuxiliar(sol, 'saldo', sal.id, usr)}
+                                  onRemover={(auxId) => handleRemoverAuxiliar(sol, 'saldo', sal.id, auxId)}
+                                />
                               </div>
                             );
                           })}
@@ -3569,8 +3782,8 @@ export function AtribuicaoPanel({
                             // Analista só pode se autoatribuir — não pode trocar a atribuição para outro analista nem mexer em processo já atribuído a colega
                             const atribuidoOutroAnalista = isAnalista && !!sol.analistaAtribuido && sol.analistaAtribuido !== meuNomeAnalista;
                             const opcoesAnalistas = isAnalista
-                              ? analistasSgo.filter(usr => usr.nome === meuNomeAnalista)
-                              : analistasSgo;
+                              ? analistasPlanejamento.filter(usr => usr.nome === meuNomeAnalista)
+                              : analistasPlanejamento;
                             return (
                               <select
                                 data-testid="atribuicao-selecionar-analista"
@@ -3605,7 +3818,47 @@ export function AtribuicaoPanel({
                               {feedbackMsg[sol.id]}
                             </span>
                           )}
+                          <AuxiliaresControl
+                            auxiliares={sol.auxiliares || []}
+                            candidatos={candidatosAuxiliares}
+                            somenteLeitura={somenteLeitura}
+                            onAdicionar={(usr) => handleAdicionarAuxiliar(sol, 'analise', null, usr)}
+                            onRemover={(auxId) => handleRemoverAuxiliar(sol, 'analise', null, auxId)}
+                          />
                         </>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* SLA — checkpoint corrente (atribuição/início/conclusão) de cada pendência. Ver [[sla-atendimentos]]. */}
+                  <td className="py-4 px-4 text-center whitespace-nowrap">
+                    <div className="flex flex-col items-center gap-1">
+                      {sol.etapaAtual === 'execucao' ? (
+                        [
+                          ...(sol.ajustes || []).filter(a => a.status === 'analise_dore'),
+                          ...(sol.reequilibrios || []).filter(r => r.status === 'aguardando_analista' || r.status === 'em_analise'),
+                          ...(sol.saldosComplementares || []).filter(s => s.status === 'aguardando_analista' || s.status === 'em_analise'),
+                        ].map((item, idx) => {
+                          const resultado = calcularSlaCorrente(item);
+                          const info = STATUS_SLA_INFO[resultado.status];
+                          return (
+                            <span key={idx} className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${info.corBadge}`} title={formatarDuracaoHoras(resultado.horasRestantes)}>
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${info.corPonto}`} />
+                              {info.label}
+                            </span>
+                          );
+                        })
+                      ) : (sol.etapaAtual === 'analise' || sol.etapaAtual === 'correcao') ? (() => {
+                        const resultado = calcularSlaCorrente(sol.analiseSla || {});
+                        const info = STATUS_SLA_INFO[resultado.status];
+                        return (
+                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${info.corBadge}`} title={formatarDuracaoHoras(resultado.horasRestantes)}>
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${info.corPonto}`} />
+                            {info.label}
+                          </span>
+                        );
+                      })() : (
+                        <span className="text-[9px] text-slate-300 italic">—</span>
                       )}
                     </div>
                   </td>
@@ -3668,6 +3921,27 @@ export function AtribuicaoPanel({
 // ==========================================
 // Gate leve sobre o estágio 'cadastro' (statusAprovacaoRegional) — o atendimento só segue
 // para 'analise' (fila da DORE) depois que o coordenador da SRE aprova.
+//
+// O mesmo painel também reúne, numa segunda aba, os Ajustes de Planilha, Reequilíbrios
+// Financeiros e Saldos Complementares abertos pelo fiscal em obras já em Execução — eles nascem
+// com status 'aguardando_coordenador' e só entram na fila de Atribuição da DORE depois que o
+// coordenador aprova aqui. Ver [[gate-coordenador-execucao]].
+type TipoPendenciaExecucao = 'ajuste' | 'reequilibrio' | 'saldo';
+interface PendenciaExecucao {
+  sol: Solicitacao;
+  tipo: TipoPendenciaExecucao;
+  itemId: string;
+  label: string;
+  valor?: number;
+  dataCriacao: string;
+}
+
+const TABELA_POR_TIPO_PENDENCIA: Record<TipoPendenciaExecucao, string> = {
+  ajuste: 'ajustes_planilha',
+  reequilibrio: 'reequilibrios_financeiros',
+  saldo: 'saldos_complementares',
+};
+
 interface AprovacaoRegionalPanelProps {
   solicitacoes: Solicitacao[];
   onUpdateSolicitacao: (updated: Solicitacao) => void;
@@ -3692,10 +3966,35 @@ export function AprovacaoRegionalPanel({
   const [justificativaReprovar, setJustificativaReprovar] = useState('');
   const [erroReprovar, setErroReprovar] = useState('');
 
+  // Aba: Atendimentos Iniciais (cadastro) x Ajuste/Reequilíbrio/Saldo Complementar de obras em Execução
+  const [abaAprovacao, setAbaAprovacao] = useState<'atendimentos' | 'execucao'>('atendimentos');
+  const [salvandoPendenciaId, setSalvandoPendenciaId] = useState<string | null>(null);
+  const [pendenciaReprovando, setPendenciaReprovando] = useState<PendenciaExecucao | null>(null);
+  const [justificativaReprovarPendencia, setJustificativaReprovarPendencia] = useState('');
+  const [erroReprovarPendencia, setErroReprovarPendencia] = useState('');
+
   const pendentes = solicitacoes
     .filter(s => s.etapaAtual === 'cadastro' && s.statusAprovacaoRegional === 'pendente')
     .filter(s => !regionaisDoCoordenador.length || regionaisDoCoordenador.some(sre => (s.sre || '').toLowerCase() === sre.toLowerCase()))
     .sort(compararPorPrioridade);
+
+  // Ajustes de Planilha, Reequilíbrios Financeiros e Saldos Complementares abertos pelo fiscal da
+  // obra durante a Execução, aguardando aprovação do coordenador regional antes de entrarem na fila
+  // de Atribuição da DORE. Ver [[gate-coordenador-execucao]].
+  const solicitacoesDaRegional = solicitacoes.filter(s =>
+    !regionaisDoCoordenador.length || regionaisDoCoordenador.some(sre => (s.sre || '').toLowerCase() === sre.toLowerCase())
+  );
+  const pendenciasExecucao: PendenciaExecucao[] = solicitacoesDaRegional.flatMap(sol => [
+    ...(sol.ajustes || [])
+      .filter(a => a.status === 'aguardando_coordenador')
+      .map(a => ({ sol, tipo: 'ajuste' as const, itemId: a.id, label: `Ajuste Nº ${a.numero}`, valor: a.valorAjuste, dataCriacao: a.dataCriacao })),
+    ...(sol.reequilibrios || [])
+      .filter(r => r.status === 'aguardando_coordenador')
+      .map(r => ({ sol, tipo: 'reequilibrio' as const, itemId: r.id, label: `Reequilíbrio ${r.id}`, valor: r.valorReequilibrado, dataCriacao: r.dataCriacao })),
+    ...(sol.saldosComplementares || [])
+      .filter(s => s.status === 'aguardando_coordenador')
+      .map(s => ({ sol, tipo: 'saldo' as const, itemId: s.id, label: `Saldo Complementar ${s.id}`, valor: s.saldoEmConta, dataCriacao: s.dataCriacao })),
+  ]);
 
   const handleAprovar = (sol: Solicitacao) => {
     const hoje = new Date().toISOString().split('T')[0];
@@ -3709,6 +4008,8 @@ export function AprovacaoRegionalPanel({
       // aplicarEdicaoSecao para detectar automaticamente o status 'editado' quando o
       // analista altera um valor (ver src/utils/validacaoTecnica.ts)
       valoresOriginaisTecnico: capturarSnapshotTecnico(sol),
+      // Início do relógio de SLA da Análise Técnica — ver [[sla-atendimentos]]
+      analiseSla: { ...sol.analiseSla, dataEntradaFila: new Date().toISOString() },
       historicoEtapas: [
         ...sol.historicoEtapas,
         { etapa: 'analise', data: hoje, responsavel: `${nomeCoordenador} (Aprovação Regional)` }
@@ -3740,19 +4041,186 @@ export function AprovacaoRegionalPanel({
     setErroReprovar('');
   };
 
+  // Aprova um Ajuste/Reequilíbrio/Saldo Complementar de obra em Execução: grava a decisão no banco
+  // e libera o item para a fila de Atribuição da DORE (status 'pendente' no banco).
+  const handleAprovarPendenciaExecucao = async (pendencia: PendenciaExecucao) => {
+    const { sol, tipo, itemId } = pendencia;
+    const hoje = new Date().toISOString().split('T')[0];
+    const agora = new Date().toISOString();
+    setSalvandoPendenciaId(itemId);
+
+    // Início do relógio de SLA deste item — ver [[sla-atendimentos]]
+    const { error } = await supabase
+      .from(TABELA_POR_TIPO_PENDENCIA[tipo])
+      .update({ status: 'pendente', coordenador_aprovador: nomeCoordenador, data_aprovacao_coordenador: hoje, data_entrada_fila: agora })
+      .eq('id', itemId);
+
+    setSalvandoPendenciaId(null);
+    if (error) {
+      console.error('Erro ao aprovar pendência no Supabase:', error);
+      alert('Erro ao aprovar a solicitação no banco de dados. Tente novamente.');
+      return;
+    }
+
+    const statusLiberado = tipo === 'ajuste' ? 'analise_dore' : 'aguardando_analista';
+    onUpdateSolicitacao({
+      ...sol,
+      ajustes: tipo === 'ajuste'
+        ? (sol.ajustes || []).map(a => a.id === itemId ? { ...a, status: statusLiberado as AjustePlanilha['status'], coordenadorAprovador: nomeCoordenador, dataAprovacaoCoordenador: hoje, dataEntradaFila: agora } : a)
+        : sol.ajustes,
+      reequilibrios: tipo === 'reequilibrio'
+        ? (sol.reequilibrios || []).map(r => r.id === itemId ? { ...r, status: statusLiberado as ReequilibrioItem['status'], coordenadorAprovador: nomeCoordenador, dataAprovacaoCoordenador: hoje, dataEntradaFila: agora } : r)
+        : sol.reequilibrios,
+      saldosComplementares: tipo === 'saldo'
+        ? (sol.saldosComplementares || []).map(s => s.id === itemId ? { ...s, status: statusLiberado as SaldoComplementarItem['status'], coordenadorAprovador: nomeCoordenador, dataAprovacaoCoordenador: hoje, dataEntradaFila: agora } : s)
+        : sol.saldosComplementares,
+      historicoEtapas: [
+        ...sol.historicoEtapas,
+        { etapa: sol.etapaAtual, data: hoje, responsavel: `${nomeCoordenador} (Aprovação de ${pendencia.label})` }
+      ]
+    });
+  };
+
+  const handleConfirmarReprovarPendencia = async () => {
+    if (!pendenciaReprovando) return;
+    const justificativa = justificativaReprovarPendencia.trim();
+    if (!justificativa) {
+      setErroReprovarPendencia('Informe a justificativa da reprovação.');
+      return;
+    }
+    const { sol, tipo, itemId } = pendenciaReprovando;
+    const hoje = new Date().toISOString().split('T')[0];
+    setSalvandoPendenciaId(itemId);
+
+    const { error } = await supabase
+      .from(TABELA_POR_TIPO_PENDENCIA[tipo])
+      .update({ status: 'recusado', coordenador_aprovador: nomeCoordenador, data_aprovacao_coordenador: hoje, justificativa_reprovacao_coordenador: justificativa })
+      .eq('id', itemId);
+
+    setSalvandoPendenciaId(null);
+    if (error) {
+      console.error('Erro ao reprovar pendência no Supabase:', error);
+      alert('Erro ao reprovar a solicitação no banco de dados. Tente novamente.');
+      return;
+    }
+
+    const statusReprovado = tipo === 'ajuste' ? 'em_elaboracao' : 'reprovado';
+    onUpdateSolicitacao({
+      ...sol,
+      ajustes: tipo === 'ajuste'
+        ? (sol.ajustes || []).map(a => a.id === itemId ? { ...a, status: statusReprovado as AjustePlanilha['status'], coordenadorAprovador: nomeCoordenador, dataAprovacaoCoordenador: hoje, justificativaReprovacaoCoordenador: justificativa } : a)
+        : sol.ajustes,
+      reequilibrios: tipo === 'reequilibrio'
+        ? (sol.reequilibrios || []).map(r => r.id === itemId ? { ...r, status: statusReprovado as ReequilibrioItem['status'], coordenadorAprovador: nomeCoordenador, dataAprovacaoCoordenador: hoje, justificativaReprovacaoCoordenador: justificativa } : r)
+        : sol.reequilibrios,
+      saldosComplementares: tipo === 'saldo'
+        ? (sol.saldosComplementares || []).map(s => s.id === itemId ? { ...s, status: statusReprovado as SaldoComplementarItem['status'], coordenadorAprovador: nomeCoordenador, dataAprovacaoCoordenador: hoje, justificativaReprovacaoCoordenador: justificativa } : s)
+        : sol.saldosComplementares,
+      historicoEtapas: [
+        ...sol.historicoEtapas,
+        { etapa: sol.etapaAtual, data: hoje, responsavel: `${nomeCoordenador} (Reprovação de ${pendenciaReprovando.label})` }
+      ]
+    });
+    setPendenciaReprovando(null);
+    setJustificativaReprovarPendencia('');
+    setErroReprovarPendencia('');
+  };
+
   return (
     <div className="space-y-4 max-w-5xl mx-auto w-full animate-in fade-in duration-200">
       <div className="border-b border-slate-100 pb-3">
         <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2 font-sans">
           <CheckCircle className="w-5 h-5 text-blue-600" />
-          Aprovação Regional de Atendimentos
+          Aprovação Regional
         </h2>
         <p className="text-xs text-slate-500 mt-1">
-          Atendimentos iniciais enviados pelos técnicos da sua regional, aguardando aprovação antes de seguir para análise da DORE.
+          Atendimentos e solicitações da sua regional aguardando aprovação antes de seguirem para a DORE.
         </p>
       </div>
 
-      {pendentes.length === 0 ? (
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setAbaAprovacao('atendimentos')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${abaAprovacao === 'atendimentos' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+        >
+          Atendimentos Iniciais ({pendentes.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setAbaAprovacao('execucao')}
+          className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${abaAprovacao === 'execucao' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+        >
+          Ajuste / Reequilíbrio / Saldo ({pendenciasExecucao.length})
+        </button>
+      </div>
+
+      {abaAprovacao === 'execucao' ? (
+        pendenciasExecucao.length === 0 ? (
+          <div className="bg-slate-50 border border-dashed border-slate-250 rounded-xl py-14 text-center">
+            <CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <h5 className="font-bold text-slate-700 text-xs">Nenhuma solicitação aguardando aprovação</h5>
+            <p className="text-[11px] text-slate-500 mt-1">Assim que um fiscal da sua regional enviar um Ajuste, Reequilíbrio ou Saldo Complementar, ele aparecerá aqui.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendenciasExecucao.map(pendencia => {
+              const { sol, tipo, itemId, label, valor, dataCriacao } = pendencia;
+              const IconeTipo = tipo === 'ajuste' ? FileText : tipo === 'reequilibrio' ? TrendingUp : Coins;
+              const corTipo = tipo === 'ajuste' ? 'text-violet-600 bg-violet-50/30 border-violet-200' : tipo === 'reequilibrio' ? 'text-purple-600 bg-purple-50/30 border-purple-200' : 'text-teal-600 bg-teal-50/30 border-teal-200';
+              return (
+                <div key={`${tipo}_${itemId}`} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-3xs hover:shadow-sm transition-shadow">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className={`shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center ${corTipo}`}>
+                        <IconeTipo className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-mono text-slate-400 font-bold">{sol.id}</span>
+                          <span className={`text-[9px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 border ${corTipo}`}>{label}</span>
+                        </div>
+                        <h4 className="text-sm font-extrabold text-slate-800 truncate">{sol.nomeEscola}</h4>
+                        <p className="text-xs text-slate-500">{sol.municipio} · {sol.sre}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={salvandoPendenciaId === itemId}
+                        onClick={() => {
+                          setPendenciaReprovando(pendencia);
+                          setJustificativaReprovarPendencia('');
+                          setErroReprovarPendencia('');
+                        }}
+                        className="px-3 py-2 border border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 rounded-lg text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Reprovar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={salvandoPendenciaId === itemId}
+                        onClick={() => handleAprovarPendenciaExecucao(pendencia)}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-xs hover:shadow-sm inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <CheckCircle className="w-3.5 h-3.5" /> {salvandoPendenciaId === itemId ? 'Aprovando…' : 'Aprovar'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pt-3 border-t border-slate-100">
+                    <span className="text-xs font-bold font-mono text-slate-700">
+                      {valor ? `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400 whitespace-nowrap">Enviado em {dataCriacao}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : pendentes.length === 0 ? (
         <div className="bg-slate-50 border border-dashed border-slate-250 rounded-xl py-14 text-center">
           <CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
           <h5 className="font-bold text-slate-700 text-xs">Nenhum atendimento aguardando aprovação</h5>
@@ -3944,6 +4412,65 @@ export function AprovacaoRegionalPanel({
                 type="button"
                 onClick={handleConfirmarReprovar}
                 className="px-4 py-2 rounded-lg text-xs font-extrabold text-white bg-red-600 hover:bg-red-700 shadow-md cursor-pointer transition"
+              >
+                Confirmar Reprovação
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Reprovar Ajuste/Reequilíbrio/Saldo Complementar de obra em Execução */}
+      {pendenciaReprovando && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-1.5">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-800">Reprovar {pendenciaReprovando.label}</h3>
+                <p className="text-[11px] text-slate-500">{pendenciaReprovando.sol.id} — {pendenciaReprovando.sol.nomeEscola}</p>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Justificativa da Reprovação *
+              </label>
+              <textarea
+                rows={4}
+                autoFocus
+                value={justificativaReprovarPendencia}
+                onChange={(e) => {
+                  setJustificativaReprovarPendencia(e.target.value);
+                  if (erroReprovarPendencia) setErroReprovarPendencia('');
+                }}
+                placeholder="Descreva o motivo da reprovação desta solicitação..."
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500/10 focus:border-red-500 bg-white text-slate-800"
+              />
+              {erroReprovarPendencia && (
+                <p className="text-[10px] text-red-600 font-bold mt-1">{erroReprovarPendencia}</p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setPendenciaReprovando(null);
+                  setJustificativaReprovarPendencia('');
+                  setErroReprovarPendencia('');
+                }}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 cursor-pointer transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={salvandoPendenciaId === pendenciaReprovando.itemId}
+                onClick={handleConfirmarReprovarPendencia}
+                className="px-4 py-2 rounded-lg text-xs font-extrabold text-white bg-red-600 hover:bg-red-700 shadow-md cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Confirmar Reprovação
               </button>

@@ -162,15 +162,8 @@ export default function Dashboard({
       icon: Layers,
       colorClass: 'border-amber-200 bg-amber-50/70 text-amber-800'
     },
-    { 
-      id: 'gestor_dore' as PerfilUsuario, 
-      label: 'Gestor Atendimento DORE - Aline Davino', 
-      desc: 'Recebe as análises das SREs, visualiza o atendimento inicial e decide qual analista irá avaliar.',
-      icon: User,
-      colorClass: 'border-indigo-200 bg-indigo-50/70 text-indigo-800'
-    },
-    { 
-      id: 'analista_dore' as PerfilUsuario, 
+    {
+      id: 'analista_dore' as PerfilUsuario,
       label: 'Analista de Engenharia DORE - Flavia Borges', 
       desc: 'Avalia checklists documentais de engenharia, emite pareceres técnicos e aprova projetos.', 
       icon: ShieldCheck,
@@ -391,7 +384,7 @@ export default function Dashboard({
           </div>
 
         {/* Filtros específicos de perfil analista/gestor */}
-        {(perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
+        {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
           <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
             <span>Visão focada por atribuição de analistas:</span>
             {(perfilUsuario === 'analista_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
@@ -413,33 +406,6 @@ export default function Dashboard({
                   className={`px-2.5 py-0.5 text-[11px] font-bold rounded-sm transition-all cursor-pointer ${
                     filtroAtribuicao === 'todos'
                       ? 'bg-blue-600 text-white shadow-3xs'
-                      : 'text-slate-600 hover:text-slate-900 bg-transparent'
-                  }`}
-                >
-                  Todas
-                </button>
-              </div>
-            )}
-
-            {(perfilUsuario === 'gestor_dore' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore')) && (
-              <div className="flex bg-slate-200/60 p-0.5 rounded-md border border-slate-250 select-none">
-                <button
-                  type="button"
-                  onClick={() => setFiltroAtribuicao('minhas')}
-                  className={`px-2.5 py-0.5 text-[11px] font-bold rounded-sm transition-all cursor-pointer ${
-                    filtroAtribuicao === 'minhas'
-                      ? 'bg-indigo-600 text-white shadow-3xs'
-                      : 'text-slate-600 hover:text-slate-900 bg-transparent'
-                  }`}
-                >
-                  Aguardando Atribuição
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFiltroAtribuicao('todos')}
-                  className={`px-2.5 py-0.5 text-[11px] font-bold rounded-sm transition-all cursor-pointer ${
-                    filtroAtribuicao === 'todos'
-                      ? 'bg-indigo-600 text-white shadow-3xs'
                       : 'text-slate-600 hover:text-slate-900 bg-transparent'
                   }`}
                 >

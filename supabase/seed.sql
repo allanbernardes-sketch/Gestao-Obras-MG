@@ -14,7 +14,7 @@ insert into perfis (id, codigo, nome_exibicao, descricao) values
 ('1300db43-e724-488e-9f70-3e13632736da','coordenador_regional','Coordenador Regional','Coordenador da SRE — aprova atendimentos antes de seguirem para análise DORE'),
 ('6db11572-143d-4894-a895-3b3e881a949a','diretor_dore','Diretor DORE','Diretor da DORE — acesso equivalente ao administrador do sistema'),
 ('1bba26c8-4838-4348-80e4-7b71a392cbd8','fiscal_obra','Fiscal de Obra','Acompanha a execução física da obra em campo'),
-('ec898e00-1bb5-45ef-a047-0d1b9cf633c2','gestor_dore','Gestor de Atendimento (DORE)','Coordena a fila de análise e distribui processos entre analistas'),
+-- 'gestor_dore' removido — ver [[remocao-perfil-gestor-dore]]. Não faz mais parte do sistema.
 ('9e12c3b9-6c95-4aaf-ba9a-d079b3baf8f9','gestor_paf','Gestor PAF','Responsável pela autorização e acompanhamento financeiro do PAF'),
 ('0c59bf53-114f-4cb0-9e83-5e3e42f0a6d3','tecnico_infra','Técnico de Infraestrutura (SRE)','Técnico lotado na SRE; registra e acompanha solicitações da sua regional')
 on conflict (id) do nothing;
@@ -177,21 +177,25 @@ from auth.users
 where email like '%@educacao.mg.gov.br'
 on conflict (provider_id, provider) do nothing;
 
-insert into usuarios (id, nome, email, perfil_id, capacidade_maxima_iee, ativo)
+-- Aline (id ...003) era 'gestor_dore' (perfil removido — ver [[remocao-perfil-gestor-dore]]) e foi
+-- reatribuída para 'analista_dore', igual ao que foi feito no banco remoto. Aproveitada como
+-- segunda analista de teste, na equipe "Ajuste" (Flavia fica em "Planejamento") — dá cobertura
+-- pras duas equipes tituladas em src/utils/auxiliares.ts (ver [[equipes-analista-auxiliares]]).
+insert into usuarios (id, nome, email, perfil_id, equipe_analise, capacidade_maxima_iee, ativo)
 select u.id::uuid, u.nome, u.email,
-  (select id from perfis where codigo = u.perfil), 10, true
+  (select id from perfis where codigo = u.perfil), u.equipe, 10, true
 from (values
-  ('00000000-0000-0000-0000-000000000001','João Técnico','tecnicoregional@educacao.mg.gov.br','tecnico_infra'),
-  ('00000000-0000-0000-0000-000000000002','Coordenador Teste','coordenador@educacao.mg.gov.br','coordenador_regional'),
-  ('00000000-0000-0000-0000-000000000003','Aline','gestordore@educacao.mg.gov.br','gestor_dore'),
-  ('00000000-0000-0000-0000-000000000004','Flavia Analista Teste','analistadore@educacao.mg.gov.br','analista_dore'),
-  ('00000000-0000-0000-0000-000000000005','Silas','gestorpaf@educacao.mg.gov.br','gestor_paf'),
-  ('00000000-0000-0000-0000-000000000006','Rui','administrativo@educacao.mg.gov.br','administrativo_dore'),
-  ('00000000-0000-0000-0000-000000000007','Diretor Teste','diretor@educacao.mg.gov.br','diretor_dore'),
-  ('00000000-0000-0000-0000-000000000008','Administrador SGO','sofia.viana@educacao.mg.gov.br','admin'),
-  ('00000000-0000-0000-0000-000000000009','Fiscal de Obras Teste','fiscal@educacao.mg.gov.br','fiscal_obra'),
-  ('00000000-0000-0000-0000-000000000010','Técnico SRE A','tecnico.sre-a@educacao.mg.gov.br','tecnico_infra')
-) as u(id, nome, email, perfil)
+  ('00000000-0000-0000-0000-000000000001','João Técnico','tecnicoregional@educacao.mg.gov.br','tecnico_infra', null),
+  ('00000000-0000-0000-0000-000000000002','Coordenador Teste','coordenador@educacao.mg.gov.br','coordenador_regional', null),
+  ('00000000-0000-0000-0000-000000000003','Aline','gestordore@educacao.mg.gov.br','analista_dore', 'Ajuste'),
+  ('00000000-0000-0000-0000-000000000004','Flavia Analista Teste','analistadore@educacao.mg.gov.br','analista_dore', 'Planejamento'),
+  ('00000000-0000-0000-0000-000000000005','Silas','gestorpaf@educacao.mg.gov.br','gestor_paf', null),
+  ('00000000-0000-0000-0000-000000000006','Rui','administrativo@educacao.mg.gov.br','administrativo_dore', null),
+  ('00000000-0000-0000-0000-000000000007','Diretor Teste','diretor@educacao.mg.gov.br','diretor_dore', null),
+  ('00000000-0000-0000-0000-000000000008','Administrador SGO','sofia.viana@educacao.mg.gov.br','admin', null),
+  ('00000000-0000-0000-0000-000000000009','Fiscal de Obras Teste','fiscal@educacao.mg.gov.br','fiscal_obra', null),
+  ('00000000-0000-0000-0000-000000000010','Técnico SRE A','tecnico.sre-a@educacao.mg.gov.br','tecnico_infra', null)
+) as u(id, nome, email, perfil, equipe)
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------

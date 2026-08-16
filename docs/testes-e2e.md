@@ -51,13 +51,18 @@ Decisões importantes:
 | tecnicoregional@educacao.mg.gov.br | tecnico_infra | Metropolitana B |
 | tecnico.sre-a@educacao.mg.gov.br | tecnico_infra | Metropolitana A |
 | coordenador@educacao.mg.gov.br | coordenador_regional | Metropolitana B |
-| gestordore@educacao.mg.gov.br | gestor_dore | — |
-| analistadore@educacao.mg.gov.br | analista_dore | — |
+| gestordore@educacao.mg.gov.br | analista_dore (equipe Ajuste) | — |
+| analistadore@educacao.mg.gov.br | analista_dore (equipe Planejamento) | — |
 | gestorpaf@educacao.mg.gov.br | gestor_paf | — |
 | administrativo@educacao.mg.gov.br | administrativo_dore | — |
 | diretor@educacao.mg.gov.br | diretor_dore | — |
 | fiscal@educacao.mg.gov.br | fiscal_obra | — |
 | sofia.viana@educacao.mg.gov.br | admin | — |
+
+O perfil `gestor_dore` (Gestor de Atendimento) foi removido do sistema — o login
+`gestordore@educacao.mg.gov.br` (Aline) foi reaproveitado como segunda analista de
+teste, na equipe Ajuste, pra dar cobertura às duas equipes tituladas
+(Planejamento/Ajuste) sem precisar de mais um usuário seedado.
 
 ## Migrations e seed
 

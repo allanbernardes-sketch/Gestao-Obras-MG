@@ -23,6 +23,8 @@ import { criarAtendimentoPeloWizard, mostrarTodasAsDemandas, ARQUIVO_PDF } from 
 //   administrativo_dore na Ficha PAF.
 // - A emissão da Ordem de Início não é do administrativo_dore: os campos da
 //   O.I. só são editáveis por tecnico_infra/gestor_paf, então o técnico emite.
+// - O perfil 'gestor_dore' foi removido do sistema (ver [[remocao-perfil-gestor-dore]]):
+//   quem atribui o analista na fila de Atribuição agora é admin/diretor_dore.
 
 test('fluxo completo: do atendimento inicial à execução da obra', async ({ page, dialogos }) => {
   // ── 1. Técnico da SRE B registra o atendimento pelo wizard ────────────────
@@ -53,9 +55,10 @@ test('fluxo completo: do atendimento inicial à execução da obra', async ({ pa
   expect(sol.status_aprovacao_regional).toBe('aprovado');
   expect(sol.coordenador_aprovador).toBe('Coordenador Teste');
 
-  // ── 3. Gestor DORE atribui o analista ─────────────────────────────────────
+  // ── 3. Admin atribui o analista (perfil Gestor de Atendimento foi removido —
+  //      ver [[remocao-perfil-gestor-dore]]; admin/diretor_dore mantêm o mesmo acesso) ──
   const analista = await usuarioPorEmail('analistadore@educacao.mg.gov.br');
-  await trocarPerfil(page, 'gestor_dore');
+  await trocarPerfil(page, 'admin');
   await irParaSubtarefa(page, 'analise_atribuicao');
   const seletorAnalista = page.getByTestId('atribuicao-selecionar-analista');
   await expect(seletorAnalista).toBeVisible();
