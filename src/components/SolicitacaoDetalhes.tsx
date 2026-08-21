@@ -126,6 +126,37 @@ const calcularComplexidade = (valor: number, tipo: string, meses: number) => {
   };
 };
 
+// Anexos exigidos na Ordem de Início, conforme a Classe de complexidade da obra. O Cronograma
+// Físico-Financeiro (item 'a' em toda classe) já tem seu próprio campo legado/box fixo
+// (cronogramaFisicoFinanceiroFileName) — os demais itens ficam em solicitacao.anexosOrdemInicio.
+interface AnexoOrdemInicioReq { key: string; label: string; }
+
+const ANEXOS_ORDEM_INICIO_POR_CLASSE: Record<'I' | 'II' | 'III' | 'IV', AnexoOrdemInicioReq[]> = {
+  I: [
+    { key: 'cronogramaFisicoFinanceiro', label: 'Cronograma Físico-Financeiro' },
+  ],
+  II: [
+    { key: 'cronogramaFisicoFinanceiro', label: 'Cronograma Físico-Financeiro' },
+    { key: 'planoAtaque', label: 'Plano de Ataque' },
+  ],
+  III: [
+    { key: 'cronogramaFisicoFinanceiro', label: 'Cronograma Físico-Financeiro' },
+    { key: 'planoAtaque', label: 'Plano de Ataque' },
+    { key: 'cronogramaExecutivo', label: 'Cronograma Executivo' },
+    { key: 'matrizRiscos', label: 'Matriz Simplificada de Riscos' },
+    { key: 'diarioObras', label: 'Diário de Obras' },
+  ],
+  IV: [
+    { key: 'cronogramaFisicoFinanceiro', label: 'Cronograma Físico-Financeiro' },
+    { key: 'planoAtaque', label: 'Plano de Ataque' },
+    { key: 'cronogramaExecutivo', label: 'Cronograma Executivo' },
+    { key: 'curvaS', label: 'Curva Físico-Financeira (Curva S)' },
+    { key: 'layoutCanteiro', label: 'Layout de Canteiro' },
+    { key: 'planoQualidade', label: 'Plano de Qualidade' },
+    { key: 'matrizRiscos', label: 'Matriz Simplificada de Riscos' },
+  ],
+};
+
 interface SolicitacaoDetalhesProps {
   solicitacao: Solicitacao;
   perfilUsuario: PerfilUsuario;
@@ -1029,6 +1060,18 @@ ${totalPendencias > 0
     dataOrdemInicioInput < solicitacao.contratoDataAssinatura
   );
   const complexidadeCalculada = calcularComplexidade(parsedValor, tipoObraInput, parsedMeses);
+  // Anexos extras (além do Cronograma) exigidos pela Classe atual e ainda não anexados —
+  // usado para liberar o botão "Emitir Ordem de Início" e para o checklist dinâmico abaixo.
+  const anexosClasseFaltando = ANEXOS_ORDEM_INICIO_POR_CLASSE[complexidadeCalculada.classe].filter(
+    item => item.key !== 'cronogramaFisicoFinanceiro' && !solicitacao.anexosOrdemInicio?.[item.key]
+  );
+  const ordemInicioCompleta = !!(
+    solicitacao.dataOrdemInicio &&
+    solicitacao.previsaoTerminoObra &&
+    solicitacao.valorHomologadoContratacao &&
+    solicitacao.cronogramaFisicoFinanceiroFileName &&
+    anexosClasseFaltando.length === 0
+  );
 
   // Keep state in sync with parent updates
   useEffect(() => {
@@ -1148,6 +1191,30 @@ ${totalPendencias > 0
     });
   };
 
+  // Anexos extras da Ordem de Início cuja exigência varia pela Classe da obra (Plano de Ataque,
+  // Cronograma Executivo, Curva S, Layout de Canteiro, Plano de Qualidade, Matriz de Riscos,
+  // Diário de Obras) — mesmo padrão do Cronograma acima, agrupados em anexosOrdemInicio.
+  const handleAnexoOrdemInicioUpload = (key: string, label: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const sizeFormatted = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+    onUpdate({
+      ...solicitacao,
+      anexosOrdemInicio: {
+        ...(solicitacao.anexosOrdemInicio || {}),
+        [key]: { fileName: file.name, fileSize: sizeFormatted, uploadedAt: new Date().toISOString().split('T')[0] }
+      }
+    });
+    alert(`${label} anexado com sucesso!`);
+  };
+
+  const removerAnexoOrdemInicio = (key: string) => {
+    const atualizado = { ...(solicitacao.anexosOrdemInicio || {}) };
+    delete atualizado[key];
+    onUpdate({ ...solicitacao, anexosOrdemInicio: atualizado });
+  };
+
   const salvarOrdemInicio = (e: React.FormEvent) => {
     e.preventDefault();
     if (ordemInicioInvalida) {
@@ -1179,8 +1246,15 @@ ${totalPendencias > 0
   };
 
   const emitirOrdemEIniciarObra = () => {
-    if (!solicitacao.dataOrdemInicio || !solicitacao.previsaoTerminoObra || !solicitacao.valorHomologadoContratacao || !solicitacao.cronogramaFisicoFinanceiroFileName) {
-      alert('Por favor registre a Data de Início, Previsão de Término, Valor Homologado de Contratação e anexe o Cronograma Físico-Financeiro antes de iniciar a obra.');
+    if (!ordemInicioCompleta) {
+      const faltando = [
+        !solicitacao.dataOrdemInicio && 'Data de Início',
+        !solicitacao.previsaoTerminoObra && 'Previsão de Término',
+        !solicitacao.valorHomologadoContratacao && 'Valor Homologado de Contratação',
+        !solicitacao.cronogramaFisicoFinanceiroFileName && 'Cronograma Físico-Financeiro',
+        ...anexosClasseFaltando.map(item => item.label),
+      ].filter(Boolean);
+      alert(`Por favor registre/anexe: ${faltando.join(', ')} antes de iniciar a obra (exigências da Classe ${complexidadeCalculada.classe}).`);
       return;
     }
 
@@ -1233,6 +1307,7 @@ ${totalPendencias > 0
       cronogramaFisicoFinanceiroFileName: solicitacao.cronogramaFisicoFinanceiroFileName,
       cronogramaFisicoFinanceiroFileSize: solicitacao.cronogramaFisicoFinanceiroFileSize,
       cronogramaFisicoFinanceiroUploadedAt: solicitacao.cronogramaFisicoFinanceiroUploadedAt,
+      anexosOrdemInicio: solicitacao.anexosOrdemInicio,
       fiscalObraAtribuido: solicitacao.fiscalObraAtribuido,
       duracaoObraMeses: solicitacao.duracaoObraMeses,
       classeObra: solicitacao.classeObra,
@@ -1262,6 +1337,7 @@ ${totalPendencias > 0
       cronogramaFisicoFinanceiroFileName: undefined,
       cronogramaFisicoFinanceiroFileSize: undefined,
       cronogramaFisicoFinanceiroUploadedAt: undefined,
+      anexosOrdemInicio: undefined,
       fiscalObraAtribuido: undefined,
       fiscalObraAtribuidoId: undefined,
       duracaoObraMeses: undefined,
@@ -3154,6 +3230,81 @@ ${totalPendencias > 0
                       )}
                     </div>
 
+                    {/* ANEXOS ADICIONAIS EXIGIDOS PELA CLASSE DA OBRA */}
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                          Anexos Adicionais Exigidos — Classe {complexidadeCalculada.classe}
+                        </label>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${complexidadeCalculada.colorClass}`}>
+                          {complexidadeCalculada.classificacao}
+                        </span>
+                      </div>
+                      {ANEXOS_ORDEM_INICIO_POR_CLASSE[complexidadeCalculada.classe].filter(item => item.key !== 'cronogramaFisicoFinanceiro').length === 0 ? (
+                        <p className="text-[10px] text-neutral-400 font-sans italic">
+                          Nenhum anexo adicional exigido para a Classe I — apenas o Cronograma Físico-Financeiro acima.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {ANEXOS_ORDEM_INICIO_POR_CLASSE[complexidadeCalculada.classe]
+                            .filter(item => item.key !== 'cronogramaFisicoFinanceiro')
+                            .map(item => {
+                              const anexo = solicitacao.anexosOrdemInicio?.[item.key];
+                              const podeEditar = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore';
+                              return (
+                                <div key={item.key} className="space-y-1">
+                                  <span className="block text-[10px] font-bold text-neutral-500">{item.label} *</span>
+                                  {anexo ? (
+                                    <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                        <div className="truncate">
+                                          <span className="block text-[11px] font-bold text-neutral-800 truncate break-all">{anexo.fileName}</span>
+                                          <span className="text-[9px] text-neutral-400 font-mono block">{anexo.fileSize} • {anexo.uploadedAt}</span>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDownloadDocument(anexo.fileName, item.label)}
+                                          className="text-blue-600 hover:text-blue-800 text-[10px] font-bold px-1.5 py-1 hover:bg-blue-50 rounded transition-all cursor-pointer"
+                                        >
+                                          Baixar
+                                        </button>
+                                        {podeEditar && (
+                                          <button
+                                            type="button"
+                                            onClick={() => removerAnexoOrdemInicio(item.key)}
+                                            className="px-1.5 py-1 text-[10px] text-rose-600 hover:bg-rose-50 rounded-md font-bold transition-colors cursor-pointer"
+                                          >
+                                            Remover
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <label className={`border-2 border-dashed rounded-xl p-3 text-center transition-all flex flex-col items-center ${
+                                      podeEditar ? 'border-neutral-300 hover:border-neutral-400 hover:bg-neutral-50/50 cursor-pointer' : 'border-neutral-200 bg-neutral-50/25 cursor-not-allowed'
+                                    }`}>
+                                      <UploadCloud className="w-5 h-5 text-neutral-400 mb-0.5" />
+                                      <span className="block text-[10.5px] font-bold text-neutral-700">Anexar {item.label.toLowerCase()}</span>
+                                      <span className="text-[9px] text-neutral-400 block mt-0.5">.pdf, .xls, .xlsx, .doc, .docx</span>
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.xls,.xlsx,.doc,.docx"
+                                        className="hidden"
+                                        disabled={!podeEditar}
+                                        onChange={(e) => handleAnexoOrdemInicioUpload(item.key, item.label, e)}
+                                      />
+                                    </label>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="pt-2 flex justify-end gap-2.5">
                       {(perfilUsuario === 'tecnico_infra' || (perfilUsuario === 'gestor_paf' || (perfilUsuario === 'admin' || perfilUsuario === 'diretor_dore'))) && (
                         <button
@@ -3170,9 +3321,9 @@ ${totalPendencias > 0
                           data-testid="botao-emitir-ordem-inicio"
                           type="button"
                           onClick={emitirOrdemEIniciarObra}
-                          disabled={!solicitacao.dataOrdemInicio || !solicitacao.previsaoTerminoObra || !solicitacao.valorHomologadoContratacao || !solicitacao.cronogramaFisicoFinanceiroFileName}
+                          disabled={!ordemInicioCompleta}
                           className={`px-4 py-1.5 rounded-lg text-xs font-black shadow-xs transition-all flex items-center gap-1.5 ${
-                            solicitacao.dataOrdemInicio && solicitacao.previsaoTerminoObra && solicitacao.valorHomologadoContratacao && solicitacao.cronogramaFisicoFinanceiroFileName
+                            ordemInicioCompleta
                               ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs'
                               : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                           }`}

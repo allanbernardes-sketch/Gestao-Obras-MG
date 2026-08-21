@@ -66,6 +66,11 @@ export interface Medicao {
   porcentagemFisica?: number;
   relatorioFiscalizacaoFileName?: string;
   boletimMedicaoFileName?: string;
+  // Anexados após a homologação da medição (public.documentos, categoria medicao_*)
+  comprovantePagamentoDocId?: string;
+  comprovantePagamentoFileName?: string;
+  notaFiscalDocId?: string;
+  notaFiscalFileName?: string;
 }
 
 export interface Aditivo {
@@ -260,6 +265,9 @@ export interface Solicitacao {
     cronogramaFisicoFinanceiroFileName?: string;
     cronogramaFisicoFinanceiroFileSize?: string;
     cronogramaFisicoFinanceiroUploadedAt?: string;
+    // Anexos adicionais da Ordem de Início cuja exigência varia pela Classe (I–IV) da obra —
+    // ver ANEXOS_ORDEM_INICIO_POR_CLASSE em SolicitacaoDetalhes.tsx.
+    anexosOrdemInicio?: Record<string, { fileName: string; fileSize?: string; uploadedAt?: string }>;
     fiscalObraAtribuido?: string;
     duracaoObraMeses?: number;
     classeObra?: string;
@@ -318,6 +326,10 @@ export interface Solicitacao {
   cronogramaFisicoFinanceiroFileName?: string;
   cronogramaFisicoFinanceiroFileSize?: string;
   cronogramaFisicoFinanceiroUploadedAt?: string;
+  // Anexos adicionais da Ordem de Início cuja exigência varia pela Classe (I–IV) da obra —
+  // ver ANEXOS_ORDEM_INICIO_POR_CLASSE em SolicitacaoDetalhes.tsx. Cronograma Físico-Financeiro
+  // continua nos campos legados acima (item 'a', exigido em toda classe).
+  anexosOrdemInicio?: Record<string, { fileName: string; fileSize?: string; uploadedAt?: string }>;
   ataOrdemInicioFileName?: string;
   ataOrdemInicioFileSize?: string;
   ataOrdemInicioUploadedAt?: string;
