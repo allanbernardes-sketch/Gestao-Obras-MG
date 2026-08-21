@@ -3401,9 +3401,11 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                       </p>
                     </div>
                   </div>
-                  {(emp.ataOrdemInicioFileName || emp.cronogramaFisicoFinanceiroFileName || (emp.outrosAnexosOrdemInicio || []).length > 0) && (
+                  {(emp.ataOrdemInicioFileName || emp.cronogramaFisicoFinanceiroFileName || Object.keys(emp.anexosOrdemInicio || {}).length > 0 || (emp.outrosAnexosOrdemInicio || []).length > 0) && (
                     <div className="pt-2 border-t border-slate-200 space-y-1.5">
-                      <span className="text-[9px] uppercase font-bold text-slate-400 block">Documentos Anexados</span>
+                      <span className="text-[9px] uppercase font-bold text-slate-400 block">
+                        Documentos Anexados{emp.classeObra ? ` (${emp.classeObra})` : ''}
+                      </span>
                       <div className="flex flex-wrap gap-2">
                         {emp.ataOrdemInicioFileName && (
                           <span className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
@@ -3419,6 +3421,13 @@ function SubAcompanhamento({ currentSol, onUpdate, somenteLeitura = false }: { c
                             {emp.cronogramaFisicoFinanceiroFileSize && <span className="text-slate-400 ml-0.5">({emp.cronogramaFisicoFinanceiroFileSize})</span>}
                           </span>
                         )}
+                        {Object.entries(emp.anexosOrdemInicio || {}).map(([key, a]) => (
+                          <span key={key} className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
+                            <FileText className="w-3 h-3 text-purple-400 shrink-0" />
+                            {a.fileName}
+                            {a.fileSize && <span className="text-slate-400 ml-0.5">({a.fileSize})</span>}
+                          </span>
+                        ))}
                         {(emp.outrosAnexosOrdemInicio || []).filter(a => a.fileName).map(a => (
                           <span key={a.id} className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg font-mono">
                             <FileText className="w-3 h-3 text-emerald-400 shrink-0" />
@@ -4391,6 +4400,75 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
     setAttemptedSubmit(false);
   };
 
+  // Anexa (ou substitui) o Comprovante de Pagamento ou a Nota Fiscal de uma medição já
+  // homologada. Diferente do relatório/boletim exigidos no ato do registro, estes chegam
+  // depois — o pagamento só ocorre após a medição já estar lançada.
+  const anexarDocumentoMedicao = async (medicaoId: string, tipo: 'comprovante' | 'notaFiscal', file: File) => {
+    setErrorMessage(null);
+    const categoria = tipo === 'comprovante' ? 'medicao_comprovante_pagamento' : 'medicao_nota_fiscal';
+    const nomeLogico = tipo === 'comprovante' ? 'Comprovante de Pagamento' : 'Nota Fiscal';
+    const medicaoAtual = (currentSol.medicoes || []).find(m => m.id === medicaoId);
+    const docIdExistente = tipo === 'comprovante' ? medicaoAtual?.comprovantePagamentoDocId : medicaoAtual?.notaFiscalDocId;
+
+    let dbId = currentSol._dbId;
+    if (!dbId) {
+      const { data: solRow, error: solError } = await supabase
+        .from('solicitacoes')
+        .select('id')
+        .eq('codigo_sgo', currentSol.id)
+        .single();
+      if (solError || !solRow) {
+        setErrorMessage('Não foi possível localizar o registro da obra no banco para anexar o documento.');
+        return;
+      }
+      dbId = solRow.id;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    const payload = {
+      solicitacao_id: dbId,
+      medicao_id: medicaoId,
+      categoria,
+      nome_logico: nomeLogico,
+      obrigatorio: false,
+      status: 'aprovado' as const,
+      file_name: file.name,
+      file_type: file.type || null,
+      file_size_bytes: file.size,
+      uploaded_by: userData.user?.id ?? null,
+      uploaded_at: new Date().toISOString(),
+    };
+
+    let docId = docIdExistente;
+    if (docIdExistente) {
+      const { error } = await supabase.from('documentos').update(payload).eq('id', docIdExistente);
+      if (error) {
+        console.error('Erro ao atualizar documento da medição:', error);
+        setErrorMessage('Erro ao anexar o arquivo. Tente novamente.');
+        return;
+      }
+    } else {
+      const { data, error } = await supabase.from('documentos').insert(payload).select('id').single();
+      if (error || !data) {
+        console.error('Erro ao anexar documento da medição:', error);
+        setErrorMessage('Erro ao anexar o arquivo. Tente novamente.');
+        return;
+      }
+      docId = data.id;
+    }
+
+    const updated = {
+      ...currentSol,
+      medicoes: (currentSol.medicoes || []).map(m => {
+        if (m.id !== medicaoId) return m;
+        return tipo === 'comprovante'
+          ? { ...m, comprovantePagamentoDocId: docId, comprovantePagamentoFileName: file.name }
+          : { ...m, notaFiscalDocId: docId, notaFiscalFileName: file.name };
+      }),
+    };
+    onUpdate(updated);
+  };
+
   const deletarMedicao = async (id: string) => {
     const { error } = await supabase.from('medicoes').delete().eq('id', id);
     if (error) {
@@ -4593,6 +4671,50 @@ function SubMedicoes({ currentSol, onUpdate, somenteLeitura = false }: { current
                         <AlertCircle className="w-3.5 h-3.5 shrink-0" /><span>Boletim de medição ausente</span>
                       </div>
                     )}
+                  </div>
+
+                  {/* Anexos pós-homologação: Comprovante de Pagamento e Nota Fiscal */}
+                  <div className="flex flex-wrap gap-2 pt-2.5 mt-1 border-t border-slate-150">
+                    {([
+                      { tipo: 'comprovante' as const, label: 'Comprovante de Pagamento', fileName: m.comprovantePagamentoFileName },
+                      { tipo: 'notaFiscal' as const, label: 'Nota Fiscal', fileName: m.notaFiscalFileName },
+                    ]).map(({ tipo, label, fileName }) => (
+                      fileName ? (
+                        <div key={tipo} className="flex items-center gap-1.5 bg-emerald-50/65 px-2.5 py-1 rounded-lg border border-emerald-105 text-[10px] text-emerald-700">
+                          <FileCheck className="w-3.5 h-3.5 shrink-0 text-emerald-550" />
+                          <span className="font-semibold block truncate max-w-[150px]" title={fileName}>{fileName}</span>
+                          {!somenteLeitura && (
+                            <label className="cursor-pointer text-emerald-700 hover:text-emerald-900 underline text-[9px] font-bold ml-0.5 shrink-0">
+                              Trocar
+                              <input
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) anexarDocumentoMedicao(m.id, tipo, e.target.files[0]);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+                      ) : somenteLeitura ? (
+                        <div key={tipo} className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 text-[10px] text-slate-400">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" /><span>{label} ausente</span>
+                        </div>
+                      ) : (
+                        <label key={tipo} className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-dashed border-slate-300 text-[10px] text-slate-500 cursor-pointer hover:bg-slate-50 hover:border-slate-400 transition-colors">
+                          <FileUp className="w-3.5 h-3.5 shrink-0" /><span className="font-semibold">Anexar {label}</span>
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) anexarDocumentoMedicao(m.id, tipo, e.target.files[0]);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      )
+                    ))}
                   </div>
                 </div>
               );

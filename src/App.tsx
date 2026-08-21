@@ -844,25 +844,54 @@ export default function App() {
                 porSolicitacaoMed.set(row.solicitacao_id, lista);
               });
 
+              // Carrega Comprovante de Pagamento / Nota Fiscal anexados a cada medição
+              const medicaoIds = (medicoesData as any[]).map(r => r.id);
+              const anexosPorMedicao = new Map<string, any[]>();
+              if (medicaoIds.length > 0) {
+                const { data: anexosData, error: anexosError } = await supabase
+                  .from('documentos')
+                  .select('id, medicao_id, categoria, file_name')
+                  .in('medicao_id', medicaoIds)
+                  .in('categoria', ['medicao_comprovante_pagamento', 'medicao_nota_fiscal']);
+                if (anexosError) {
+                  console.error('Erro ao carregar anexos das medições:', anexosError);
+                } else if (anexosData) {
+                  (anexosData as any[]).forEach((row) => {
+                    const lista = anexosPorMedicao.get(row.medicao_id) ?? [];
+                    lista.push(row);
+                    anexosPorMedicao.set(row.medicao_id, lista);
+                  });
+                }
+              }
+
               comMedicoes = comHistorico.map(sol => {
                 const linhas = sol._dbId ? porSolicitacaoMed.get(sol._dbId) : undefined;
                 if (!linhas || linhas.length === 0) return sol;
                 return {
                   ...sol,
-                  medicoes: linhas.map((row: any): Medicao => ({
-                    id: row.id,
-                    data: row.data_medicao ? String(row.data_medicao) : '',
-                    valor: row.valor,
-                    porcentagem: row.porcentagem ?? 0,
-                    descricao: row.descricao ?? '',
-                    empresaNome: row.empresa_nome ?? undefined,
-                    empresaCnpj: row.empresa_cnpj ?? undefined,
-                    numeroMedicao: row.numero_medicao_display ?? String(row.numero_medicao),
-                    periodoMedicao: row.periodo_medicao ?? undefined,
-                    responsavelMedicao: row.responsavel_medicao ?? undefined,
-                    observacoes: row.observacao ?? undefined,
-                    porcentagemFisica: row.porcentagem_fisica ?? undefined,
-                  })),
+                  medicoes: linhas.map((row: any): Medicao => {
+                    const anexos = anexosPorMedicao.get(row.id) ?? [];
+                    const comprovante = anexos.find(a => a.categoria === 'medicao_comprovante_pagamento');
+                    const notaFiscal = anexos.find(a => a.categoria === 'medicao_nota_fiscal');
+                    return {
+                      id: row.id,
+                      data: row.data_medicao ? String(row.data_medicao) : '',
+                      valor: row.valor,
+                      porcentagem: row.porcentagem ?? 0,
+                      descricao: row.descricao ?? '',
+                      empresaNome: row.empresa_nome ?? undefined,
+                      empresaCnpj: row.empresa_cnpj ?? undefined,
+                      numeroMedicao: row.numero_medicao_display ?? String(row.numero_medicao),
+                      periodoMedicao: row.periodo_medicao ?? undefined,
+                      responsavelMedicao: row.responsavel_medicao ?? undefined,
+                      observacoes: row.observacao ?? undefined,
+                      porcentagemFisica: row.porcentagem_fisica ?? undefined,
+                      comprovantePagamentoDocId: comprovante?.id,
+                      comprovantePagamentoFileName: comprovante?.file_name ?? undefined,
+                      notaFiscalDocId: notaFiscal?.id,
+                      notaFiscalFileName: notaFiscal?.file_name ?? undefined,
+                    };
+                  }),
                 };
               });
             }
