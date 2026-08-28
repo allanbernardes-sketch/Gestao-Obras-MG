@@ -14,7 +14,7 @@ import VisaoGeralDashboard from './components/VisaoGeralDashboard';
 import SolicitacaoDetalhes from './components/SolicitacaoDetalhes';
 import NovaSolicitacaoModal from './components/NovaSolicitacaoModal';
 import EditarSolicitacaoModal from './components/EditarSolicitacaoModal';
-import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft, FileCheck, DollarSign, Clock, AlertTriangle } from 'lucide-react';
+import { HardHat, Layers, ShieldCheck, Building2, HelpCircle, ChevronDown, LayoutGrid, Users, Lock, Coins, UserPlus, FileText, ClipboardList, ClipboardCheck, BookOpen, Key, Landmark, CheckCircle, Calculator, Building, UploadCloud, Plus, Search, X, Wrench, Ticket, Bell, FileClock, Navigation, Package, BarChart2, Database, FolderOpen, RefreshCw, Filter, LogOut, ArrowLeft, FileCheck, DollarSign, Clock, AlertTriangle } from 'lucide-react';
 import LoginScreen from './components/LoginScreen';
 import KanbanViews from './components/KanbanViews';
 import { NovoAtendimentoPanel, AtribuicaoPanel, AtribuicaoHistoricoPanel, AprovacaoRegionalPanel } from './components/GestaoObrasViews';
@@ -25,6 +25,11 @@ import CentralNavegacaoObras from './components/CentralNavegacaoObras';
 import ValidacaoContratual from './components/ValidacaoContratual';
 import OrcamentoModule from './components/orcamento/OrcamentoModule';
 import PatrimonioModule from './components/patrimonio/PatrimonioModule';
+import RolManutencaoPredialView from './components/patrimonio/RolManutencaoPredialView';
+import NovoChamadoForm from './components/chamados/NovoChamadoForm';
+import MeusChamadosView from './components/chamados/MeusChamadosView';
+import FilaChamadosCoordenadorView from './components/chamados/FilaChamadosCoordenadorView';
+import { useEscolas } from './hooks/useEscolas';
 import { supabase } from './lib/supabase';
 import {
   resolverUsuarioIdPorNome,
@@ -44,6 +49,8 @@ const PERFIS_SELECIONAVEIS: { value: PerfilUsuario; label: string; regional: boo
   { value: 'administrativo_dore', label: 'Administrativo (DORE)', regional: false },
   { value: 'gestor_paf', label: 'Subsecretário de Administração (PAF)', regional: false },
   { value: 'diretor_dore', label: 'Diretor (DORE)', regional: false },
+  // Vínculo é por escola (não por SRE) — tratado à parte via usuario_escolas. Ver [[modulo-chamados]].
+  { value: 'diretor_escola', label: 'Diretor(a) de Escola', regional: false },
   { value: 'admin', label: 'Administrador do Sistema', regional: false },
 ];
 
@@ -167,7 +174,8 @@ export default function App() {
               perfilUsuario === 'analista_dore' ? 'Analista de Engenharia DORE' :
               perfilUsuario === 'gestor_paf' ? 'Subsecretário de Administração' :
               perfilUsuario === 'administrativo_dore' ? 'Administrativo DORE' :
-              perfilUsuario === 'diretor_dore' ? 'Diretor DORE' : 'Operador',
+              perfilUsuario === 'diretor_dore' ? 'Diretor DORE' :
+              perfilUsuario === 'diretor_escola' ? 'Diretor(a) de Escola' : 'Operador',
       acao,
       detalhe,
       tipo,
@@ -346,6 +354,10 @@ export default function App() {
   const [usrSituacaoFuncional, setUsrSituacaoFuncional] = useState<'Ativo' | 'Férias' | 'Licença' | 'Afastado' | 'Desligado'>('Ativo');
   const [usrPerfil, setUsrPerfil] = useState<PerfilUsuario>('tecnico_infra');
   const [usrRegionais, setUsrRegionais] = useState<string[]>(['SRE Metropolitana A']);
+  // Escola(s) vinculada(s) — só para perfil diretor_escola. Ver [[modulo-chamados]].
+  const [usrEscolasVinculadas, setUsrEscolasVinculadas] = useState<{ escolaId: string; codesc: string; nome: string }[]>([]);
+  const [usrEscolaBusca, setUsrEscolaBusca] = useState('');
+  const { escolas: escolasParaCadastro } = useEscolas();
   // Equipe de especialidade — obrigatória quando usrPerfil === 'analista_dore'. Ver [[equipes-analista-auxiliares]].
   const [usrEquipe, setUsrEquipe] = useState<EquipeAnalista | ''>('');
 
@@ -377,6 +389,8 @@ export default function App() {
     setUsrSituacaoFuncional('Ativo');
     setUsrPerfil('tecnico_infra');
     setUsrRegionais(['SRE Metropolitana A']);
+    setUsrEscolasVinculadas([]);
+    setUsrEscolaBusca('');
     setUsrEquipe('');
     setUsrIdEmEdicao(null);
     setShowCadastroUsuarioModal(false);
@@ -396,6 +410,8 @@ export default function App() {
     setUsrRegionais(u.tipoVinculo === 'regional'
       ? (u.regionais?.length ? u.regionais : (u.departamento ? [u.departamento] : ['SRE Metropolitana A']))
       : ['SRE Metropolitana A']);
+    setUsrEscolasVinculadas(u.escolasVinculadas ?? []);
+    setUsrEscolaBusca('');
     setUsrEquipe((u.equipeAnalise as EquipeAnalista) || '');
     setShowCadastroUsuarioModal(true);
   };
@@ -409,6 +425,7 @@ export default function App() {
         case 'gestor_paf': return 'Subsecretário de Administração';
         case 'administrativo_dore': return 'Administrativo DORE';
         case 'diretor_dore': return 'Diretor DORE';
+        case 'diretor_escola': return 'Diretor(a) de Escola';
         case 'admin': return 'Administrador do Sistema';
         default: return perfil;
       }
@@ -469,6 +486,10 @@ export default function App() {
       alert('Selecione a equipe de especialidade do Analista de Engenharia (Planejamento, Ajuste, Elétrica, Arquitetura ou PSCIP).');
       return;
     }
+    if (usrPerfil === 'diretor_escola' && usrEscolasVinculadas.length === 0) {
+      alert('Selecione ao menos uma escola vinculada ao Diretor de Escola.');
+      return;
+    }
 
     const isRegional = usrPerfil === 'tecnico_infra' || usrPerfil === 'coordenador_regional';
     const departamento = isRegional
@@ -481,6 +502,7 @@ export default function App() {
       perfil: usrPerfil,
       departamento,
       regionais: isRegional ? usrRegionais : undefined,
+      escolasVinculadas: usrPerfil === 'diretor_escola' ? usrEscolasVinculadas : undefined,
       equipeAnalise: usrPerfil === 'analista_dore' ? (usrEquipe || undefined) : undefined,
       cargo: usrCargo,
       formacao: usrFormacao,
@@ -506,6 +528,21 @@ export default function App() {
           if (erroPersist) {
             console.error('Erro ao gravar perfil/equipe no Supabase:', erroPersist);
             alert('Erro ao gravar o perfil/equipe no banco de dados. As demais alterações do cadastro foram salvas só nesta sessão.');
+          }
+        }
+        // Vínculo diretor ↔ escola (replace-set: remove os antigos, insere os atuais). Ver [[modulo-chamados]].
+        if (usrPerfil === 'diretor_escola') {
+          const { error: erroRemoverVinculo } = await supabase.from('usuario_escolas').delete().eq('usuario_id', usrIdEmEdicao);
+          if (erroRemoverVinculo) {
+            console.error('Erro ao limpar vínculos de escola:', erroRemoverVinculo);
+          } else if (usrEscolasVinculadas.length > 0) {
+            const { error: erroInserirVinculo } = await supabase.from('usuario_escolas').insert(
+              usrEscolasVinculadas.map(ev => ({ usuario_id: usrIdEmEdicao, escola_id: ev.escolaId }))
+            );
+            if (erroInserirVinculo) {
+              console.error('Erro ao gravar vínculo de escola no Supabase:', erroInserirVinculo);
+              alert('Erro ao gravar a escola vinculada no banco de dados. As demais alterações do cadastro foram salvas só nesta sessão.');
+            }
           }
         }
       }
@@ -1544,7 +1581,7 @@ export default function App() {
     async function carregarUsuarios() {
       const { data: usuariosData, error: usuariosError } = await supabase
         .from('usuarios')
-        .select('id, nome, email, perfil_id, equipe_analise, perfis(codigo), usuario_regionais(regionais_sre(nome))')
+        .select('id, nome, email, perfil_id, equipe_analise, perfis(codigo), usuario_regionais(regionais_sre(nome)), usuario_escolas(escolas(id, codesc, nome))')
         .eq('ativo', true);
 
       if (usuariosError) {
@@ -1557,6 +1594,10 @@ export default function App() {
           const regionais = (u.usuario_regionais ?? [])
             .map((ur: any) => ur.regionais_sre?.nome)
             .filter(Boolean) as string[];
+          // Escola(s) vinculada(s) — só relevante para perfil diretor_escola. Ver [[modulo-chamados]].
+          const escolasVinculadas = (u.usuario_escolas ?? [])
+            .map((ue: any) => ue.escolas ? { escolaId: ue.escolas.id, codesc: ue.escolas.codesc, nome: ue.escolas.nome } : null)
+            .filter(Boolean) as { escolaId: string; codesc: string; nome: string }[];
           return {
             id: u.id,
             nome: u.nome,
@@ -1564,6 +1605,7 @@ export default function App() {
             perfil: u.perfis?.codigo ?? '',
             departamento: regionais[0] ?? '',
             regionais,
+            escolasVinculadas,
             equipeAnalise: u.equipe_analise ?? undefined,
           };
         }));
@@ -1589,10 +1631,17 @@ export default function App() {
         .eq('id', userId)
         .single();
       if (usuario) {
-        setPerfilUsuario((usuario.perfis as unknown as { codigo: string }).codigo as PerfilUsuario);
+        const perfil = (usuario.perfis as unknown as { codigo: string }).codigo as PerfilUsuario;
+        setPerfilUsuario(perfil);
         setNomeUsuario(usuario.nome as string);
         setIdUsuarioLogado(userId);
         setLogado(true);
+        // Mesmo redirecionamento de handleLogin — necessário aqui pois a restauração de sessão
+        // não passa por handleLogin. Ver [[modulo-chamados]].
+        if (perfil === 'diretor_escola') {
+          setActiveModule('abertura_chamados');
+          setActiveSubTask('chamados_novo');
+        }
       }
     }
 
@@ -2157,6 +2206,12 @@ export default function App() {
     setNomeUsuario(nome);
     setIdUsuarioLogado(usuarioId);
     setLogado(true);
+    // diretor_escola só enxerga o módulo de Chamados — 'gestao_obras' (default) fica bloqueado
+    // para esse perfil. Ver [[modulo-chamados]].
+    if (perfil === 'diretor_escola') {
+      setActiveModule('abertura_chamados');
+      setActiveSubTask('chamados_novo');
+    }
   };
 
   const handleLogout = () => {
@@ -2326,6 +2381,7 @@ export default function App() {
                   {perfilUsuario === 'gestor_paf' && 'Subsecretário de Administração'}
                   {perfilUsuario === 'administrativo_dore' && 'Administrativo DORE'}
                   {perfilUsuario === 'diretor_dore' && 'Diretor DORE'}
+                  {perfilUsuario === 'diretor_escola' && 'Diretor(a) de Escola'}
                 </p>
               </div>
             </div>
@@ -2353,25 +2409,32 @@ export default function App() {
             Módulos
           </div>
 
-          {/* 1. GESTÃO DE OBRAS */}
-          <button
-            data-testid="modulo-gestao-obras"
-            type="button"
-            title="Gestão de Obras SGO"
-            onClick={() => {
-              setActiveModule('gestao_obras');
-              setActiveSubTask('visao_geral');
-              setIdSolicitacaoSelecionada(null);
-            }}
-            className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border cursor-pointer ${
-              activeModule === 'gestao_obras'
-                ? 'bg-blue-600 text-white border-blue-500 shadow-md'
-                : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white'
-            }`}
-          >
-            <HardHat className="w-5 h-5 flex-shrink-0" />
-            <span className="text-[8px] font-bold tracking-tight">Obras</span>
-          </button>
+          {/* 1. GESTÃO DE OBRAS — diretor_escola só enxerga o módulo de Chamados. Ver [[modulo-chamados]]. */}
+          {(() => {
+            const bloqueado = perfilUsuario === 'diretor_escola';
+            return (
+              <button
+                data-testid="modulo-gestao-obras"
+                type="button"
+                title={bloqueado ? 'Acesso restrito para este perfil' : 'Gestão de Obras SGO'}
+                onClick={bloqueado ? undefined : () => {
+                  setActiveModule('gestao_obras');
+                  setActiveSubTask('visao_geral');
+                  setIdSolicitacaoSelecionada(null);
+                }}
+                className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 group relative border ${
+                  bloqueado
+                    ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
+                    : activeModule === 'gestao_obras'
+                      ? 'bg-blue-600 text-white border-blue-500 shadow-md cursor-pointer'
+                      : 'bg-[#1c3870] text-slate-100 border-[#26417a]/40 hover:bg-[#1a2f5c] hover:text-white cursor-pointer'
+                }`}
+              >
+                <HardHat className="w-5 h-5 flex-shrink-0" />
+                <span className="text-[8px] font-bold tracking-tight">Obras</span>
+              </button>
+            );
+          })()}
 
           {/* 2. SEGURANÇA — acesso restrito: só Diretor DORE, Administrativo DORE e Admin */}
           {(() => {
@@ -2398,7 +2461,7 @@ export default function App() {
 
           {/* 3. ORÇAMENTO */}
           {(() => {
-            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
+            const bloqueado = perfilUsuario === 'administrativo_dore' || perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf' || perfilUsuario === 'diretor_escola';
             return (
               <button
                 data-testid="modulo-orcamento"
@@ -2419,15 +2482,21 @@ export default function App() {
             );
           })()}
 
-          {/* 4. IMÓVEIS */}
+          {/* 4. IMÓVEIS — diretor_escola só enxerga o Rol de Manutenção Predial (editável) da própria
+               escola; coordenador_regional enxerga o mesmo Rol em modo só leitura das escolas da SRE
+               dele; admin/diretor_dore continuam com as telas completas + o Rol em leitura. Ver [[modulo-chamados]]. */}
           {(() => {
-            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
+            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 data-testid="modulo-imoveis"
                 type="button"
                 title={bloqueado ? 'Acesso restrito para este perfil' : 'Patrimônio & Imóveis'}
-                onClick={bloqueado ? undefined : () => { setActiveModule('imoveis'); setActiveSubTask('blank_imoveis'); setIdSolicitacaoSelecionada(null); }}
+                onClick={bloqueado ? undefined : () => {
+                  setActiveModule('imoveis');
+                  setActiveSubTask(perfilUsuario === 'diretor_escola' || perfilUsuario === 'coordenador_regional' ? 'imoveis_rol_manutencao' : 'blank_imoveis');
+                  setIdSolicitacaoSelecionada(null);
+                }}
                 className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 relative border ${
                   bloqueado
                     ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
@@ -2442,15 +2511,21 @@ export default function App() {
             );
           })()}
 
-          {/* 5. ABERTURA DE CHAMADOS */}
+          {/* 5. CHAMADOS — diretor_escola abre chamados da própria escola; coordenador_regional
+               (reaproveitado como "coordenador de rede física") triangula a fila da sua SRE.
+               Ver [[modulo-chamados]]. */}
           {(() => {
-            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'coordenador_regional' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
+            const bloqueado = perfilUsuario === 'tecnico_infra' || perfilUsuario === 'administrativo_dore' || perfilUsuario === 'analista_dore' || perfilUsuario === 'gestor_paf';
             return (
               <button
                 data-testid="modulo-abertura-chamados"
                 type="button"
-                title={bloqueado ? 'Acesso restrito para este perfil' : 'Abertura de Chamados'}
-                onClick={bloqueado ? undefined : () => { setActiveModule('abertura_chamados'); setActiveSubTask('blank_novo_chamado'); setIdSolicitacaoSelecionada(null); }}
+                title={bloqueado ? 'Acesso restrito para este perfil' : 'Chamados'}
+                onClick={bloqueado ? undefined : () => {
+                  setActiveModule('abertura_chamados');
+                  setActiveSubTask(perfilUsuario === 'diretor_escola' ? 'chamados_novo' : 'chamados_fila');
+                  setIdSolicitacaoSelecionada(null);
+                }}
                 className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center gap-1 transition-all duration-200 relative border ${
                   bloqueado
                     ? 'opacity-25 cursor-not-allowed bg-[#1c3870] text-slate-100 border-[#26417a]/40'
@@ -2958,7 +3033,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+          {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-teal-600 uppercase tracking-widest block font-sans">
@@ -2971,13 +3046,24 @@ export default function App() {
               </div>
 
               <div className="space-y-1.5">
-                {[
-                  { id: 'blank_imoveis',       label: 'Cadastro de Próprios',     desc: 'Registro de imóveis públicos',       icon: Building2 },
-                  { id: 'blank_regularizacao', label: 'Regularização Documental', desc: 'Situação fundiária e documentos',      icon: FileText },
-                  { id: 'blank_projetos',      label: 'Projetos',                 desc: 'Projetos técnicos atualizados',        icon: FolderOpen },
-                  { id: 'blank_vistorias',     label: 'Vistorias & Inspeções',    desc: 'Laudos de integridade predial',        icon: ClipboardList },
-                  { id: 'blank_ficha',         label: 'Ficha Consolidada',        desc: 'Prontuário imobiliário completo',      icon: BookOpen }
-                ].map((item) => {
+                {(perfilUsuario === 'diretor_escola' || perfilUsuario === 'coordenador_regional'
+                  ? [
+                      {
+                        id: 'imoveis_rol_manutencao',
+                        label: 'Rol de Manutenção Predial',
+                        desc: perfilUsuario === 'diretor_escola' ? 'Manutenções anuais obrigatórias' : 'Consulta — escolas da sua regional',
+                        icon: ClipboardList,
+                      },
+                    ]
+                  : [
+                      { id: 'blank_imoveis',       label: 'Cadastro de Próprios',     desc: 'Registro de imóveis públicos',       icon: Building2 },
+                      { id: 'blank_regularizacao', label: 'Regularização Documental', desc: 'Situação fundiária e documentos',      icon: FileText },
+                      { id: 'blank_projetos',      label: 'Projetos',                 desc: 'Projetos técnicos atualizados',        icon: FolderOpen },
+                      { id: 'blank_vistorias',     label: 'Vistorias & Inspeções',    desc: 'Laudos de integridade predial',        icon: ClipboardList },
+                      { id: 'blank_ficha',         label: 'Ficha Consolidada',        desc: 'Prontuário imobiliário completo',      icon: BookOpen },
+                      { id: 'imoveis_rol_manutencao', label: 'Rol de Manutenção Predial', desc: 'Consulta — todas as escolas',    icon: ClipboardCheck },
+                    ]
+                ).map((item) => {
                   const Icon = item.icon;
                   const isActive = activeSubTask === item.id;
                   return (
@@ -3008,7 +3094,7 @@ export default function App() {
             </div>
           )}
 
-          {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+          {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3 mb-2">
                 <span className="text-[9px] font-extrabold text-purple-600 uppercase tracking-widest block font-sans">
@@ -3016,16 +3102,20 @@ export default function App() {
                 </span>
                 <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5 mt-0.5 font-sans">
                   <Wrench className="w-4 h-4 text-purple-600 shrink-0" />
-                  Suporte & Chamados
+                  Chamados
                 </h3>
               </div>
 
               <div className="space-y-1.5">
-                {[
-                  { id: 'blank_novo_chamado', label: 'Solicitar Suporte', desc: 'Abertura de incidentes técnicos', icon: HelpCircle },
-                  { id: 'blank_meus_chamados', label: 'Meus Chamados', desc: 'Acompanhamento de tickets', icon: Ticket },
-                  { id: 'blank_sla', label: 'SLA & Desempenho', desc: 'Métricas de atendimento de rede', icon: ShieldCheck }
-                ].map((item) => {
+                {(perfilUsuario === 'diretor_escola'
+                  ? [
+                      { id: 'chamados_novo', label: 'Abrir Chamado', desc: 'Nova solicitação de intervenção física', icon: HelpCircle },
+                      { id: 'chamados_meus', label: 'Meus Chamados', desc: 'Acompanhamento das solicitações', icon: Ticket },
+                    ]
+                  : [
+                      { id: 'chamados_fila', label: 'Fila de Chamados', desc: 'Triagem das escolas da sua regional', icon: ClipboardList },
+                    ]
+                ).map((item) => {
                   const Icon = item.icon;
                   const isActive = activeSubTask === item.id;
                   return (
@@ -5172,6 +5262,7 @@ export default function App() {
                                       u.perfil === 'gestor_paf' ? 'bg-cyan-100 text-cyan-800' :
                                       u.perfil === 'administrativo_dore' ? 'bg-purple-100 text-purple-800' :
                                       u.perfil === 'diretor_dore' ? 'bg-rose-100 text-rose-800' :
+                                      u.perfil === 'diretor_escola' ? 'bg-teal-100 text-teal-800' :
                                       'bg-slate-100 text-slate-700';
                                     const creaSituacaoColor = usr.creaSituacao === 'Ativo' ? 'text-emerald-600' : usr.creaSituacao === 'Inativo' ? 'text-rose-600' : 'text-slate-400';
 
@@ -5216,6 +5307,7 @@ export default function App() {
                                              u.perfil === 'gestor_paf' ? 'SUBSEC. ADM' :
                                              u.perfil === 'administrativo_dore' ? 'ADMIN DORE' :
                                              u.perfil === 'diretor_dore' ? 'DIRETOR DORE' :
+                                             u.perfil === 'diretor_escola' ? 'DIRETOR ESCOLA' :
                                              u.perfil.toUpperCase()}
                                           </span>
                                         </td>
@@ -5463,71 +5555,68 @@ export default function App() {
                 />
               )}
 
-              {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
-                <div className="w-full p-6">
-                  <PatrimonioModule
-                    activeSubTask={activeSubTask}
-                    perfilUsuario={perfilUsuario}
-                    somenteLeitura={false}
-                    regionaisDoTecnico={regionaisDoTecnico}
-                  />
-                </div>
+              {activeModule === 'imoveis' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+                perfilUsuario === 'diretor_escola' || perfilUsuario === 'coordenador_regional' ? (
+                  (() => {
+                    const usuarioLogado = usuariosSeguranca.find(u => u.id === idUsuarioLogado);
+                    if (!usuarioLogado) {
+                      return <div className="flex-1 flex items-center justify-center py-12 text-sm text-slate-400">Carregando dados do usuário...</div>;
+                    }
+                    // coordenador_regional (reaproveitado como "coordenador de rede física") só
+                    // visualiza — consulta as escolas da própria SRE. Ver [[modulo-chamados]].
+                    return (
+                      <RolManutencaoPredialView
+                        usuario={{ id: usuarioLogado.id, nome: usuarioLogado.nome, escolasVinculadas: usuarioLogado.escolasVinculadas }}
+                        somenteLeitura={perfilUsuario === 'coordenador_regional'}
+                        regionaisRestritas={perfilUsuario === 'coordenador_regional' ? regionaisDoTecnico : undefined}
+                      />
+                    );
+                  })()
+                ) : activeSubTask === 'imoveis_rol_manutencao' ? (
+                  // admin / diretor_dore — mesmo Rol em modo só leitura, sem restrição de escola.
+                  (() => {
+                    const usuarioLogado = usuariosSeguranca.find(u => u.id === idUsuarioLogado);
+                    if (!usuarioLogado) {
+                      return <div className="flex-1 flex items-center justify-center py-12 text-sm text-slate-400">Carregando dados do usuário...</div>;
+                    }
+                    return (
+                      <RolManutencaoPredialView
+                        usuario={{ id: usuarioLogado.id, nome: usuarioLogado.nome }}
+                        somenteLeitura
+                      />
+                    );
+                  })()
+                ) : (
+                  <div className="w-full p-6">
+                    <PatrimonioModule
+                      activeSubTask={activeSubTask}
+                      perfilUsuario={perfilUsuario}
+                      somenteLeitura={false}
+                      regionaisDoTecnico={regionaisDoTecnico}
+                    />
+                  </div>
+                )
               )}
 
-              {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'coordenador_regional' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
-                <div className="flex-1 flex flex-col items-center justify-center py-12 text-center select-none animate-in fade-in duration-200">
-                  <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center border border-purple-100 mb-4 animate-bounce">
-                    <Wrench className="w-8 h-8 text-purple-600" />
-                  </div>
-                  <h2 className="text-base font-bold text-slate-800 font-sans">
-                    Módulo de Abertura de Chamados (Em Construção)
-                  </h2>
-                  <p className="text-xs text-slate-500 max-w-lg mt-1.5 font-sans leading-relaxed text-center">
-                    Canal unificado para abertura de incidentes, solicitações de manutenção corretiva e vistorias de urgência nas escolas.
-                    Permitirá aos gestores das SREs registrar demandas sobre sinistros ou falhas estruturais críticas diretamente à equipe da central.
-                  </p>
-
-                  <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl w-full text-left">
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-3xs hover:border-purple-200 transition-all">
-                      <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 font-bold mb-3 text-xs">
-                        🆕
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-800 mb-1 font-sans">Abertura Rápida</h4>
-                      <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
-                        Envio de relatórios fotográficos preliminares e descrição textual do sinistro diretamente no portal de infraestrutura.
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-3xs hover:border-purple-200 transition-all">
-                      <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-slate-600 font-bold mb-3 text-xs">
-                        🧭
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-800 mb-1 font-sans">Roteamento Inteligente</h4>
-                      <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
-                        Distribuição automática ao analista ou engenheiro da SRE responsável de acordo com a jurisdição do imóvel.
-                      </p>
-                    </div>
-
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-3xs hover:border-purple-200 transition-all">
-                      <div className="w-8 h-8 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600 font-bold mb-3 text-xs">
-                        ⏳
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-800 mb-1 font-sans">Controle de SLA</h4>
-                      <p className="text-[11px] text-slate-500 leading-relaxed font-sans">
-                        Linha do tempo interativa mostrando prazos de atendimento com alertas em cores baseadas na criticidade da falha.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-8 flex gap-2">
-                    <span className="px-2.5 py-1 bg-slate-100 rounded-full text-[10px] font-bold text-slate-500 font-mono">
-                      v1.5.0-planned
-                    </span>
-                    <span className="px-2.5 py-1 bg-purple-100 rounded-full text-[10px] font-bold text-purple-700 font-sans">
-                      Suporte & Atendimento DORE
-                    </span>
-                  </div>
-                </div>
+              {activeModule === 'abertura_chamados' && perfilUsuario !== 'tecnico_infra' && perfilUsuario !== 'administrativo_dore' && perfilUsuario !== 'analista_dore' && perfilUsuario !== 'gestor_paf' && (
+                perfilUsuario === 'diretor_escola' ? (
+                  (() => {
+                    const usuarioLogado = usuariosSeguranca.find(u => u.id === idUsuarioLogado);
+                    if (!usuarioLogado) {
+                      return <div className="flex-1 flex items-center justify-center py-12 text-sm text-slate-400">Carregando dados do usuário...</div>;
+                    }
+                    return activeSubTask === 'chamados_meus' ? (
+                      <MeusChamadosView usuario={{ id: usuarioLogado.id, nome: usuarioLogado.nome }} />
+                    ) : (
+                      <NovoChamadoForm
+                        usuario={{ id: usuarioLogado.id, nome: usuarioLogado.nome, escolasVinculadas: usuarioLogado.escolasVinculadas }}
+                        onCriado={() => setActiveSubTask('chamados_meus')}
+                      />
+                    );
+                  })()
+                ) : (
+                  <FilaChamadosCoordenadorView usuario={{ id: idUsuarioLogado || '', nome: nomeUsuario, regionais: regionaisDoTecnico }} />
+                )
               )}
 
               {activeModule === 'central_logs' && (
@@ -5886,6 +5975,61 @@ export default function App() {
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {usrPerfil === 'diretor_escola' && (
+                  <div className="animate-in slide-in-from-top-1 duration-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Escola(s) Vinculada(s) *
+                        <span className="ml-1.5 text-[9px] font-normal text-slate-400 normal-case">Busque por nome ou CODESC</span>
+                      </label>
+                      {usrEscolasVinculadas.length > 0 && (
+                        <span className="text-[10px] text-rose-600 font-bold">{usrEscolasVinculadas.length} selecionada{usrEscolasVinculadas.length > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Digite o nome da escola ou o CODESC..."
+                      value={usrEscolaBusca}
+                      onChange={(e) => setUsrEscolaBusca(e.target.value)}
+                      className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:ring-1 focus:ring-rose-500 outline-hidden"
+                    />
+                    {usrEscolasVinculadas.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {usrEscolasVinculadas.map(ev => (
+                          <span key={ev.escolaId} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold">
+                            {ev.nome}
+                            <button type="button" onClick={() => setUsrEscolasVinculadas(prev => prev.filter(e => e.escolaId !== ev.escolaId))} className="text-rose-400 hover:text-rose-700 cursor-pointer">×</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {usrEscolaBusca.trim().length >= 3 && (
+                      <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50/50 divide-y divide-slate-100">
+                        {escolasParaCadastro
+                          .filter(e =>
+                            (e.nome.toLowerCase().includes(usrEscolaBusca.toLowerCase()) || e.codesc.includes(usrEscolaBusca.trim())) &&
+                            !usrEscolasVinculadas.some(ev => ev.codesc === e.codesc)
+                          )
+                          .slice(0, 20)
+                          .map(e => (
+                            <button
+                              key={e.codesc}
+                              type="button"
+                              onClick={() => {
+                                setUsrEscolasVinculadas(prev => [...prev, { escolaId: e.id, codesc: e.codesc, nome: e.nome }]);
+                                setUsrEscolaBusca('');
+                              }}
+                              className="w-full text-left px-3 py-2 text-[11px] text-slate-700 hover:bg-white cursor-pointer"
+                            >
+                              <span className="font-bold">{e.nome}</span>
+                              <span className="text-slate-400 ml-1.5">CODESC {e.codesc} — {e.municipio}/{e.sre}</span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

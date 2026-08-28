@@ -506,7 +506,9 @@ export interface SaldoComplementarItem extends ChecklistSla {
 
 // 'gestor_dore' (Gestor de Atendimento) foi descontinuado e removido do sistema — não é mais um
 // perfil válido. Ver [[remocao-perfil-gestor-dore]].
-export type PerfilUsuario = 'tecnico_infra' | 'coordenador_regional' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'diretor_dore' | 'admin';
+// 'diretor_escola' é o perfil da direção da unidade escolar — só enxerga o módulo de Chamados
+// (abre chamado da própria escola). Ver [[modulo-chamados]].
+export type PerfilUsuario = 'tecnico_infra' | 'coordenador_regional' | 'analista_dore' | 'gestor_paf' | 'fiscal_obra' | 'administrativo_dore' | 'diretor_dore' | 'diretor_escola' | 'admin';
 
 export interface UsuarioSistema {
   id: string;
@@ -527,6 +529,8 @@ export interface UsuarioSistema {
   tipoVinculo?: 'regional' | 'orgao_central';
   equipeCentral?: string;
   regionais?: string[];
+  // Escola(s) vinculada(s) — só se aplica a perfil === 'diretor_escola'. Ver [[modulo-chamados]].
+  escolasVinculadas?: { escolaId: string; codesc: string; nome: string }[];
   // Capacidade de carga de análise (preparação para futura regra de atribuição por pontos)
   capacidadeMaxima?: number; // padrão: 100 pts
 }
@@ -744,6 +748,239 @@ export interface SistemaLog {
   solicitacaoId?: string;
   escola?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Módulo de Chamados (Diretor de Escola → Coordenador Regional). Independente do fluxo de
+// Solicitacao/PAF por enquanto. Ver [[modulo-chamados]].
+// ---------------------------------------------------------------------------
+
+export type StatusChamado = 'aberto' | 'em_analise' | 'em_atendimento' | 'concluido' | 'recusado';
+
+export interface ChamadoHistoricoItem {
+  status: StatusChamado;
+  data: string;
+  responsavel: string;
+  observacao?: string;
+}
+
+export interface Chamado {
+  id: string;
+  numero: number;
+  dataSolicitacao: string;
+  sre: string;
+  municipio: string;
+  escolaId?: string;
+  escolaNome: string;
+  codesc: string;
+  codigoEndereco?: string;
+  predioDescricao?: string;
+  responsavelCaixaEscolarNome?: string;
+  responsavelCaixaEscolarTelefone?: string;
+  solicitanteMatriculaMasp?: string;
+
+  descricaoProblema: string;
+  localOcorrencia: string[];
+  localOcorrenciaOutro?: string;
+
+  motivoTipo: 'necessidade_escola' | 'autorizacao_soe' | 'doacao' | 'orgao_controle' | 'emenda';
+  motivoOrgaoControle?: string;
+  motivoOrgaoNumeroOficio?: string;
+  motivoOrgaoData?: string;
+  motivoOrgaoPrazoAtendimento?: string;
+  motivoEmendaTipo?: 'Parlamentar' | 'Impositiva';
+
+  consequencias: string[];
+  consequenciaOutro?: string;
+
+  qtdAlunosAfetados?: number;
+  numeroSalasAfetadas?: number;
+  turnosAfetados: string[];
+  funcionamento?: 'Normal' | 'Parcial' | 'Suspenso';
+
+  riscoImediato?: boolean;
+
+  emendaNomeParlamentar?: string;
+  emendaNumero?: string;
+  emendaValor?: number;
+  emendaExercicio?: string;
+  emendaObjeto?: string;
+
+  // Seção 8 (Documentação Anexada) — reaproveita o mesmo tipo do resto do app (metadado, sem upload real)
+  documentos: DocumentoChecklist[];
+
+  status: StatusChamado;
+  prioridade?: 'Crítico' | 'Alto' | 'Médio' | 'Baixo';
+  coordenadorAtribuidoId?: string;
+  parecerCoordenador?: string;
+  justificativaRecusa?: string;
+  dataTriagem?: string;
+  dataConclusao?: string;
+
+  // Painel de Controle do coordenador (priorização/vistoria/DORE) — preenchido só pelo
+  // coordenador, sem relação com o fluxo de status/histórico acima. Ver [[modulo-chamados]].
+  tipoObra?: string;
+  pontuacaoAtual?: number;
+  primeiroRetornoAte?: string;
+  engenheiroFiscalEscola?: string;
+  pontuacaoAjustada?: number;
+  farolVistoria?: FarolChamado;
+  farolProcesso?: FarolChamado;
+  dataPlanejadaVistoria?: string;
+  dataReplanejadaVistoria?: string;
+  dataRealVistoria?: string;
+  statusVistoria?: StatusVistoriaChamado;
+  numeroSeiProcessoDore?: string;
+  dataEnvioDore?: string;
+
+  criadoPor: string;
+  criadoPorNome?: string;
+  historico: ChamadoHistoricoItem[];
+  dataCriacao: string;
+}
+
+export type FarolChamado = 'verde' | 'amarelo' | 'vermelho';
+export type StatusVistoriaChamado = 'planejado' | 'replanejado' | 'realizado' | 'aguardando';
+
+export const TIPO_OBRA_CHAMADO_OPCOES = [
+  'AMPLIAÇÃO', 'REFORMA', 'QUADRA', 'ACESSIBILIDADE', 'CONSTRUÇÃO', 'ENGENHEIRO PARA ELABORAÇÃO DE PROJETO',
+] as const;
+
+export const STATUS_VISTORIA_OPCOES: { value: StatusVistoriaChamado; label: string }[] = [
+  { value: 'aguardando', label: 'Aguardando' },
+  { value: 'planejado', label: 'Planejado' },
+  { value: 'replanejado', label: 'Replanejado' },
+  { value: 'realizado', label: 'Realizado' },
+];
+
+export const FAROL_INFO: Record<FarolChamado, { label: string; dotClass: string }> = {
+  verde: { label: 'Verde', dotClass: 'bg-emerald-500' },
+  amarelo: { label: 'Amarelo', dotClass: 'bg-amber-400' },
+  vermelho: { label: 'Vermelho', dotClass: 'bg-rose-500' },
+};
+
+// "Onde ocorre" — checkbox múltiplo (seção 2)
+export const LOCAL_OCORRENCIA_OPCOES = [
+  'Telhado', 'Sala de aula', 'Banheiro', 'Muro', 'Instalações elétricas',
+  'Instalações hidráulicas', 'Cozinha', 'Administrativo', 'Outro',
+] as const;
+
+// "Motivo da solicitação" — seleção única (seção 3)
+export const MOTIVO_SOLICITACAO_OPCOES: { value: Chamado['motivoTipo']; label: string }[] = [
+  { value: 'necessidade_escola', label: 'Necessidade identificada pela escola' },
+  { value: 'autorizacao_soe', label: 'Autorização da SOE' },
+  { value: 'doacao', label: 'Doação' },
+  { value: 'orgao_controle', label: 'Determinação, notificação ou recomendações de órgãos de controle' },
+  { value: 'emenda', label: 'Emenda' },
+];
+
+export const ORGAOS_CONTROLE_OPCOES = ['MPMG', 'CBMMG', 'Defesa Civil', 'TCE', 'ANVISA', 'Tribunal de Contas'] as const;
+
+export const EMENDA_TIPO_OPCOES = ['Parlamentar', 'Impositiva'] as const;
+
+// "Consequências observadas" — checkbox múltiplo (seção 4)
+export const CONSEQUENCIAS_OPCOES = [
+  'Há risco para pessoas', 'Há infiltração', 'Existe interdição de ambiente', 'Houve suspensão de aulas',
+  'Há risco de agravamento', 'Salas não podem ser utilizadas', 'Outro',
+] as const;
+
+export const TURNOS_OPCOES = ['Manhã', 'Tarde', 'Noite', 'Integral'] as const;
+
+export const FUNCIONAMENTO_OPCOES = ['Normal', 'Parcial', 'Suspenso'] as const;
+
+// "Documentação Anexada" — seção 7, vira o checklist opcional de `documentos` (categoria 'chamado')
+export const DOCUMENTACAO_ANEXADA_TIPOS: { id: string; nome: string }[] = [
+  { id: 'chamado_doc_fotografias', nome: 'Fotografias' },
+  { id: 'chamado_doc_relatorio_tecnico', nome: 'Relatório Técnico' },
+  { id: 'chamado_doc_oficio', nome: 'Ofício' },
+  { id: 'chamado_doc_notificacao', nome: 'Notificação' },
+  { id: 'chamado_doc_auto_vistoria', nome: 'Auto de Vistoria' },
+  { id: 'chamado_doc_parecer', nome: 'Parecer' },
+  { id: 'chamado_doc_projeto', nome: 'Projeto' },
+  { id: 'chamado_doc_croqui', nome: 'Croqui' },
+  { id: 'chamado_doc_laudo', nome: 'Laudo' },
+  { id: 'chamado_doc_declaracao_doacao', nome: 'Declaração de Doação' },
+  { id: 'chamado_doc_autorizacao_soe', nome: 'Autorização SOE' },
+  { id: 'chamado_doc_outro', nome: 'Outro' },
+];
+
+export function montarDocumentosChamado(existentes: DocumentoChecklist[] = []): DocumentoChecklist[] {
+  const achar = (id: string) => existentes.find(d => d.id === id);
+  return DOCUMENTACAO_ANEXADA_TIPOS.map(tipo => ({
+    id: tipo.id,
+    nome: tipo.nome,
+    obrigatorio: false,
+    desc: 'Anexo opcional — marque e anexe se aplicável a este chamado.',
+    status: achar(tipo.id)?.status || 'nao_se_aplica',
+    fileName: achar(tipo.id)?.fileName,
+    fileSize: achar(tipo.id)?.fileSize,
+    uploadedAt: achar(tipo.id)?.uploadedAt,
+  }));
+}
+
+export interface StatusChamadoInfo {
+  label: string;
+  badgeClass: string;
+}
+
+export const STATUS_CHAMADO_INFO: Record<StatusChamado, StatusChamadoInfo> = {
+  aberto: { label: 'Aberto', badgeClass: 'bg-blue-100 text-blue-700 border-blue-200' },
+  em_analise: { label: 'Em Análise', badgeClass: 'bg-amber-100 text-amber-700 border-amber-200' },
+  em_atendimento: { label: 'Em Atendimento', badgeClass: 'bg-purple-100 text-purple-700 border-purple-200' },
+  concluido: { label: 'Concluído', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  recusado: { label: 'Recusado', badgeClass: 'bg-rose-100 text-rose-700 border-rose-200' },
+};
+
+// ---------------------------------------------------------------------------
+// Rol de Manutenção Predial Anual Obrigatória (módulo Imóveis, preenchido pelo diretor_escola).
+// Um registro por escola por ano, com 12 itens fixos (ROL_MANUTENCAO_ITENS_PADRAO). Vinculado a
+// escola_id (tabela real `escolas`), não ao ImovelPatrimonio local-only do resto do módulo Imóveis.
+// Ver [[modulo-chamados]].
+// ---------------------------------------------------------------------------
+
+export type StatusItemRolManutencao = 'executado' | 'nao_executado';
+
+export interface RolManutencaoItem {
+  id: string;
+  itemCodigo: string;
+  status?: StatusItemRolManutencao;
+  dataExecucao?: string;
+  empresaProfissional?: string;
+  cnpjCpf?: string;
+  comprovacaoDespesa?: boolean;
+  // Anexo comprovante (nota fiscal/recibo) — mesmo padrão metadado do resto do app.
+  documento?: DocumentoChecklist;
+}
+
+export interface RolManutencaoPredial {
+  id: string;
+  escolaId: string;
+  ano: number;
+  itens: RolManutencaoItem[];
+  criadoPor?: string;
+  dataCriacao: string;
+}
+
+export interface ItemRolManutencaoPadrao {
+  codigo: string;
+  sistema: string;
+  elemento: string;
+  atividade: string;
+}
+
+export const ROL_MANUTENCAO_ITENS_PADRAO: ItemRolManutencaoPadrao[] = [
+  { codigo: 'cobertura_telhado_calhas', sistema: 'COBERTURA', elemento: 'Telhado, calhas e dutos', atividade: 'Limpeza' },
+  { codigo: 'hidro_caixa_gordura', sistema: 'HIDROSSANITÁRIO', elemento: 'Caixa de gordura, tubos e conexões', atividade: 'Limpeza / troca caixa de gordura; inspeção de tubos e conexões' },
+  { codigo: 'hidro_caixa_passagem', sistema: 'HIDROSSANITÁRIO', elemento: 'Caixa de passagem', atividade: 'Limpeza da caixa de passagem (esgoto e pluvial)' },
+  { codigo: 'hidro_caixa_dagua', sistema: 'HIDROSSANITÁRIO', elemento: "Caixa d'água", atividade: 'Limpeza' },
+  { codigo: 'esquadrias_fechaduras', sistema: 'ESQUADRIAS', elemento: 'Fechaduras, maçanetas, trincos', atividade: 'Reparos / substituição' },
+  { codigo: 'eletrica_lampadas', sistema: 'ELÉTRICA', elemento: 'Lâmpadas, inclusive emergência', atividade: 'Substituição' },
+  { codigo: 'eletrica_luminarias', sistema: 'ELÉTRICA', elemento: 'Luminárias', atividade: 'Substituição' },
+  { codigo: 'outros_dedetizacao', sistema: 'OUTROS', elemento: 'Dedetização / desratização', atividade: 'Áreas em geral, empresa qualificada' },
+  { codigo: 'outros_fossa_septica', sistema: 'OUTROS', elemento: 'Fossa séptica', atividade: 'Limpeza' },
+  { codigo: 'outros_capina_entulhos', sistema: 'OUTROS', elemento: 'Capina e entulhos', atividade: 'Limpeza e destinação correta' },
+  { codigo: 'outros_ralos_calhas', sistema: 'OUTROS', elemento: 'Ralos, calhas', atividade: 'Remoção de entulho e destinação correta' },
+  { codigo: 'outros_poda_arvores', sistema: 'OUTROS', elemento: 'Poda em árvores', atividade: 'Poda e destinação correta' },
+];
 
 export interface Notificacao {
   id: string;
