@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 export interface Escola {
+  id: string;
   codesc: string;
   nome: string;
   municipio: string;
@@ -56,7 +57,7 @@ export function useEscolas() {
 
       try {
         const [todasEscolas, todosEnderecos] = await Promise.all([
-          carregarPaginado<Escola>('escolas', 'codesc, nome, municipio, sre', 'nome'),
+          carregarPaginado<Escola>('escolas', 'id, codesc, nome, municipio, sre', 'nome'),
           carregarPaginado<{ codigo_endereco: string; codesc: string; descricao: string }>(
             'enderecos_escola',
             'codigo_endereco, codesc, descricao',
